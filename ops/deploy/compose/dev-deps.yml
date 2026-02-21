@@ -3,7 +3,7 @@ services:
   scylla:
     image: scylladb/scylla:latest
     container_name: gryt-dev-scylla
-    command: ["--overprovisioned", "1", "--smp", "1"]
+    command: ["--overprovisioned", "1", "--smp", "1", "--listen-address", "0.0.0.0", "--rpc-address", "0.0.0.0", "--broadcast-address", "127.0.0.1", "--broadcast-rpc-address", "127.0.0.1"]
     ports:
       - "9042:9042"
     volumes:

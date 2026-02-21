@@ -48,6 +48,17 @@ services:
       - GRYT_OIDC_ISSUER=https://auth.gryt.chat/realms/gryt
       - GRYT_OIDC_AUDIENCE=gryt-web
       - NODE_ENV=development
+      - SCYLLA_CONTACT_POINTS=gryt-dev-scylla
+      - SCYLLA_LOCAL_DATACENTER=datacenter1
+      - SCYLLA_KEYSPACE=${SCYLLA_KEYSPACE_WS1:-ws1}
+      - S3_ENDPOINT=http://gryt-dev-minio:9000
+      - S3_REGION=us-east-1
+      - S3_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - S3_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - S3_BUCKET=${S3_BUCKET:-gryt}
+      - S3_FORCE_PATH_STYLE=true
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-do-not-use-in-production}
+      - OWNER_ID=${OWNER_ID:-}
       # Optional: voice seat limit (derived if SFU_UDP_* set)
       # - SFU_UDP_PORT_MIN=${SFU_UDP_MIN:-10000}
       # - SFU_UDP_PORT_MAX=${SFU_UDP_MAX:-10019}
@@ -56,6 +67,7 @@ services:
       - ../../../packages/server/.env:/app/.env:ro
     networks:
       - gryt-network
+      - dev-deps
     depends_on:
       - sfu
     restart: unless-stopped
@@ -84,6 +96,17 @@ services:
       - GRYT_OIDC_ISSUER=https://auth.gryt.chat/realms/gryt
       - GRYT_OIDC_AUDIENCE=gryt-web
       - NODE_ENV=development
+      - SCYLLA_CONTACT_POINTS=gryt-dev-scylla
+      - SCYLLA_LOCAL_DATACENTER=datacenter1
+      - SCYLLA_KEYSPACE=${SCYLLA_KEYSPACE_WS2:-ws2}
+      - S3_ENDPOINT=http://gryt-dev-minio:9000
+      - S3_REGION=us-east-1
+      - S3_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - S3_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - S3_BUCKET=${S3_BUCKET:-gryt}
+      - S3_FORCE_PATH_STYLE=true
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-do-not-use-in-production}
+      - OWNER_ID=${OWNER_ID:-}
       # Optional: voice seat limit (derived if SFU_UDP_* set)
       # - SFU_UDP_PORT_MIN=${SFU_UDP_MIN:-10000}
       # - SFU_UDP_PORT_MAX=${SFU_UDP_MAX:-10019}
@@ -92,6 +115,7 @@ services:
       - ../../../packages/server/.env:/app/.env:ro
     networks:
       - gryt-network
+      - dev-deps
     depends_on:
       - sfu
     restart: unless-stopped
@@ -133,6 +157,9 @@ networks:
     ipam:
       config:
         - subnet: 172.20.0.0/16
+  dev-deps:
+    name: compose_default
+    external: true
 
 volumes:
   sfu-data:

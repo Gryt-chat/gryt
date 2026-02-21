@@ -2,6 +2,16 @@
 set -euo pipefail
 
 SESSION="gryt"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# ── Load local overrides (ops/.env) ───────────────────────────────────
+ENV_FILE="${SCRIPT_DIR}/.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck source=/dev/null
+  . "$ENV_FILE"
+  set +a
+fi
 
 DEV_WITH_DB="${DEV_WITH_DB:-1}"
 DEV_WITH_S3="${DEV_WITH_S3:-1}"

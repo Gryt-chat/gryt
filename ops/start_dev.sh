@@ -32,14 +32,14 @@ DB_DISABLE_ENV="DISABLE_SCYLLA=true"
 S3_DISABLE_ENV="DISABLE_S3=true"
 
 SFU_WS_HOST="${SFU_WS_HOST:-ws://127.0.0.1:5005}"
-SFU_PUBLIC_HOST="${SFU_PUBLIC_HOST:-wss://sfu.sivert.io}"
+SFU_PUBLIC_HOST="${SFU_PUBLIC_HOST:-wss://sfu.example.com}"
 STUN_SERVERS="${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}"
-CORS_ORIGIN="${CORS_ORIGIN:-http://localhost:3666,https://gryt.sivert.io}"
+CORS_ORIGIN="${CORS_ORIGIN:-http://localhost:3666,https://gryt.example.com}"
 GRYT_AUTH_MODE="${GRYT_AUTH_MODE:-required}"
 GRYT_OIDC_ISSUER="${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}"
 GRYT_OIDC_AUDIENCE="${GRYT_OIDC_AUDIENCE:-gryt-web}"
 JWT_SECRET="${JWT_SECRET:-dev-secret-do-not-use-in-production}"
-SERVER_PASSWORD="${SERVER_PASSWORD-Sivert}"
+SERVER_PASSWORD="${SERVER_PASSWORD-changeme}"
 OWNER_ID="${OWNER_ID:-c49d6a91-9ee7-4fd0-99e8-2021e08618a7}"
 
 # ── Helpers ──────────────────────────────────────────────────────────

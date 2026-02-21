@@ -44,7 +44,7 @@ services:
       - SFU_WS_HOST=ws://sfu:5005
       - STUN_SERVERS=stun:stun.l.google.com:19302
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3666}
-      - SERVER_PASSWORD=123
+      - SERVER_PASSWORD=changeme-1
       - GRYT_AUTH_MODE=required
       - GRYT_OIDC_ISSUER=https://auth.gryt.chat/realms/gryt
       - GRYT_OIDC_AUDIENCE=gryt-web
@@ -82,7 +82,7 @@ services:
       - SFU_WS_HOST=ws://sfu:5005
       - STUN_SERVERS=stun:stun.l.google.com:19302
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3666}
-      - SERVER_PASSWORD=456
+      - SERVER_PASSWORD=changeme-2
       - GRYT_AUTH_MODE=required
       - GRYT_OIDC_ISSUER=https://auth.gryt.chat/realms/gryt
       - GRYT_OIDC_AUDIENCE=gryt-web

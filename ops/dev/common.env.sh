@@ -27,11 +27,11 @@ export S3_FORCE_PATH_STYLE="${S3_FORCE_PATH_STYLE:-true}"
 
 # Local defaults for SFU + STUN in dev
 export SFU_WS_HOST="${SFU_WS_HOST:-ws://127.0.0.1:5005}"
-export SFU_PUBLIC_HOST="${SFU_PUBLIC_HOST:-wss://sfu.sivert.io}"
+export SFU_PUBLIC_HOST="${SFU_PUBLIC_HOST:-wss://sfu.example.com}"
 export STUN_SERVERS="${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}"
 
 # CORS allowlist
-export CORS_ORIGIN="${CORS_ORIGIN:-http://localhost:3666,https://gryt.sivert.io}"
+export CORS_ORIGIN="${CORS_ORIGIN:-http://localhost:3666,https://gryt.example.com}"
 
 # Gryt auth (Keycloak / OIDC)
 export GRYT_AUTH_MODE="${GRYT_AUTH_MODE:-required}"

@@ -113,6 +113,13 @@ if [[ "$DEV_WITH_DB" == "1" || "$DEV_WITH_S3" == "1" ]]; then
   echo ""
 fi
 
+# ── Install JS dependencies ──────────────────────────────────────────
+echo "Installing JS dependencies..."
+(cd packages/client && npm install --silent) &
+(cd packages/server && npm install --silent) &
+wait
+echo ""
+
 # ── Build env strings for servers ────────────────────────────────────
 WS_DB_ENV="$DB_DISABLE_ENV"
 WS_S3_ENV="$S3_DISABLE_ENV"

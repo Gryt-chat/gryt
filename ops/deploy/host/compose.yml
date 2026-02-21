@@ -75,7 +75,7 @@ services:
       PORT: "5005"
       STUN_SERVERS: "${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}"
       ICE_UDP_PORT_MIN: "${SFU_UDP_MIN:-10000}"
-      ICE_UDP_PORT_MAX: "${SFU_UDP_MAX:-10004}"
+      ICE_UDP_PORT_MAX: "${SFU_UDP_MAX:-10019}"
       ICE_ADVERTISE_IP: "${SFU_ADVERTISE_IP:-}"
       DISABLE_STUN: "${SFU_DISABLE_STUN:-false}"
       MAX_PEERS: "${SFU_MAX_PEERS:-}"
@@ -83,7 +83,7 @@ services:
       # SFU websocket (HTTP) for signaling (Cloudflare Tunnel will proxy this as HTTPS/WSS)
       - "${BIND_ADDR:-127.0.0.1}:${SFU_WS_PORT:-5005}:5005"
       # WebRTC media (UDP). Must be reachable from the public internet (not via Cloudflare).
-      - "${SFU_UDP_MIN:-10000}-${SFU_UDP_MAX:-10004}:${SFU_UDP_MIN:-10000}-${SFU_UDP_MAX:-10004}/udp"
+      - "${SFU_UDP_MIN:-10000}-${SFU_UDP_MAX:-10019}:${SFU_UDP_MIN:-10000}-${SFU_UDP_MAX:-10019}/udp"
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:5005/health" ]

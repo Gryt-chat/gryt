@@ -2,6 +2,7 @@ services:
   docs:
     build:
       context: ../packages/docs
+      network: host
     ports:
       - "9471:3000"
     restart: unless-stopped

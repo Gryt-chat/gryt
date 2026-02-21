@@ -1,0 +1,90 @@
+{{- if .Values.sfu.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gryt.fullname" . }}-sfu
+  labels:
+    {{- include "gryt.sfu.labels" . | nindent 4 }}
+  {{- with (include "gryt.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.sfu.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "gryt.sfu.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gryt.sfu.selectorLabels" . | nindent 8 }}
+      {{- with (include "gryt.annotations" .) }}
+      annotations:
+        {{- . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "gryt.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.security.podSecurityContext | nindent 8 }}
+      containers:
+      - name: sfu
+        image: {{ include "gryt.image" .Values.sfu.image }}
+        imagePullPolicy: {{ .Values.sfu.image.pullPolicy }}
+        ports:
+        - name: websocket
+          containerPort: {{ .Values.sfu.service.port }}
+          protocol: TCP
+        env:
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "gryt.fullname" . }}-config
+              key: SFU_PORT
+        - name: STUN_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "gryt.fullname" . }}-config
+              key: STUN_SERVERS
+        {{- range $key, $value := .Values.sfu.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.sfu.resources | nindent 10 }}
+        {{- if .Values.sfu.healthCheck.enabled }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.sfu.healthCheck.path }}
+            port: {{ .Values.sfu.service.port }}
+          initialDelaySeconds: {{ .Values.sfu.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ .Values.sfu.healthCheck.periodSeconds }}
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.sfu.healthCheck.path }}
+            port: {{ .Values.sfu.service.port }}
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        {{- end }}
+        securityContext:
+          {{- toYaml .Values.security.securityContext | nindent 10 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }} 

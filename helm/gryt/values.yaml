@@ -1,0 +1,259 @@
+# Default values for gryt.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global configuration
+global:
+  # Image registry for all components
+  imageRegistry: ""
+  # Image pull secrets
+  imagePullSecrets: []
+  # Storage class for persistent volumes
+  storageClass: ""
+
+# Gryt configuration
+gryt:
+  # Domain configuration
+  domain: "gryt.yourdomain.com"
+  # Enable TLS
+  tls:
+    enabled: true
+    secretName: "gryt-tls"
+    # Use cert-manager for automatic certificates
+    certManager:
+      enabled: true
+      issuer: "letsencrypt-prod"
+  
+  # Authentication configuration
+  auth:
+    # Gryt authentication API endpoint
+    apiUrl: "https://auth.gryt.chat"
+  
+  # STUN server configuration (TURN is intentionally not required)
+  stun:
+    servers: "stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302"
+
+# SFU (Selective Forwarding Unit) configuration
+sfu:
+  enabled: true
+  image:
+    repository: gryt/sfu
+    tag: "latest"
+    pullPolicy: Always
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 5005
+  
+  # Resource limits
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  # Replica count
+  replicaCount: 1
+  
+  # Environment variables
+  env:
+    PORT: "5005"
+  
+  # Health checks
+  healthCheck:
+    enabled: true
+    path: "/health"
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+# Signaling Server configuration
+server:
+  enabled: true
+  image:
+    repository: gryt/server
+    tag: "latest"
+    pullPolicy: Always
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 5000
+  
+  # Resource limits
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+  
+  # Replica count and autoscaling
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  # Environment variables
+  env:
+    PORT: "5000"
+    NODE_ENV: "production"
+    SERVER_NAME: "Gryt Production Server"
+    SERVER_ICON: "example.png"
+  
+  # Secrets (will be base64 encoded)
+  secrets:
+    serverPassword: "your-secure-password"
+    corsOrigin: "https://yourdomain.com"
+  
+  # Health checks
+  healthCheck:
+    enabled: true
+    path: "/health"
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+# Web Client configuration
+client:
+  enabled: true
+  image:
+    repository: gryt/client
+    tag: "latest"
+    pullPolicy: Always
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 80
+  
+  # Resource limits
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+  
+  # Replica count and autoscaling
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  # Health checks
+  healthCheck:
+    enabled: true
+    path: "/health"
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    # WebSocket support
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/websocket-services: "gryt-server"
+    # SSL
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # CORS for WebRTC
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    # Rate limiting
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    # Body size
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+  
+  # Routing configuration
+  routing:
+    # Use subdomain routing (api.domain.com, gryt.domain.com)
+    # Set to false for path-based routing (/api, /)
+    useSubdomains: true
+    
+    # Subdomain configuration (when useSubdomains: true)
+    subdomains:
+      client: "gryt"      # gryt.yourdomain.com
+      api: "api"          # api.yourdomain.com
+    
+    # Path configuration (when useSubdomains: false)
+    paths:
+      client: "/"
+      api: "/api"
+      sfu: "/sfu"
+
+# Security configuration
+security:
+  # Pod security context
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+  
+  # Container security context
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  
+  # Network policies
+  networkPolicy:
+    enabled: false
+
+# Monitoring configuration
+monitoring:
+  # Enable ServiceMonitor for Prometheus
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    labels: {}
+    interval: 30s
+  
+  # Enable PodMonitor
+  podMonitor:
+    enabled: false
+
+# Persistence configuration
+persistence:
+  enabled: false
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 1Gi
+
+# Node selector, tolerations, and affinity
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Service account
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  name: ""
+
+# Additional labels to add to all resources
+commonLabels: {}
+
+# Additional annotations to add to all resources
+commonAnnotations: {} 

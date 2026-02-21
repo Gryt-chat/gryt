@@ -1,0 +1,140 @@
+# Production deployment example for Gryt Voice Chat Platform
+# Copy this file and customize for your environment
+
+gryt:
+  domain: "gryt.mycompany.com"
+  tls:
+    enabled: true
+    certManager:
+      enabled: true
+      issuer: "letsencrypt-prod"
+  
+  auth:
+    apiUrl: "https://auth.gryt.chat"
+  
+  stun:
+    servers: "stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302"
+
+# SFU Configuration
+sfu:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: gryt/sfu
+    tag: "latest"
+    pullPolicy: Always
+  
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+# Signaling Server Configuration
+server:
+  enabled: true
+  replicaCount: 3
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  image:
+    repository: gryt/server
+    tag: "latest"
+    pullPolicy: Always
+  
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  env:
+    NODE_ENV: "production"
+    SERVER_NAME: "Gryt Production Server"
+    SERVER_ICON: "production-icon.png"
+  
+  secrets:
+    serverPassword: "super-secure-production-password-change-me"
+    corsOrigin: "https://gryt.mycompany.com"
+
+# Web Client Configuration
+client:
+  enabled: true
+  replicaCount: 3
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  image:
+    repository: gryt/client
+    tag: "latest"
+    pullPolicy: Always
+  
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+# Ingress Configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  routing:
+    useSubdomains: true
+    subdomains:
+      client: "gryt"      # gryt.mycompany.com
+      api: "api"          # api.mycompany.com
+
+# Security Configuration
+security:
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+  
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+
+# Monitoring
+monitoring:
+  serviceMonitor:
+    enabled: true
+    namespace: "monitoring"
+    labels:
+      app: "gryt"
+    interval: 30s
+
+# Node placement
+nodeSelector: {}
+tolerations: []
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - gryt
+        topologyKey: kubernetes.io/hostname 

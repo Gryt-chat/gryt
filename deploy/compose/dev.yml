@@ -1,0 +1,148 @@
+version: '3.8'
+
+services:
+  # SFU Server (Media Forwarding)
+  sfu:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.sfu
+    container_name: gryt-sfu
+    ports:
+      - "${SFU_WS_PORT:-5005}:5005"
+      # Optional: publish a fixed UDP port range for WebRTC media (recommended in production)
+      # - "${SFU_UDP_MIN:-10000}-${SFU_UDP_MAX:-10004}:${SFU_UDP_MIN:-10000}-${SFU_UDP_MAX:-10004}/udp"
+    environment:
+      - PORT=5005
+      - STUN_SERVERS=stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302
+      # Optional: pin ICE UDP ports + capacity and control what IP is advertised in ICE candidates
+      # - ICE_UDP_PORT_MIN=${SFU_UDP_MIN:-10000}
+      # - ICE_UDP_PORT_MAX=${SFU_UDP_MAX:-10004}
+      # - ICE_ADVERTISE_IP=${SFU_ADVERTISE_IP:-}
+      # - DISABLE_STUN=${SFU_DISABLE_STUN:-false}
+    volumes:
+      - ../../sfu-v2/.env:/root/.env:ro
+    networks:
+      - gryt-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5005/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Gryt Server 1 (Signaling)
+  server1:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.server
+    container_name: gryt-server-1
+    ports:
+      - "${SERVER1_PORT:-5000}:5000"
+    environment:
+      - PORT=5000
+      - SERVER_NAME=Gryta Krutt
+      - SERVER_ICON=example.png
+      - SFU_WS_HOST=ws://sfu:5005
+      - STUN_SERVERS=stun:stun.l.google.com:19302
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3666}
+      - SERVER_PASSWORD=123
+      - GRYT_AUTH_MODE=required
+      - GRYT_OIDC_ISSUER=https://auth.gryt.chat/realms/gryt
+      - GRYT_OIDC_AUDIENCE=gryt-web
+      - NODE_ENV=development
+      # Optional: voice seat limit (derived if SFU_UDP_* set)
+      # - SFU_UDP_PORT_MIN=${SFU_UDP_MIN:-10000}
+      # - SFU_UDP_PORT_MAX=${SFU_UDP_MAX:-10004}
+      # - VOICE_MAX_USERS=${VOICE_MAX_USERS:-}
+    volumes:
+      - ../../server/.env:/app/.env:ro
+      - ../../server/public:/app/public:ro
+    networks:
+      - gryt-network
+    depends_on:
+      - sfu
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Gryt Server 2 (Signaling)
+  server2:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.server
+    container_name: gryt-server-2
+    ports:
+      - "${SERVER2_PORT:-5001}:5000"
+    environment:
+      - PORT=5000
+      - SERVER_NAME=Techial
+      - SERVER_ICON=example.png
+      - SFU_WS_HOST=ws://sfu:5005
+      - STUN_SERVERS=stun:stun.l.google.com:19302
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3666}
+      - SERVER_PASSWORD=456
+      - GRYT_AUTH_MODE=required
+      - GRYT_OIDC_ISSUER=https://auth.gryt.chat/realms/gryt
+      - GRYT_OIDC_AUDIENCE=gryt-web
+      - NODE_ENV=development
+      # Optional: voice seat limit (derived if SFU_UDP_* set)
+      # - SFU_UDP_PORT_MIN=${SFU_UDP_MIN:-10000}
+      # - SFU_UDP_PORT_MAX=${SFU_UDP_MAX:-10004}
+      # - VOICE_MAX_USERS=${VOICE_MAX_USERS:-}
+    volumes:
+      - ../../server/.env:/app/.env:ro
+      - ../../server/public:/app/public:ro
+    networks:
+      - gryt-network
+    depends_on:
+      - sfu
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Web Client
+  client:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.client
+    container_name: gryt-client
+    ports:
+      - "${CLIENT_HTTP_PORT:-3666}:80"
+    environment:
+      - GRYT_OIDC_ISSUER=https://auth.gryt.chat/realms/gryt
+      - GRYT_OIDC_REALM=gryt
+      - GRYT_OIDC_CLIENT_ID=gryt-web
+    networks:
+      - gryt-network
+    depends_on:
+      - server1
+      - server2
+    restart: unless-stopped
+    healthcheck:
+      # Use 127.0.0.1 (not localhost) to avoid IPv6 ::1 issues in wget
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  gryt-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  sfu-data:
+  server-data:
+

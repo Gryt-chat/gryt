@@ -1,0 +1,116 @@
+# Development deployment example for Gryt Voice Chat Platform
+# Minimal resource usage for local development and testing
+
+gryt:
+  domain: "gryt-dev.local"
+  tls:
+    enabled: false  # Disable TLS for local development
+  
+  auth:
+    apiUrl: "https://auth.gryt.chat"
+  
+  stun:
+    servers: "stun:stun.l.google.com:19302"
+
+# SFU Configuration
+sfu:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: gryt/sfu
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+
+# Signaling Server Configuration
+server:
+  enabled: true
+  replicaCount: 1
+  autoscaling:
+    enabled: false  # Disable autoscaling for development
+  
+  image:
+    repository: gryt/server
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+  
+  env:
+    NODE_ENV: "development"
+    SERVER_NAME: "Gryt Development Server"
+    SERVER_ICON: "dev-icon.png"
+  
+  secrets:
+    serverPassword: "dev-password-123"
+    corsOrigin: "http://gryt-dev.local"
+
+# Web Client Configuration
+client:
+  enabled: true
+  replicaCount: 1
+  autoscaling:
+    enabled: false  # Disable autoscaling for development
+  
+  image:
+    repository: gryt/client
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  
+  resources:
+    requests:
+      memory: "32Mi"
+      cpu: "25m"
+    limits:
+      memory: "64Mi"
+      cpu: "50m"
+
+# Ingress Configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  routing:
+    useSubdomains: false  # Use path-based routing for simplicity
+    paths:
+      client: "/"
+      api: "/api"
+      sfu: "/sfu"
+
+# Security Configuration (relaxed for development)
+security:
+  podSecurityContext:
+    runAsNonRoot: false  # Allow root for easier debugging
+    runAsUser: 0
+    runAsGroup: 0
+    fsGroup: 0
+  
+  securityContext:
+    allowPrivilegeEscalation: true
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop: []
+
+# Monitoring (disabled for development)
+monitoring:
+  serviceMonitor:
+    enabled: false
+  podMonitor:
+    enabled: false
+
+# Node placement (none for development)
+nodeSelector: {}
+tolerations: []
+affinity: {} 

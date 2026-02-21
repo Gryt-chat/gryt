@@ -1,0 +1,21 @@
+{
+  "name": "voice-chat-playwright-tests",
+  "version": "1.0.0",
+  "description": "Automated voice chat testing with Playwright",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test",
+    "test:voice": "playwright test voice-transmission.spec.ts",
+    "test:debug": "playwright test --debug",
+    "test:headed": "playwright test --headed",
+    "install": "playwright install"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "playwright": "^1.40.0"
+  },
+  "dependencies": {
+    "wav": "^1.0.2",
+    "node-wav": "^0.0.2"
+  }
+}

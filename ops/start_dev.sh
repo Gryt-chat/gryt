@@ -3,6 +3,8 @@ set -euo pipefail
 
 SESSION="gryt"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
 
 # ── Load local overrides (ops/.env) ───────────────────────────────────
 ENV_FILE="${SCRIPT_DIR}/.env"

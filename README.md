@@ -55,10 +55,12 @@ A WebRTC-based voice chat platform with real-time communication, advanced audio 
 ### One command
 
 ```bash
-git clone https://github.com/sivert-io/WebSocket-Voice.git
-cd WebSocket-Voice
+git clone --recurse-submodules https://github.com/Gryt-chat/gryt.git
+cd gryt
 ./start_dev.sh
 ```
+
+> Already cloned without `--recurse-submodules`? Run `git submodule update --init --recursive`.
 
 This spins up **everything** in a tmux session:
 - ScyllaDB + MinIO via Docker (messages, uploads)
@@ -197,13 +199,49 @@ See [`helm/gryt/`](helm/gryt/) for the chart and [`helm/gryt/examples/production
 - **Rate limiting**: Score-based system with user-friendly feedback
 - **Auth**: Centrally hosted Keycloak (no setup required)
 
+## Repository Structure
+
+This is a monorepo that uses **git submodules** for each major component:
+
+| Directory | Repo | Description |
+|-----------|------|-------------|
+| [`auth/`](https://github.com/Gryt-chat/auth) | Gryt-chat/auth | Keycloak auth service, themes, and ops tooling |
+| [`client/`](https://github.com/Gryt-chat/client) | Gryt-chat/client | React web client with audio processing |
+| [`server/`](https://github.com/Gryt-chat/server) | Gryt-chat/server | Node.js signaling server |
+| [`site/`](https://github.com/Gryt-chat/site) | Gryt-chat/site | Landing page (gryt.chat) |
+| [`docs/`](https://github.com/Gryt-chat/docs) | Gryt-chat/docs | Documentation site (Fumadocs + Next.js) |
+| `sfu-v2/` | — | SFU media server (Go + Pion WebRTC) |
+| `deploy/` | — | Docker Compose files for dev and prod |
+| `helm/` | — | Kubernetes Helm chart |
+| `dev/` | — | Dev launcher scripts |
+
+### Working with submodules
+
+```bash
+# Clone everything
+git clone --recurse-submodules https://github.com/Gryt-chat/gryt.git
+
+# Pull latest changes (including submodules)
+git pull --recurse-submodules
+
+# Update all submodules to latest remote
+git submodule update --remote
+
+# Make changes inside a submodule (e.g. client)
+cd client
+# ... edit, commit, push (goes to Gryt-chat/client)
+cd ..
+git add client
+git commit -m "Update client submodule ref"
+git push
+```
+
 ## Documentation
 
-- [Client docs](client/README.md) - React app, audio processing
-- [Server docs](server/README.md) - Signaling, room management
+- [Client docs](https://github.com/Gryt-chat/client#readme) - React app, audio processing
+- [Server docs](https://github.com/Gryt-chat/server#readme) - Signaling, room management
 - [SFU docs](sfu-v2/README.md) - Media forwarding, WebRTC
-- [Deployment guide](docs/content/docs/deployment.mdx) - Full production deployment reference
-- [Rate limiting](docs/content/docs/development/rate-limiting.mdx) - Score-based rate limiting system
+- [Deployment guide](https://github.com/Gryt-chat/docs) - Full production deployment reference
 
 ## Troubleshooting
 

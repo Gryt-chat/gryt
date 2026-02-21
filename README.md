@@ -201,7 +201,7 @@ See [`ops/helm/gryt/`](ops/helm/gryt/) for the chart and [`ops/helm/gryt/example
 
 ## Repository Structure
 
-This is a monorepo that uses **git submodules**. Each core component lives in its own repo under [Gryt-chat](https://github.com/Gryt-chat) and is pulled in here under `packages/`. Shared infrastructure (Dockerfiles, Compose files, Helm charts, dev scripts) lives in `ops/`.
+This is a monorepo that uses **git submodules**. Each core component lives in its own repo under [Gryt-chat](https://github.com/Gryt-chat) and is pulled in here under `packages/`. Each package contains its own `Dockerfile`. Shared infrastructure (Compose files, Helm charts, dev scripts) lives in `ops/`.
 
 ```
 gryt/
@@ -214,7 +214,6 @@ gryt/
 │   └── docs/           # Documentation site (Fumadocs + Next.js)
 ├── ops/                # Shared infrastructure (not a submodule)
 │   ├── deploy/         # Docker Compose files for dev and prod
-│   ├── docker/         # Dockerfiles for client, server, and SFU
 │   ├── dev/            # Individual dev launcher scripts
 │   ├── helm/           # Kubernetes Helm chart
 │   └── start_dev.sh    # One-command tmux dev launcher

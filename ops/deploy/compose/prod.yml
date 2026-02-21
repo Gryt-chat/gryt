@@ -4,8 +4,7 @@ services:
   # SFU Server (Media Forwarding)
   sfu:
     build:
-      context: ../../..
-      dockerfile: ops/docker/Dockerfile.sfu
+      context: ../../../packages/sfu
     container_name: gryt-sfu-prod
     ports:
       - "5005:5005"
@@ -43,8 +42,7 @@ services:
   # Gryt Server (Signaling)
   server:
     build:
-      context: ../../..
-      dockerfile: ops/docker/Dockerfile.server
+      context: ../../../packages/server
     container_name: gryt-server-prod
     ports:
       - "5000:5000"
@@ -83,8 +81,7 @@ services:
   # Web Client with Nginx
   client:
     build:
-      context: ../../..
-      dockerfile: ops/docker/Dockerfile.client
+      context: ../../../packages/client
     container_name: gryt-client-prod
     ports:
       - "80:80"

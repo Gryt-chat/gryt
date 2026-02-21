@@ -117,7 +117,7 @@ echo ""
 
 # Window 0: SFU
 tmux new-session -d -s "$SESSION" -n sfu \
-  "bash -lc 'export PATH=\"/usr/local/go/bin:\$PATH\"; cd sfu-v2 && echo \"── SFU ──\" && ./start.sh; exec bash'"
+  "bash -lc 'export PATH=\"/usr/local/go/bin:\$PATH\"; cd sfu && echo \"── SFU ──\" && ./start.sh; exec bash'"
 
 # Window 1: Client (Vite)
 tmux new-window -t "$SESSION" -n client \

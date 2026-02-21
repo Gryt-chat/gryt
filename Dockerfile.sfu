@@ -7,13 +7,13 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 # Copy go mod files
-COPY sfu-v2/go.mod sfu-v2/go.sum ./
+COPY sfu/go.mod sfu/go.sum ./
 
 # Download dependencies
 RUN go mod download
 
 # Copy source code
-COPY sfu-v2/ .
+COPY sfu/ .
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o sfu ./cmd/sfu

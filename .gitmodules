@@ -13,3 +13,6 @@
 [submodule "docs"]
 	path = docs
 	url = https://github.com/Gryt-chat/docs.git
+[submodule "sfu"]
+	path = sfu
+	url = https://github.com/Gryt-chat/sfu.git

@@ -20,7 +20,7 @@ services:
       # - ICE_ADVERTISE_IP=${SFU_ADVERTISE_IP:-}
       # - DISABLE_STUN=${SFU_DISABLE_STUN:-false}
     volumes:
-      - ../../sfu-v2/.env:/root/.env:ro
+      - ../../sfu/.env:/root/.env:ro
     networks:
       - gryt-network
     restart: unless-stopped

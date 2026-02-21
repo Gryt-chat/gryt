@@ -130,7 +130,7 @@ No TURN server is required. Voice media goes directly over the pinned UDP port r
 
 ```bash
 # SFU
-cp sfu-v2/env.example sfu-v2/.env
+cp sfu/env.example sfu/.env
 
 # Server
 cp server/example.env server/.env
@@ -157,7 +157,7 @@ S3_SECRET_ACCESS_KEY=your_secret
 S3_BUCKET=gryt
 ```
 
-**3. Edit `sfu-v2/.env`** (usually defaults are fine):
+**3. Edit `sfu/.env`** (usually defaults are fine):
 
 ```env
 ICE_UDP_PORT_MIN=10000
@@ -210,7 +210,7 @@ This is a monorepo that uses **git submodules** for each major component:
 | [`server/`](https://github.com/Gryt-chat/server) | Gryt-chat/server | Node.js signaling server |
 | [`site/`](https://github.com/Gryt-chat/site) | Gryt-chat/site | Landing page (gryt.chat) |
 | [`docs/`](https://github.com/Gryt-chat/docs) | Gryt-chat/docs | Documentation site (Fumadocs + Next.js) |
-| `sfu-v2/` | — | SFU media server (Go + Pion WebRTC) |
+| [`sfu/`](https://github.com/Gryt-chat/sfu) | Gryt-chat/sfu | SFU media server (Go + Pion WebRTC) |
 | `deploy/` | — | Docker Compose files for dev and prod |
 | `helm/` | — | Kubernetes Helm chart |
 | `dev/` | — | Dev launcher scripts |
@@ -240,7 +240,7 @@ git push
 
 - [Client docs](https://github.com/Gryt-chat/client#readme) - React app, audio processing
 - [Server docs](https://github.com/Gryt-chat/server#readme) - Signaling, room management
-- [SFU docs](sfu-v2/README.md) - Media forwarding, WebRTC
+- [SFU docs](https://github.com/Gryt-chat/sfu#readme) - Media forwarding, WebRTC
 - [Deployment guide](https://github.com/Gryt-chat/docs) - Full production deployment reference
 
 ## Troubleshooting

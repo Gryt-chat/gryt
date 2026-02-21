@@ -21,7 +21,7 @@ services:
       # Set this when the SFU host is behind NAT or has multiple interfaces.
       - ICE_ADVERTISE_IP=${SFU_ADVERTISE_IP:-}
     env_file:
-      - ../../sfu-v2/.env
+      - ../../sfu/.env
     networks:
       - gryt-network
     restart: unless-stopped

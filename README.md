@@ -201,41 +201,100 @@ See [`ops/helm/gryt/`](ops/helm/gryt/) for the chart and [`ops/helm/gryt/example
 
 ## Repository Structure
 
-This is a monorepo that uses **git submodules** for each major component:
+This is a monorepo that uses **git submodules**. Each core component lives in its own repo under [Gryt-chat](https://github.com/Gryt-chat) and is pulled in here under `packages/`. Shared infrastructure (Dockerfiles, Compose files, Helm charts, dev scripts) lives in `ops/`.
 
-| Directory | Repo | Description |
-|-----------|------|-------------|
-| [`packages/auth/`](https://github.com/Gryt-chat/auth) | Gryt-chat/auth | Keycloak auth service, themes, and ops tooling |
-| [`packages/client/`](https://github.com/Gryt-chat/client) | Gryt-chat/client | React web client with audio processing |
-| [`packages/server/`](https://github.com/Gryt-chat/server) | Gryt-chat/server | Node.js signaling server |
-| [`packages/sfu/`](https://github.com/Gryt-chat/sfu) | Gryt-chat/sfu | SFU media server (Go + Pion WebRTC) |
-| [`packages/site/`](https://github.com/Gryt-chat/site) | Gryt-chat/site | Landing page (gryt.chat) |
-| [`packages/docs/`](https://github.com/Gryt-chat/docs) | Gryt-chat/docs | Documentation site (Fumadocs + Next.js) |
-| `ops/deploy/` | — | Docker Compose files for dev and prod |
-| `ops/docker/` | — | Dockerfiles for client, server, and SFU |
-| `ops/helm/` | — | Kubernetes Helm chart |
-| `ops/dev/` | — | Dev launcher scripts |
+```
+gryt/
+├── packages/           # Git submodules — each is its own repo
+│   ├── auth/           # Keycloak auth service, themes, and ops tooling
+│   ├── client/         # React web client with audio processing
+│   ├── server/         # Node.js signaling server
+│   ├── sfu/            # SFU media server (Go + Pion WebRTC)
+│   ├── site/           # Landing page (gryt.chat)
+│   └── docs/           # Documentation site (Fumadocs + Next.js)
+├── ops/                # Shared infrastructure (not a submodule)
+│   ├── deploy/         # Docker Compose files for dev and prod
+│   ├── docker/         # Dockerfiles for client, server, and SFU
+│   ├── dev/            # Individual dev launcher scripts
+│   ├── helm/           # Kubernetes Helm chart
+│   └── start_dev.sh    # One-command tmux dev launcher
+├── .github/
+├── .gitmodules
+├── LICENSE
+└── README.md
+```
 
-### Working with submodules
+| Submodule | Repo |
+|-----------|------|
+| `packages/auth` | [Gryt-chat/auth](https://github.com/Gryt-chat/auth) |
+| `packages/client` | [Gryt-chat/client](https://github.com/Gryt-chat/client) |
+| `packages/server` | [Gryt-chat/server](https://github.com/Gryt-chat/server) |
+| `packages/sfu` | [Gryt-chat/sfu](https://github.com/Gryt-chat/sfu) |
+| `packages/site` | [Gryt-chat/site](https://github.com/Gryt-chat/site) |
+| `packages/docs` | [Gryt-chat/docs](https://github.com/Gryt-chat/docs) |
+
+---
+
+## Working with Submodules
+
+### Cloning
+
+Always clone with `--recurse-submodules` so all packages are fetched:
 
 ```bash
-# Clone everything
 git clone --recurse-submodules https://github.com/Gryt-chat/gryt.git
+```
 
-# Pull latest changes (including submodules)
+If you already cloned without it, initialize the submodules manually:
+
+```bash
+git submodule update --init --recursive
+```
+
+### Pulling updates
+
+When you `git pull` the monorepo, submodules don't auto-update. Use one of:
+
+```bash
+# Pull monorepo changes AND update submodules to their recorded commits
 git pull --recurse-submodules
 
-# Update all submodules to latest remote
-git submodule update --remote
+# Or, after a normal git pull, sync submodules separately
+git submodule update --init --recursive
+```
 
-# Make changes inside a submodule (e.g. client)
+To move every submodule to the **latest commit on its remote** (not just the recorded commit):
+
+```bash
+git submodule update --remote
+```
+
+### Making changes inside a submodule
+
+Each `packages/*` directory is a full git repo. You can work in it like any normal repo:
+
+```bash
 cd packages/client
-# ... edit, commit, push (goes to Gryt-chat/client)
-cd ../..
+git checkout -b my-feature
+# ... make edits ...
+git add -A && git commit -m "Add feature"
+git push origin my-feature          # pushes to Gryt-chat/client
+```
+
+After pushing the submodule, update the monorepo to record the new commit:
+
+```bash
+cd ../..                             # back to monorepo root
 git add packages/client
 git commit -m "Update client submodule ref"
-git push
+git push                             # pushes to Gryt-chat/gryt
 ```
+
+### Tips
+
+- **Submodule = pointer.** The monorepo stores a specific commit hash for each submodule, not the code itself. When you `git add packages/client`, you're updating that pointer.
+- **Branches are independent.** The monorepo branch and each submodule's branch are separate. You can have `main` in the monorepo pointing to a `develop` commit in a submodule.
+- **VS Code / Cursor.** Both detect submodules automatically. You'll see separate source control panels for the monorepo and each submodule.
 
 ## Documentation
 

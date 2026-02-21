@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck disable=SC1091
-source "${ROOT_DIR}/dev/common.env.sh"
+source "${ROOT_DIR}/ops/dev/common.env.sh"
 
-cd "${ROOT_DIR}/server"
+cd "${ROOT_DIR}/packages/server"
 
 # Build env for optional deps
 if [[ "${DEV_WITH_DB:-1}" == "1" ]]; then

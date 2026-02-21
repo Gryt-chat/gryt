@@ -57,7 +57,7 @@ A WebRTC-based voice chat platform with real-time communication, advanced audio 
 ```bash
 git clone --recurse-submodules https://github.com/Gryt-chat/gryt.git
 cd gryt
-./start_dev.sh
+./ops/start_dev.sh
 ```
 
 > Already cloned without `--recurse-submodules`? Run `git submodule update --init --recursive`.
@@ -76,19 +76,19 @@ If you prefer separate terminals instead of tmux:
 
 ```bash
 # 1. Dev dependencies (ScyllaDB + MinIO)
-./dev/deps.sh
+./ops/dev/deps.sh
 
 # 2. SFU
-./dev/sfu.sh
+./ops/dev/sfu.sh
 
 # 3. Signaling server 1
-./dev/ws1.sh
+./ops/dev/ws1.sh
 
 # 4. Signaling server 2 (optional)
-./dev/ws2.sh
+./ops/dev/ws2.sh
 
 # 5. Client
-./dev/client.sh
+./ops/dev/client.sh
 ```
 
 ### Without database / S3
@@ -96,7 +96,7 @@ If you prefer separate terminals instead of tmux:
 If you just want voice chat without persistence:
 
 ```bash
-DEV_WITH_DB=0 DEV_WITH_S3=0 ./start_dev.sh
+DEV_WITH_DB=0 DEV_WITH_S3=0 ./ops/start_dev.sh
 ```
 
 ---
@@ -130,13 +130,13 @@ No TURN server is required. Voice media goes directly over the pinned UDP port r
 
 ```bash
 # SFU
-cp sfu/env.example sfu/.env
+cp packages/sfu/env.example packages/sfu/.env
 
 # Server
-cp server/example.env server/.env
+cp packages/server/example.env packages/server/.env
 ```
 
-**2. Edit `server/.env`** (minimum required changes):
+**2. Edit `packages/server/.env`** (minimum required changes):
 
 ```env
 # Auth – generate with: openssl rand -base64 48
@@ -157,7 +157,7 @@ S3_SECRET_ACCESS_KEY=your_secret
 S3_BUCKET=gryt
 ```
 
-**3. Edit `sfu/.env`** (usually defaults are fine):
+**3. Edit `packages/sfu/.env`** (usually defaults are fine):
 
 ```env
 ICE_UDP_PORT_MIN=10000
@@ -169,7 +169,7 @@ ICE_UDP_PORT_MAX=10004
 **4. Start**
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f ops/deploy/compose/prod.yml up -d --build
 ```
 
 **5. Point your reverse proxy** at:
@@ -182,10 +182,10 @@ Health checks: `GET /health` on all three services.
 ### Kubernetes (Helm)
 
 ```bash
-helm install gryt ./helm/gryt -f my-values.yaml
+helm install gryt ./ops/helm/gryt -f my-values.yaml
 ```
 
-See [`helm/gryt/`](helm/gryt/) for the chart and [`helm/gryt/examples/production-values.yaml`](helm/gryt/examples/production-values.yaml) for a production example.
+See [`ops/helm/gryt/`](ops/helm/gryt/) for the chart and [`ops/helm/gryt/examples/production-values.yaml`](ops/helm/gryt/examples/production-values.yaml) for a production example.
 
 ---
 
@@ -205,15 +205,16 @@ This is a monorepo that uses **git submodules** for each major component:
 
 | Directory | Repo | Description |
 |-----------|------|-------------|
-| [`auth/`](https://github.com/Gryt-chat/auth) | Gryt-chat/auth | Keycloak auth service, themes, and ops tooling |
-| [`client/`](https://github.com/Gryt-chat/client) | Gryt-chat/client | React web client with audio processing |
-| [`server/`](https://github.com/Gryt-chat/server) | Gryt-chat/server | Node.js signaling server |
-| [`site/`](https://github.com/Gryt-chat/site) | Gryt-chat/site | Landing page (gryt.chat) |
-| [`docs/`](https://github.com/Gryt-chat/docs) | Gryt-chat/docs | Documentation site (Fumadocs + Next.js) |
-| [`sfu/`](https://github.com/Gryt-chat/sfu) | Gryt-chat/sfu | SFU media server (Go + Pion WebRTC) |
-| `deploy/` | — | Docker Compose files for dev and prod |
-| `helm/` | — | Kubernetes Helm chart |
-| `dev/` | — | Dev launcher scripts |
+| [`packages/auth/`](https://github.com/Gryt-chat/auth) | Gryt-chat/auth | Keycloak auth service, themes, and ops tooling |
+| [`packages/client/`](https://github.com/Gryt-chat/client) | Gryt-chat/client | React web client with audio processing |
+| [`packages/server/`](https://github.com/Gryt-chat/server) | Gryt-chat/server | Node.js signaling server |
+| [`packages/sfu/`](https://github.com/Gryt-chat/sfu) | Gryt-chat/sfu | SFU media server (Go + Pion WebRTC) |
+| [`packages/site/`](https://github.com/Gryt-chat/site) | Gryt-chat/site | Landing page (gryt.chat) |
+| [`packages/docs/`](https://github.com/Gryt-chat/docs) | Gryt-chat/docs | Documentation site (Fumadocs + Next.js) |
+| `ops/deploy/` | — | Docker Compose files for dev and prod |
+| `ops/docker/` | — | Dockerfiles for client, server, and SFU |
+| `ops/helm/` | — | Kubernetes Helm chart |
+| `ops/dev/` | — | Dev launcher scripts |
 
 ### Working with submodules
 
@@ -228,10 +229,10 @@ git pull --recurse-submodules
 git submodule update --remote
 
 # Make changes inside a submodule (e.g. client)
-cd client
+cd packages/client
 # ... edit, commit, push (goes to Gryt-chat/client)
-cd ..
-git add client
+cd ../..
+git add packages/client
 git commit -m "Update client submodule ref"
 git push
 ```
@@ -252,7 +253,7 @@ git push
 - In production: ensure everything is served over HTTPS/WSS
 
 **Can't connect?**
-- Check that `SFU_WS_HOST` in `server/.env` is a public `wss://` URL browsers can reach
+- Check that `SFU_WS_HOST` in `packages/server/.env` is a public `wss://` URL browsers can reach
 - Check `CORS_ORIGIN` matches your client domain
 - Look at browser console + server logs
 

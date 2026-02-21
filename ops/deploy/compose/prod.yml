@@ -4,8 +4,8 @@ services:
   # SFU Server (Media Forwarding)
   sfu:
     build:
-      context: ../..
-      dockerfile: Dockerfile.sfu
+      context: ../../..
+      dockerfile: ops/docker/Dockerfile.sfu
     container_name: gryt-sfu-prod
     ports:
       - "5005:5005"
@@ -21,7 +21,7 @@ services:
       # Set this when the SFU host is behind NAT or has multiple interfaces.
       - ICE_ADVERTISE_IP=${SFU_ADVERTISE_IP:-}
     env_file:
-      - ../../sfu/.env
+      - ../../../packages/sfu/.env
     networks:
       - gryt-network
     restart: unless-stopped
@@ -43,8 +43,8 @@ services:
   # Gryt Server (Signaling)
   server:
     build:
-      context: ../..
-      dockerfile: Dockerfile.server
+      context: ../../..
+      dockerfile: ops/docker/Dockerfile.server
     container_name: gryt-server-prod
     ports:
       - "5000:5000"
@@ -57,9 +57,9 @@ services:
       - SFU_UDP_PORT_MIN=${SFU_UDP_MIN:-10000}
       - SFU_UDP_PORT_MAX=${SFU_UDP_MAX:-10004}
     env_file:
-      - ../../server/.env
+      - ../../../packages/server/.env
     volumes:
-      - ../../server/public:/app/public:ro
+      - ../../../packages/server/public:/app/public:ro
     networks:
       - gryt-network
     depends_on:
@@ -83,8 +83,8 @@ services:
   # Web Client with Nginx
   client:
     build:
-      context: ../..
-      dockerfile: Dockerfile.client
+      context: ../../..
+      dockerfile: ops/docker/Dockerfile.client
     container_name: gryt-client-prod
     ports:
       - "80:80"

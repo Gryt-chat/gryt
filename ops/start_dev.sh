@@ -84,15 +84,15 @@ if [[ "$DEV_WITH_DB" == "1" || "$DEV_WITH_S3" == "1" ]]; then
   fi
 
   echo "Starting dev dependencies (ScyllaDB + MinIO)..."
-  docker compose -f deploy/compose/dev-deps.yml up -d --wait 2>/dev/null \
-    || docker compose -f deploy/compose/dev-deps.yml up -d
+  docker compose -f ops/deploy/compose/dev-deps.yml up -d --wait 2>/dev/null \
+    || docker compose -f ops/deploy/compose/dev-deps.yml up -d
 
   [[ "$DEV_WITH_DB" == "1" ]] && wait_for_tcp 127.0.0.1 9042 "ScyllaDB" 90
   if [[ "$DEV_WITH_S3" == "1" ]]; then
     wait_for_tcp 127.0.0.1 9000 "MinIO" 60
     wait_for_http "http://127.0.0.1:9000/minio/health/ready" "MinIO" 60 || true
     # Best-effort init (compose service) + explicit bucket ensure (so avatar/file uploads don't 502).
-    docker compose -f deploy/compose/dev-deps.yml up -d minio-init >/dev/null 2>&1 || true
+    docker compose -f ops/deploy/compose/dev-deps.yml up -d minio-init >/dev/null 2>&1 || true
     echo "Ensuring MinIO bucket exists: ${S3_BUCKET}"
     docker run --rm --network host --entrypoint /bin/sh minio/mc:latest -lc "\
       mc alias set local http://127.0.0.1:9000 '${MINIO_ROOT_USER}' '${MINIO_ROOT_PASSWORD}' >/dev/null 2>&1 \
@@ -117,19 +117,19 @@ echo ""
 
 # Window 0: SFU
 tmux new-session -d -s "$SESSION" -n sfu \
-  "bash -lc 'export PATH=\"/usr/local/go/bin:\$PATH\"; cd sfu && echo \"── SFU ──\" && ./start.sh; exec bash'"
+  "bash -lc 'export PATH=\"/usr/local/go/bin:\$PATH\"; cd packages/sfu && echo \"── SFU ──\" && ./start.sh; exec bash'"
 
 # Window 1: Client (Vite)
 tmux new-window -t "$SESSION" -n client \
-  "bash -lc 'cd client && echo \"── Client ──\" && bun dev --host; exec bash'"
+  "bash -lc 'cd packages/client && echo \"── Client ──\" && bun dev --host; exec bash'"
 
 # Window 2: Server 1 (ws1) on :5000
 tmux new-window -t "$SESSION" -n ws1 \
-  "bash -lc 'cd server && echo \"── ws1 :5000 ──\" && env PORT=5000 SERVER_NAME=ws1 SERVER_ICON=owl-4.png ${COMMON_ENV} ${DEV_WITH_DB:+${SCYLLA_ENV_WS1}} bun dev; exec bash'"
+  "bash -lc 'cd packages/server && echo \"── ws1 :5000 ──\" && env PORT=5000 SERVER_NAME=ws1 SERVER_ICON=owl-4.png ${COMMON_ENV} ${DEV_WITH_DB:+${SCYLLA_ENV_WS1}} bun dev; exec bash'"
 
 # Window 3: Server 2 (ws2) on :5001
 tmux new-window -t "$SESSION" -n ws2 \
-  "bash -lc 'cd server && echo \"── ws2 :5001 ──\" && env PORT=5001 SERVER_NAME=ws2 SERVER_ICON=owl-9.png ${COMMON_ENV} ${DEV_WITH_DB:+${SCYLLA_ENV_WS2}} bun dev; exec bash'"
+  "bash -lc 'cd packages/server && echo \"── ws2 :5001 ──\" && env PORT=5001 SERVER_NAME=ws2 SERVER_ICON=owl-9.png ${COMMON_ENV} ${DEV_WITH_DB:+${SCYLLA_ENV_WS2}} bun dev; exec bash'"
 
 # Window 4: spare shell for ad-hoc commands
 tmux new-window -t "$SESSION" -n shell

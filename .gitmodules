@@ -1,18 +1,18 @@
 [submodule "auth"]
-	path = auth
+	path = packages/auth
 	url = https://github.com/Gryt-chat/auth.git
 [submodule "client"]
-	path = client
+	path = packages/client
 	url = https://github.com/Gryt-chat/client.git
 [submodule "site"]
-	path = site
+	path = packages/site
 	url = https://github.com/Gryt-chat/site.git
 [submodule "server"]
-	path = server
+	path = packages/server
 	url = https://github.com/Gryt-chat/server.git
 [submodule "docs"]
-	path = docs
+	path = packages/docs
 	url = https://github.com/Gryt-chat/docs.git
 [submodule "sfu"]
-	path = sfu
+	path = packages/sfu
 	url = https://github.com/Gryt-chat/sfu.git

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck disable=SC1091
-source "${ROOT_DIR}/dev/common.env.sh"
+source "${ROOT_DIR}/ops/dev/common.env.sh"
 
 wait_for_tcp() {
   local host="$1" port="$2" name="$3" seconds="${4:-60}"
@@ -52,7 +52,7 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
-docker compose -f deploy/compose/dev-deps.yml up -d
+docker compose -f ops/deploy/compose/dev-deps.yml up -d
 
 if [[ "$DEV_WITH_DB" == "1" ]]; then
   wait_for_tcp 127.0.0.1 9042 "ScyllaDB" 90
@@ -61,7 +61,7 @@ fi
 if [[ "$DEV_WITH_S3" == "1" ]]; then
   wait_for_tcp 127.0.0.1 9000 "MinIO" 60
   wait_for_http_ready "http://127.0.0.1:9000/minio/health/ready" "MinIO" 60 || true
-  docker compose -f deploy/compose/dev-deps.yml up -d minio-init >/dev/null 2>&1 || true
+  docker compose -f ops/deploy/compose/dev-deps.yml up -d minio-init >/dev/null 2>&1 || true
 fi
 
 echo "Dev deps started."

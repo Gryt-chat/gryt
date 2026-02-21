@@ -9,13 +9,13 @@ WORKDIR /app
 ENV BUN_INSTALL_FROZEN_LOCKFILE=0
 
 # Copy package files first for better layer caching
-COPY server/package.json server/bun.lockb* ./
+COPY packages/server/package.json packages/server/bun.lockb* ./
 
 # Install all deps (including devDependencies) so TypeScript build works
 RUN bun install --no-save
 
 # Copy source and build
-COPY server/ .
+COPY packages/server/ .
 RUN bun run build
 
 FROM oven/bun:1 AS runner

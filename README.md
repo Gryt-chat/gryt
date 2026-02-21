@@ -251,16 +251,26 @@ If you already cloned without it, initialize the submodules manually:
 git submodule update --init --recursive
 ```
 
-### Pulling updates
+### Recommended git config
 
-When you `git pull` the monorepo, submodules don't auto-update. Use one of:
+Run these once after cloning to make submodules work seamlessly:
 
 ```bash
-# Pull monorepo changes AND update submodules to their recorded commits
-git pull --recurse-submodules
+# Auto-push submodule commits when you push the monorepo
+git config push.recurseSubmodules on-demand
 
-# Or, after a normal git pull, sync submodules separately
-git submodule update --init --recursive
+# Auto-update submodules when you pull/checkout/switch branches
+git config submodule.recurse true
+```
+
+With these settings, `git pull` and `git push` behave the way you'd expect -- submodules stay in sync automatically.
+
+### Pulling updates
+
+With `submodule.recurse true` set, a normal `git pull` also updates submodules. Otherwise:
+
+```bash
+git pull --recurse-submodules
 ```
 
 To move every submodule to the **latest commit on its remote** (not just the recorded commit):
@@ -275,20 +285,20 @@ Each `packages/*` directory is a full git repo. You can work in it like any norm
 
 ```bash
 cd packages/client
-git checkout -b my-feature
 # ... make edits ...
 git add -A && git commit -m "Add feature"
-git push origin my-feature          # pushes to Gryt-chat/client
 ```
 
-After pushing the submodule, update the monorepo to record the new commit:
+Then update the monorepo to record the new commit:
 
 ```bash
 cd ../..                             # back to monorepo root
 git add packages/client
-git commit -m "Update client submodule ref"
-git push                             # pushes to Gryt-chat/gryt
+git commit -m "Update client"
+git push                             # pushes client first, then monorepo
 ```
+
+With `push.recurseSubmodules on-demand`, that single `git push` automatically pushes the submodule commit to Gryt-chat/client before pushing the monorepo to Gryt-chat/gryt.
 
 ### Tips
 

@@ -314,6 +314,11 @@ With `push.recurseSubmodules on-demand`, that single `git push` automatically pu
 
 ## Troubleshooting
 
+**Windows "Smart App Control" / SmartScreen warning?**
+- The desktop app is not code-signed yet, so Windows may show a warning when you first run it
+- Click **"More info"** → **"Run anyway"** to proceed
+- If Smart App Control is set to **Evaluation** or **On**, it may block the app entirely. Go to **Settings → Privacy & Security → Windows Security → App & browser control → Smart App Control** and set it to **Off**
+
 **No audio?**
 - Check microphone permissions in your browser
 - Verify STUN servers are configured in the SFU `.env`

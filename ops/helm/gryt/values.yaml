@@ -37,9 +37,9 @@ gryt:
 sfu:
   enabled: true
   image:
-    repository: gryt/sfu
+    repository: ghcr.io/gryt-chat/sfu
     tag: "latest"
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   
   # Service configuration
   service:
@@ -73,9 +73,9 @@ sfu:
 server:
   enabled: true
   image:
-    repository: gryt/server
+    repository: ghcr.io/gryt-chat/server
     tag: "latest"
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   
   # Service configuration
   service:
@@ -123,9 +123,9 @@ server:
 client:
   enabled: true
   image:
-    repository: gryt/client
+    repository: ghcr.io/gryt-chat/client
     tag: "latest"
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   
   # Service configuration
   service:
@@ -154,6 +154,54 @@ client:
   healthCheck:
     enabled: true
     path: "/health"
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+# Landing Site configuration
+site:
+  enabled: true
+  image:
+    repository: ghcr.io/gryt-chat/site
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+  replicaCount: 1
+  healthCheck:
+    enabled: true
+    path: "/health"
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+# Documentation site configuration
+docs:
+  enabled: true
+  image:
+    repository: ghcr.io/gryt-chat/docs
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3000
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+  replicaCount: 1
+  healthCheck:
+    enabled: true
+    path: "/"
     initialDelaySeconds: 10
     periodSeconds: 10
 
@@ -190,12 +238,16 @@ ingress:
     subdomains:
       client: "gryt"      # gryt.yourdomain.com
       api: "api"          # api.yourdomain.com
+      site: "www"         # www.yourdomain.com
+      docs: "docs"        # docs.yourdomain.com
     
     # Path configuration (when useSubdomains: false)
     paths:
       client: "/"
       api: "/api"
       sfu: "/sfu"
+      site: "/site"
+      docs: "/docs"
 
 # Security configuration
 security:

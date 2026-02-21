@@ -3,21 +3,16 @@ version: '3.8'
 services:
   # SFU Server (Media Forwarding)
   sfu:
-    build:
-      context: ../../../packages/sfu
+    image: ghcr.io/gryt-chat/sfu:${SFU_VERSION:-latest}
     container_name: gryt-sfu-prod
     ports:
       - "5005:5005"
-      # WebRTC media (UDP). Pin a dedicated range and open it in your firewall.
       - "${SFU_UDP_MIN:-10000}-${SFU_UDP_MAX:-10004}:${SFU_UDP_MIN:-10000}-${SFU_UDP_MAX:-10004}/udp"
     environment:
       - PORT=5005
       - STUN_SERVERS=${STUN_SERVERS:-stun:stun.l.google.com:19302}
-      # Pin the UDP port range used for WebRTC media.
       - ICE_UDP_PORT_MIN=${SFU_UDP_MIN:-10000}
       - ICE_UDP_PORT_MAX=${SFU_UDP_MAX:-10004}
-      # Optional: force the IP address the SFU advertises in ICE host candidates.
-      # Set this when the SFU host is behind NAT or has multiple interfaces.
       - ICE_ADVERTISE_IP=${SFU_ADVERTISE_IP:-}
     env_file:
       - ../../../packages/sfu/.env
@@ -41,8 +36,7 @@ services:
 
   # Gryt Server (Signaling)
   server:
-    build:
-      context: ../../../packages/server
+    image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest}
     container_name: gryt-server-prod
     ports:
       - "5000:5000"
@@ -80,8 +74,7 @@ services:
 
   # Web Client with Nginx
   client:
-    build:
-      context: ../../../packages/client
+    image: ghcr.io/gryt-chat/client:${CLIENT_VERSION:-latest}
     container_name: gryt-client-prod
     ports:
       - "80:80"
@@ -109,7 +102,56 @@ services:
       retries: 3
       start_period: 40s
 
+  # Landing Site
+  site:
+    image: ghcr.io/gryt-chat/site:${SITE_VERSION:-latest}
+    container_name: gryt-site-prod
+    ports:
+      - "8080:80"
+    networks:
+      - gryt-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Documentation Site
+  docs:
+    image: ghcr.io/gryt-chat/docs:${DOCS_VERSION:-latest}
+    container_name: gryt-docs-prod
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - gryt-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
 networks:
   gryt-network:
     driver: bridge
-

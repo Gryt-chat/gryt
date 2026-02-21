@@ -40,7 +40,6 @@ services:
     environment:
       - PORT=5000
       - SERVER_NAME=Gryta Krutt
-      - SERVER_ICON=example.png
       - SFU_WS_HOST=ws://sfu:5005
       - STUN_SERVERS=stun:stun.l.google.com:19302
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3666}
@@ -55,7 +54,6 @@ services:
       # - VOICE_MAX_USERS=${VOICE_MAX_USERS:-}
     volumes:
       - ../../../packages/server/.env:/app/.env:ro
-      - ../../../packages/server/public:/app/public:ro
     networks:
       - gryt-network
     depends_on:
@@ -78,7 +76,6 @@ services:
     environment:
       - PORT=5000
       - SERVER_NAME=Techial
-      - SERVER_ICON=example.png
       - SFU_WS_HOST=ws://sfu:5005
       - STUN_SERVERS=stun:stun.l.google.com:19302
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3666}
@@ -93,7 +90,6 @@ services:
       # - VOICE_MAX_USERS=${VOICE_MAX_USERS:-}
     volumes:
       - ../../../packages/server/.env:/app/.env:ro
-      - ../../../packages/server/public:/app/public:ro
     networks:
       - gryt-network
     depends_on:

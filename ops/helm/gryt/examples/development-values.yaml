@@ -52,7 +52,6 @@ server:
   env:
     NODE_ENV: "development"
     SERVER_NAME: "Gryt Development Server"
-    SERVER_ICON: "dev-icon.png"
   
   secrets:
     serverPassword: "dev-password-123"

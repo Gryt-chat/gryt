@@ -24,7 +24,6 @@ fi
 
 export PORT=5001
 export SERVER_NAME=ws2
-export SERVER_ICON=owl-9.png
 # Dev bootstrap password (DB password, if set, still overrides this).
 # Override per run, e.g. SERVER_PASSWORD=OtherPass ./dev/ws2.sh
 # Disable by setting empty explicitly: SERVER_PASSWORD= ./dev/ws2.sh

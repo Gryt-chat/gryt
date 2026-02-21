@@ -144,11 +144,11 @@ tmux new-window -t "$SESSION" -n client \
 
 # Window 2: Server 1 (ws1) on :5000
 tmux new-window -t "$SESSION" -n ws1 \
-  "bash -lc 'cd packages/server && echo \"── ws1 :5000 ──\" && env PORT=5000 SERVER_NAME=ws1 SERVER_ICON=owl-4.png ${COMMON_ENV} ${DEV_WITH_DB:+${SCYLLA_ENV_WS1}} bun dev; exec bash'"
+  "bash -lc 'cd packages/server && echo \"── ws1 :5000 ──\" && env PORT=5000 SERVER_NAME=ws1 ${COMMON_ENV} ${DEV_WITH_DB:+${SCYLLA_ENV_WS1}} bun dev; exec bash'"
 
 # Window 3: Server 2 (ws2) on :5001
 tmux new-window -t "$SESSION" -n ws2 \
-  "bash -lc 'cd packages/server && echo \"── ws2 :5001 ──\" && env PORT=5001 SERVER_NAME=ws2 SERVER_ICON=owl-9.png ${COMMON_ENV} ${DEV_WITH_DB:+${SCYLLA_ENV_WS2}} bun dev; exec bash'"
+  "bash -lc 'cd packages/server && echo \"── ws2 :5001 ──\" && env PORT=5001 SERVER_NAME=ws2 ${COMMON_ENV} ${DEV_WITH_DB:+${SCYLLA_ENV_WS2}} bun dev; exec bash'"
 
 # Window 4: spare shell for ad-hoc commands
 tmux new-window -t "$SESSION" -n shell

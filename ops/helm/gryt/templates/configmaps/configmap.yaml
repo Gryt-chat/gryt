@@ -17,7 +17,6 @@ data:
   SERVER_PORT: {{ .Values.server.service.port | quote }}
   NODE_ENV: {{ .Values.server.env.NODE_ENV | quote }}
   SERVER_NAME: {{ .Values.server.env.SERVER_NAME | quote }}
-  SERVER_ICON: {{ .Values.server.env.SERVER_ICON | quote }}
   GRYT_AUTH_API: {{ .Values.gryt.auth.apiUrl | quote }}
   
   # Nginx Configuration

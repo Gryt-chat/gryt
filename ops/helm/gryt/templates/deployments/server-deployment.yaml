@@ -56,11 +56,6 @@ spec:
             configMapKeyRef:
               name: {{ include "gryt.fullname" . }}-config
               key: SERVER_NAME
-        - name: SERVER_ICON
-          valueFrom:
-            configMapKeyRef:
-              name: {{ include "gryt.fullname" . }}-config
-              key: SERVER_ICON
         - name: GRYT_AUTH_API
           valueFrom:
             configMapKeyRef:
@@ -87,7 +82,7 @@ spec:
               name: {{ include "gryt.fullname" . }}-secrets
               key: CORS_ORIGIN
         {{- range $key, $value := .Values.server.env }}
-        {{- if not (has $key (list "PORT" "NODE_ENV" "SERVER_NAME" "SERVER_ICON")) }}
+        {{- if not (has $key (list "PORT" "NODE_ENV" "SERVER_NAME")) }}
         - name: {{ $key }}
           value: {{ $value | quote }}
         {{- end }}

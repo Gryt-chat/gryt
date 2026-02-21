@@ -109,7 +109,6 @@ services:
       NODE_ENV: production
       SERVER_NAME: ${SERVER_NAME:-My Gryt Server}
       SERVER_DESCRIPTION: ${SERVER_DESCRIPTION:-A Gryt voice chat server}
-      SERVER_ICON: ${SERVER_ICON:-example.png}
       SERVER_PASSWORD: ${SERVER_PASSWORD:-}
       SERVER_INVITE_ONLY: ${SERVER_INVITE_ONLY:-false}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3666}

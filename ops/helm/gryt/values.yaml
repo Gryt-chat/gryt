@@ -105,7 +105,6 @@ server:
     PORT: "5000"
     NODE_ENV: "production"
     SERVER_NAME: "Gryt Production Server"
-    SERVER_ICON: "example.png"
   
   # Secrets (will be base64 encoded)
   secrets:

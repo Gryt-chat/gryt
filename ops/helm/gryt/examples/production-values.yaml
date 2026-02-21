@@ -59,7 +59,6 @@ server:
   env:
     NODE_ENV: "production"
     SERVER_NAME: "Gryt Production Server"
-    SERVER_ICON: "production-icon.png"
   
   secrets:
     serverPassword: "super-secure-production-password-change-me"

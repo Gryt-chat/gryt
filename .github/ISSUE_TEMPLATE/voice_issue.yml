@@ -1,6 +1,6 @@
 name: Voice / Connection Issue
 description: Report problems with voice chat, WebRTC, or connectivity
-labels: ["bug", "voice/webrtc"]
+labels: ["🐛 bug", "🎙️ voice/webrtc", "🔍 needs triage"]
 body:
   - type: textarea
     id: what-happened

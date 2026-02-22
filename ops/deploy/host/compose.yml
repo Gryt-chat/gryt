@@ -1,9 +1,12 @@
 services:
+  # Web client (optional — most users connect via the Gryt desktop app)
+  # Enable with: docker compose --profile web up -d
   client:
     build:
       context: ../..
       dockerfile: Dockerfile.client
     container_name: gryt-client
+    profiles: ["web"]
     env_file:
       - ./.env
     ports:

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://docs.gryt.chat
+    about: Check the docs — your question might already be answered.
+  - name: Troubleshooting Guide
+    url: https://docs.gryt.chat/docs/guide/troubleshooting
+    about: Common issues and fixes for self-hosting.

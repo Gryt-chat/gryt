@@ -61,16 +61,26 @@ for i in "${!PACKAGES[@]}"; do
     commit_count="new"
   else
     version="$tag"
-    # Count commits since that tag in the submodule
-    if git -C "$ROOT_DIR/packages/$name" rev-parse "$tag" &>/dev/null; then
-      commit_count=$(git -C "$ROOT_DIR/packages/$name" rev-list "$tag"..HEAD --count 2>/dev/null || echo "?")
+    sub_dir="$ROOT_DIR/packages/$name"
+    commit_count="?"
+
+    # 1) Tag lives in the submodule itself (server, sfu)
+    if git -C "$sub_dir" rev-parse "$tag" &>/dev/null; then
+      commit_count=$(git -C "$sub_dir" rev-list "$tag"..HEAD --count 2>/dev/null || echo "?")
     else
-      # Tag not fetched locally — try fetching it
-      git -C "$ROOT_DIR/packages/$name" fetch --tags --quiet 2>/dev/null || true
-      if git -C "$ROOT_DIR/packages/$name" rev-parse "$tag" &>/dev/null; then
-        commit_count=$(git -C "$ROOT_DIR/packages/$name" rev-list "$tag"..HEAD --count 2>/dev/null || echo "?")
-      else
-        commit_count="?"
+      git -C "$sub_dir" fetch --tags --quiet 2>/dev/null || true
+      if git -C "$sub_dir" rev-parse "$tag" &>/dev/null; then
+        commit_count=$(git -C "$sub_dir" rev-list "$tag"..HEAD --count 2>/dev/null || echo "?")
+      fi
+    fi
+
+    # 2) Tag lives in the parent repo (client releases on Gryt-chat/gryt).
+    #    Resolve the submodule commit recorded at that tag, then count from there.
+    if [[ "$commit_count" == "?" ]]; then
+      git -C "$ROOT_DIR" fetch --tags --quiet 2>/dev/null || true
+      pinned=$(git -C "$ROOT_DIR" rev-parse "$tag:packages/$name" 2>/dev/null || echo "")
+      if [[ -n "$pinned" ]]; then
+        commit_count=$(git -C "$sub_dir" rev-list "$pinned"..HEAD --count 2>/dev/null || echo "?")
       fi
     fi
   fi

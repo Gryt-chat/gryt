@@ -42,7 +42,7 @@ services:
       - SERVER_NAME=Gryta Krutt
       - SFU_WS_HOST=ws://sfu:5005
       - STUN_SERVERS=stun:stun.l.google.com:19302
-      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3666}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3666,https://app.gryt.chat}
       - SERVER_PASSWORD=changeme-1
       - GRYT_AUTH_MODE=required
       - GRYT_OIDC_ISSUER=https://auth.gryt.chat/realms/gryt
@@ -90,7 +90,7 @@ services:
       - SERVER_NAME=Techial
       - SFU_WS_HOST=ws://sfu:5005
       - STUN_SERVERS=stun:stun.l.google.com:19302
-      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3666}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3666,https://app.gryt.chat}
       - SERVER_PASSWORD=changeme-2
       - GRYT_AUTH_MODE=required
       - GRYT_OIDC_ISSUER=https://auth.gryt.chat/realms/gryt

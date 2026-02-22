@@ -1,0 +1,15 @@
+services:
+  docs:
+    build:
+      context: ../packages/docs
+      network: host
+    ports:
+      - "9471:3000"
+    restart: unless-stopped
+
+  site:
+    build:
+      context: ../packages/site
+    ports:
+      - "9472:80"
+    restart: unless-stopped

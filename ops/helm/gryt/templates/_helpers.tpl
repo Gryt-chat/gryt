@@ -136,13 +136,13 @@ Get the SFU WebSocket host
 
 
 {{/*
-Get the CORS origin
+Get the CORS origin — always includes the hosted client (app.gryt.chat)
 */}}
 {{- define "gryt.corsOrigin" -}}
 {{- if .Values.ingress.routing.useSubdomains -}}
-{{- printf "https://%s.%s" .Values.ingress.routing.subdomains.client .Values.gryt.domain -}}
+{{- printf "https://app.gryt.chat,https://%s.%s" .Values.ingress.routing.subdomains.client .Values.gryt.domain -}}
 {{- else -}}
-{{- printf "https://%s" .Values.gryt.domain -}}
+{{- printf "https://app.gryt.chat,https://%s" .Values.gryt.domain -}}
 {{- end -}}
 {{- end }}
 

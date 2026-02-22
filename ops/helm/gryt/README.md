@@ -45,7 +45,7 @@ A Helm chart for deploying the Gryt Voice Chat Platform on Kubernetes.
    server:
      secrets:
        serverPassword: "your-secure-password"
-       corsOrigin: "https://gryt.yourdomain.com"
+       corsOrigin: "https://app.gryt.chat,https://gryt.yourdomain.com"
    ```
 
 3. **Install with custom values**:
@@ -153,7 +153,7 @@ server:
     maxReplicas: 20
   secrets:
     serverPassword: "super-secure-production-password"
-    corsOrigin: "https://gryt.mycompany.com"
+    corsOrigin: "https://app.gryt.chat,https://gryt.mycompany.com"
   resources:
     requests:
       memory: "256Mi"
@@ -198,7 +198,7 @@ server:
     enabled: false
   secrets:
     serverPassword: "dev-password"
-    corsOrigin: "http://gryt-dev.mycompany.com"
+    corsOrigin: "https://app.gryt.chat,http://gryt-dev.mycompany.com"
 
 client:
   replicaCount: 1

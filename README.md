@@ -39,18 +39,30 @@ Full documentation lives at **[docs.gryt.chat](https://docs.gryt.chat)**:
 - [Troubleshooting](https://docs.gryt.chat/docs/guide/troubleshooting) — common issues and fixes
 - [FAQ](https://docs.gryt.chat/docs/guide/faq)
 
+## Docker Images
+
+Pre-built images are published to GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/gryt-chat/server:latest
+docker pull ghcr.io/gryt-chat/sfu:latest
+docker pull ghcr.io/gryt-chat/client:latest
+```
+
+See the [Docker Compose deployment guide](https://docs.gryt.chat/docs/deployment/docker-compose) to self-host with a single command.
+
 ## Repository Structure
 
 Monorepo using **git submodules**. Shared infrastructure lives in `ops/`.
 
-| Package | Description | Docs |
-|---------|-------------|------|
-| [`packages/client`](https://github.com/Gryt-chat/client) | React web client | [docs](https://docs.gryt.chat/docs/client) |
-| [`packages/server`](https://github.com/Gryt-chat/server) | Node.js signaling server | [docs](https://docs.gryt.chat/docs/server) |
-| [`packages/sfu`](https://github.com/Gryt-chat/sfu) | Go SFU media server | [docs](https://docs.gryt.chat/docs/sfu) |
-| [`packages/auth`](https://github.com/Gryt-chat/auth) | Keycloak auth service | — |
-| [`packages/docs`](https://github.com/Gryt-chat/docs) | Documentation site | — |
-| [`packages/site`](https://github.com/Gryt-chat/site) | Landing page | — |
+| Package | Description | Image | Docs |
+|---------|-------------|-------|------|
+| [`packages/client`](https://github.com/Gryt-chat/client) | React web client | `ghcr.io/gryt-chat/client` | [docs](https://docs.gryt.chat/docs/client) |
+| [`packages/server`](https://github.com/Gryt-chat/server) | Node.js signaling server | `ghcr.io/gryt-chat/server` | [docs](https://docs.gryt.chat/docs/server) |
+| [`packages/sfu`](https://github.com/Gryt-chat/sfu) | Go SFU media server | `ghcr.io/gryt-chat/sfu` | [docs](https://docs.gryt.chat/docs/sfu) |
+| [`packages/auth`](https://github.com/Gryt-chat/auth) | Keycloak auth service | — | — |
+| [`packages/docs`](https://github.com/Gryt-chat/docs) | Documentation site | `ghcr.io/gryt-chat/docs` | — |
+| [`packages/site`](https://github.com/Gryt-chat/site) | Landing page | `ghcr.io/gryt-chat/site` | — |
 
 ## Contributing
 

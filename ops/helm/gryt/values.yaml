@@ -109,7 +109,7 @@ server:
   # Secrets (will be base64 encoded)
   secrets:
     serverPassword: "your-secure-password"
-    corsOrigin: "https://yourdomain.com"
+    corsOrigin: "https://app.gryt.chat,https://yourdomain.com"
   
   # Health checks
   healthCheck:

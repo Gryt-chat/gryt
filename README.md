@@ -39,17 +39,36 @@ Full documentation lives at **[docs.gryt.chat](https://docs.gryt.chat)**:
 - [Troubleshooting](https://docs.gryt.chat/docs/guide/troubleshooting) — common issues and fixes
 - [FAQ](https://docs.gryt.chat/docs/guide/faq)
 
+## Self-Hosting
+
+Host your own Gryt server with Docker Compose — connect with the desktop app:
+
+```bash
+curl -O https://raw.githubusercontent.com/Gryt-chat/gryt/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/Gryt-chat/gryt/main/.env.example
+cp .env.example .env       # edit as needed
+docker compose up -d
+```
+
+Download the **[Gryt desktop app](https://github.com/Gryt-chat/gryt/releases)** and connect to your server.
+
+Optionally run the web client too:
+
+```bash
+docker compose --profile web up -d
+```
+
 ## Docker Images
 
 Pre-built images are published to GitHub Container Registry:
 
-```bash
-docker pull ghcr.io/gryt-chat/server:latest
-docker pull ghcr.io/gryt-chat/sfu:latest
-docker pull ghcr.io/gryt-chat/client:latest
-```
+| Image | Purpose | Required? |
+|-------|---------|-----------|
+| `ghcr.io/gryt-chat/server` | Signaling, chat, file uploads | Yes |
+| `ghcr.io/gryt-chat/sfu` | WebRTC media forwarding | Yes |
+| `ghcr.io/gryt-chat/client` | Web UI (browser access) | Optional |
 
-See the [Docker Compose deployment guide](https://docs.gryt.chat/docs/deployment/docker-compose) to self-host with a single command.
+See the [Docker Compose deployment guide](https://docs.gryt.chat/docs/deployment/docker-compose) for the full guide.
 
 ## Repository Structure
 

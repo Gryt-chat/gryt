@@ -34,8 +34,6 @@ PACKAGES=(
   "client|Gryt-chat/gryt|packages/client/scripts/release.sh|Electron + Docker client"
   "server|Gryt-chat/server|packages/server/scripts/release.sh|Signaling server"
   "sfu|Gryt-chat/sfu|packages/sfu/scripts/release.sh|Media server (SFU)"
-  "site|Gryt-chat/site|packages/site/scripts/release.sh|Landing page"
-  "docs|Gryt-chat/docs|packages/docs/scripts/release.sh|Documentation"
 )
 
 # ── Fetch latest release + detect changes ─────────────────────────────

@@ -1,0 +1,96 @@
+name: Voice / Connection Issue
+description: Report problems with voice chat, WebRTC, or connectivity
+labels: ["bug", "voice/webrtc"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the voice or connection issue.
+      placeholder: "e.g. I can hear others but they can't hear me, audio cuts out after 30 seconds, etc."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: network-setup
+    attributes:
+      label: Network setup
+      description: What kind of network are you on?
+      options:
+        - Direct (no NAT / public IP)
+        - Behind NAT (home router)
+        - Corporate or university network
+        - VPN
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      description: How is the Gryt server you connected to deployed?
+      options:
+        - Self-hosted (Docker Compose)
+        - Self-hosted (built from source)
+        - gryt.chat (official)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: sfu-version
+    attributes:
+      label: SFU version
+      description: "Check the /health endpoint or startup logs. e.g. 1.0.1"
+      placeholder: "1.0.1"
+    validations:
+      required: true
+
+  - type: input
+    id: server-version
+    attributes:
+      label: Server version
+      description: "Check the /health endpoint or startup logs. e.g. 1.0.1"
+      placeholder: "1.0.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: worked-before
+    attributes:
+      label: Did it work before?
+      description: Has voice chat ever worked for you on this setup?
+      options:
+        - "Yes, it stopped working"
+        - "No, it never worked"
+        - "First time trying"
+    validations:
+      required: true
+
+  - type: textarea
+    id: client-info
+    attributes:
+      label: Client info
+      description: Fill in everything that applies.
+      value: |
+        - **Client:** [Desktop app / Web browser]
+        - **Client version:** 
+        - **OS:** 
+        - **Browser (if web):** 
+    validations:
+      required: true
+
+  - type: textarea
+    id: sfu-logs
+    attributes:
+      label: SFU logs
+      description: Paste SFU container/process logs from around the time of the issue.
+      render: shell
+
+  - type: textarea
+    id: browser-logs
+    attributes:
+      label: Browser console logs
+      description: Open DevTools (F12) > Console, reproduce the issue, and paste the output.
+      render: shell

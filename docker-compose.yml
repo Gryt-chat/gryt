@@ -1,13 +1,20 @@
 ##############################################################################
-# Gryt — All-in-One Docker Compose
+# Gryt — Self-Hosted Docker Compose
 #
-# Spins up the full Gryt stack using pre-built images from GHCR.
+# Spins up the Gryt backend using pre-built images from GHCR.
 # No need to clone any repos — just this file + .env is enough.
+#
+# Core services: Server, SFU, ScyllaDB, MinIO
+# Connect with the Gryt desktop app (Linux / macOS / Windows).
 #
 # Usage:
 #   1. Copy .env.example to .env and edit it
 #   2. docker compose up -d
-#   3. Open http://localhost:3666
+#   3. Connect with the Gryt desktop app
+#
+# Optional — run the web client too:
+#   docker compose --profile web up -d
+#   Then open http://localhost:3666
 #
 # Images are published to ghcr.io/gryt-chat/* on every release.
 ##############################################################################
@@ -151,11 +158,14 @@ services:
       retries: 3
       start_period: 30s
 
-  # ── Web Client ───────────────────────────────────────────────────────────
+  # ── Web Client (optional) ────────────────────────────────────────────────
+  # Most users connect via the Gryt desktop app (Electron).
+  # Enable the web client with: docker compose --profile web up -d
 
   client:
     image: ghcr.io/gryt-chat/client:${CLIENT_VERSION:-latest}
     container_name: gryt-client
+    profiles: ["web"]
     ports:
       - "${CLIENT_PORT:-3666}:80"
     environment:

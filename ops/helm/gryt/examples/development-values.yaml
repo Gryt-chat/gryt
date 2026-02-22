@@ -17,7 +17,7 @@ sfu:
   enabled: true
   replicaCount: 1
   image:
-    repository: gryt/sfu
+    repository: ghcr.io/gryt-chat/sfu
     tag: "latest"
     pullPolicy: IfNotPresent
   
@@ -37,7 +37,7 @@ server:
     enabled: false  # Disable autoscaling for development
   
   image:
-    repository: gryt/server
+    repository: ghcr.io/gryt-chat/server
     tag: "latest"
     pullPolicy: IfNotPresent
   
@@ -55,7 +55,7 @@ server:
   
   secrets:
     serverPassword: "dev-password-123"
-    corsOrigin: "http://gryt-dev.local"
+    corsOrigin: "https://app.gryt.chat,http://gryt-dev.local"
 
 # Web Client Configuration
 client:
@@ -65,7 +65,7 @@ client:
     enabled: false  # Disable autoscaling for development
   
   image:
-    repository: gryt/client
+    repository: ghcr.io/gryt-chat/client
     tag: "latest"
     pullPolicy: IfNotPresent
   

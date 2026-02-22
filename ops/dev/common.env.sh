@@ -31,7 +31,7 @@ export SFU_PUBLIC_HOST="${SFU_PUBLIC_HOST:-wss://sfu.example.com}"
 export STUN_SERVERS="${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}"
 
 # CORS allowlist
-export CORS_ORIGIN="${CORS_ORIGIN:-http://localhost:3666,https://gryt.example.com}"
+export CORS_ORIGIN="${CORS_ORIGIN:-http://localhost:3666,https://app.gryt.chat}"
 
 # Gryt auth (Keycloak / OIDC)
 export GRYT_AUTH_MODE="${GRYT_AUTH_MODE:-required}"

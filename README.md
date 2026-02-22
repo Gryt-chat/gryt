@@ -11,6 +11,10 @@
   </p>
 
   <img src="/.github/preview_client.png" width="700" alt="Gryt preview" />
+
+  <br />
+
+  <strong><a href="https://app.gryt.chat">Try Gryt instantly at app.gryt.chat</a></strong> — no download or setup required.
 </div>
 
 <br />
@@ -50,7 +54,7 @@ cp .env.example .env       # edit as needed
 docker compose up -d
 ```
 
-Download the **[Gryt desktop app](https://github.com/Gryt-chat/gryt/releases)** and connect to your server.
+Download the **[Gryt desktop app](https://github.com/Gryt-chat/gryt/releases)** and connect to your server, or use the hosted web client at **[app.gryt.chat](https://app.gryt.chat)**.
 
 Optionally run the web client too:
 

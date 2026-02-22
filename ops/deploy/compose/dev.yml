@@ -1,4 +1,4 @@
-version: '3.8'
+name: gryt-dev
 
 services:
   # SFU Server (Media Forwarding)
@@ -7,7 +7,7 @@ services:
       context: ../../../packages/sfu
     container_name: gryt-sfu
     ports:
-      - "${SFU_WS_PORT:-5005}:5005"
+      - "${SFU_WS_PORT:-5006}:5005"
       # Optional: publish a fixed UDP port range for WebRTC media (recommended in production)
       # - "${SFU_UDP_MIN:-10000}-${SFU_UDP_MAX:-10019}:${SFU_UDP_MIN:-10000}-${SFU_UDP_MAX:-10019}/udp"
     environment:
@@ -36,13 +36,13 @@ services:
       context: ../../../packages/server
     container_name: gryt-server-1
     ports:
-      - "${SERVER1_PORT:-5000}:5000"
+      - "${SERVER1_PORT:-5001}:5000"
     environment:
       - PORT=5000
       - SERVER_NAME=Gryta Krutt
       - SFU_WS_HOST=ws://sfu:5005
       - STUN_SERVERS=stun:stun.l.google.com:19302
-      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3666,https://app.gryt.chat}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3777,https://app.gryt.chat}
       - SERVER_PASSWORD=changeme-1
       - GRYT_AUTH_MODE=required
       - GRYT_OIDC_ISSUER=https://auth.gryt.chat/realms/gryt
@@ -84,13 +84,13 @@ services:
       context: ../../../packages/server
     container_name: gryt-server-2
     ports:
-      - "${SERVER2_PORT:-5001}:5000"
+      - "${SERVER2_PORT:-5002}:5000"
     environment:
       - PORT=5000
       - SERVER_NAME=Techial
       - SFU_WS_HOST=ws://sfu:5005
       - STUN_SERVERS=stun:stun.l.google.com:19302
-      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3666,https://app.gryt.chat}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3777,https://app.gryt.chat}
       - SERVER_PASSWORD=changeme-2
       - GRYT_AUTH_MODE=required
       - GRYT_OIDC_ISSUER=https://auth.gryt.chat/realms/gryt
@@ -132,7 +132,7 @@ services:
       context: ../../../packages/client
     container_name: gryt-client
     ports:
-      - "${CLIENT_HTTP_PORT:-3666}:80"
+      - "${CLIENT_HTTP_PORT:-3777}:80"
     environment:
       - GRYT_OIDC_ISSUER=https://auth.gryt.chat/realms/gryt
       - GRYT_OIDC_REALM=gryt

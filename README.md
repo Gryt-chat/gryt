@@ -95,4 +95,4 @@ See the [contributing guide](https://docs.gryt.chat/docs/guide/contributing) for
 
 This project is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE).
 
-For commercial licensing inquiries, contact [sivert@sivert.io](mailto:sivert@sivert.io).
+For commercial licensing inquiries, contact [sivert@gryt.chat](mailto:sivert@gryt.chat).

@@ -34,7 +34,7 @@ S3_DISABLE_ENV="DISABLE_S3=true"
 SFU_WS_HOST="${SFU_WS_HOST:-ws://127.0.0.1:5005}"
 SFU_PUBLIC_HOST="${SFU_PUBLIC_HOST:-wss://sfu.example.com}"
 STUN_SERVERS="${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}"
-CORS_ORIGIN="${CORS_ORIGIN:-http://localhost:3666,https://app.gryt.chat}"
+CORS_ORIGIN="${CORS_ORIGIN:-http://localhost:3777,https://app.gryt.chat}"
 GRYT_AUTH_MODE="${GRYT_AUTH_MODE:-required}"
 GRYT_OIDC_ISSUER="${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}"
 GRYT_OIDC_AUDIENCE="${GRYT_OIDC_AUDIENCE:-gryt-web}"
@@ -142,13 +142,13 @@ tmux new-session -d -s "$SESSION" -n sfu \
 tmux new-window -t "$SESSION" -n client \
   "bash -lc 'cd packages/client && echo \"── Client ──\" && bun dev --host; exec bash'"
 
-# Window 2: Server 1 (ws1) on :5000
+# Window 2: Server 1 (ws1) on :5001
 tmux new-window -t "$SESSION" -n ws1 \
-  "bash -lc 'cd packages/server && echo \"── ws1 :5000 ──\" && env PORT=5000 SERVER_NAME=ws1 ${COMMON_ENV} ${DEV_WITH_DB:+${SCYLLA_ENV_WS1}} bun dev; exec bash'"
+  "bash -lc 'cd packages/server && echo \"── ws1 :5001 ──\" && env PORT=5001 SERVER_NAME=ws1 ${COMMON_ENV} ${DEV_WITH_DB:+${SCYLLA_ENV_WS1}} bun dev; exec bash'"
 
-# Window 3: Server 2 (ws2) on :5001
+# Window 3: Server 2 (ws2) on :5002
 tmux new-window -t "$SESSION" -n ws2 \
-  "bash -lc 'cd packages/server && echo \"── ws2 :5001 ──\" && env PORT=5001 SERVER_NAME=ws2 ${COMMON_ENV} ${DEV_WITH_DB:+${SCYLLA_ENV_WS2}} bun dev; exec bash'"
+  "bash -lc 'cd packages/server && echo \"── ws2 :5002 ──\" && env PORT=5002 SERVER_NAME=ws2 ${COMMON_ENV} ${DEV_WITH_DB:+${SCYLLA_ENV_WS2}} bun dev; exec bash'"
 
 # Window 4: spare shell for ad-hoc commands
 tmux new-window -t "$SESSION" -n shell

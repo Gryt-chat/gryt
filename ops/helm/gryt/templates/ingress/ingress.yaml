@@ -1,0 +1,99 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "gryt.fullname" . }}-ingress
+  labels:
+    {{- include "gryt.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- if .Values.gryt.tls.certManager.enabled }}
+    cert-manager.io/cluster-issuer: {{ .Values.gryt.tls.certManager.issuer | quote }}
+    {{- end }}
+    {{- with (include "gryt.annotations" .) }}
+    {{- . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.gryt.tls.enabled }}
+  tls:
+  - hosts:
+    {{- if .Values.ingress.routing.useSubdomains }}
+    - {{ .Values.ingress.routing.subdomains.client }}.{{ .Values.gryt.domain }}
+    - {{ .Values.ingress.routing.subdomains.api }}.{{ .Values.gryt.domain }}
+    {{- else }}
+    - {{ .Values.gryt.domain }}
+    {{- end }}
+    secretName: {{ .Values.gryt.tls.secretName }}
+  {{- end }}
+  rules:
+  {{- if .Values.ingress.routing.useSubdomains }}
+  # Subdomain-based routing
+  - host: {{ .Values.ingress.routing.subdomains.client }}.{{ .Values.gryt.domain }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "gryt.fullname" . }}-client
+            port:
+              number: {{ .Values.client.service.port }}
+  
+  - host: {{ .Values.ingress.routing.subdomains.api }}.{{ .Values.gryt.domain }}
+    http:
+      paths:
+      # Signaling server WebSocket
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "gryt.fullname" . }}-server
+            port:
+              number: {{ .Values.server.service.port }}
+      
+      # SFU WebSocket (if needed for direct access)
+      - path: /sfu
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "gryt.fullname" . }}-sfu
+            port:
+              number: {{ .Values.sfu.service.port }}
+  {{- else }}
+  # Path-based routing
+  - host: {{ .Values.gryt.domain }}
+    http:
+      paths:
+      # API endpoints
+      - path: {{ .Values.ingress.routing.paths.api }}
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "gryt.fullname" . }}-server
+            port:
+              number: {{ .Values.server.service.port }}
+      
+      # SFU endpoints
+      - path: {{ .Values.ingress.routing.paths.sfu }}
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "gryt.fullname" . }}-sfu
+            port:
+              number: {{ .Values.sfu.service.port }}
+      
+      # Web client (catch-all)
+      - path: {{ .Values.ingress.routing.paths.client }}
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "gryt.fullname" . }}-client
+            port:
+              number: {{ .Values.client.service.port }}
+  {{- end }}
+{{- end }} 

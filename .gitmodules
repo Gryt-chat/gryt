@@ -1,0 +1,24 @@
+[submodule "auth"]
+	path = packages/auth
+	url = https://github.com/Gryt-chat/auth.git
+	branch = main
+[submodule "client"]
+	path = packages/client
+	url = https://github.com/Gryt-chat/client.git
+	branch = main
+[submodule "site"]
+	path = packages/site
+	url = https://github.com/Gryt-chat/site.git
+	branch = main
+[submodule "server"]
+	path = packages/server
+	url = https://github.com/Gryt-chat/server.git
+	branch = main
+[submodule "docs"]
+	path = packages/docs
+	url = https://github.com/Gryt-chat/docs.git
+	branch = main
+[submodule "sfu"]
+	path = packages/sfu
+	url = https://github.com/Gryt-chat/sfu.git
+	branch = main

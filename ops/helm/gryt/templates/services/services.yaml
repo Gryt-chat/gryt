@@ -1,0 +1,67 @@
+{{- if .Values.sfu.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gryt.fullname" . }}-sfu
+  labels:
+    {{- include "gryt.sfu.labels" . | nindent 4 }}
+  {{- with (include "gryt.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.sfu.service.type }}
+  ports:
+  - port: {{ .Values.sfu.service.port }}
+    targetPort: {{ .Values.sfu.service.port }}
+    protocol: TCP
+    name: websocket
+  selector:
+    {{- include "gryt.sfu.selectorLabels" . | nindent 4 }}
+{{- end }}
+
+{{- if .Values.server.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gryt.fullname" . }}-server
+  labels:
+    {{- include "gryt.server.labels" . | nindent 4 }}
+  {{- with (include "gryt.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.server.service.type }}
+  ports:
+  - port: {{ .Values.server.service.port }}
+    targetPort: {{ .Values.server.service.port }}
+    protocol: TCP
+    name: websocket
+  selector:
+    {{- include "gryt.server.selectorLabels" . | nindent 4 }}
+{{- end }}
+
+{{- if .Values.client.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gryt.fullname" . }}-client
+  labels:
+    {{- include "gryt.client.labels" . | nindent 4 }}
+  {{- with (include "gryt.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.client.service.type }}
+  ports:
+  - port: {{ .Values.client.service.port }}
+    targetPort: {{ .Values.client.service.port }}
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "gryt.client.selectorLabels" . | nindent 4 }}
+{{- end }} 

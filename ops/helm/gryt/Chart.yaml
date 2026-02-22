@@ -1,0 +1,20 @@
+apiVersion: v2
+name: gryt
+description: A Helm chart for Gryt Voice Chat Platform
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+home: https://github.com/gryt-chat/gryt
+sources:
+  - https://github.com/gryt-chat/gryt
+maintainers:
+  - name: Gryt Team
+    email: support@gryt.chat
+keywords:
+  - voice-chat
+  - webrtc
+  - real-time
+  - communication
+annotations:
+  category: Communication
+  licenses: MIT 

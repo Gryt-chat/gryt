@@ -1,0 +1,35 @@
+# Auth secrets
+auth/.env
+
+# Local auth backups
+auth/backups/*.sql
+auth/backups/*.sql.gz
+auth/backups/*.dump
+auth/backups/*.dump.gz
+
+# Env files (never commit secrets)
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Node / JS artifacts
+**/node_modules/
+**/dist/
+**/.next/
+**/out/
+**/build/
+**/coverage/
+**/*.tsbuildinfo
+
+# Docs generators (fumadocs/next)
+**/.contentlayer/
+**/.content-collections/
+**/.source/
+**/.vercel/
+
+# OS/editor noise
+.DS_Store
+

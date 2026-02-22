@@ -1,0 +1,56 @@
+services:
+  # ScyllaDB (Cassandra-compatible) for messages/users/files metadata
+  scylla:
+    image: scylladb/scylla:latest
+    container_name: gryt-dev-scylla
+    command: ["--overprovisioned", "1", "--smp", "1", "--listen-address", "0.0.0.0", "--rpc-address", "0.0.0.0", "--broadcast-address", "127.0.0.1", "--broadcast-rpc-address", "127.0.0.1"]
+    ports:
+      - "9042:9042"
+    volumes:
+      - gryt-dev-scylla-data:/var/lib/scylla
+    restart: unless-stopped
+
+  # MinIO (S3-compatible object storage) for uploads
+  minio:
+    image: minio/minio:latest
+    container_name: gryt-dev-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - gryt-dev-minio-data:/data
+    restart: unless-stopped
+
+  # Create the default bucket used by the server in dev.
+  # This runs once and exits (safe to re-run).
+  minio-init:
+    image: minio/mc:latest
+    container_name: gryt-dev-minio-init
+    depends_on:
+      - minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${S3_BUCKET:-gryt}
+    entrypoint: ["/bin/sh", "-lc"]
+    command: |
+      set -e
+      echo "Waiting for MinIO..."
+      for i in $(seq 1 60); do
+        if mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null 2>&1; then
+          break
+        fi
+        sleep 1
+      done
+      mc mb -p "local/$$S3_BUCKET" >/dev/null 2>&1 || true
+      echo "MinIO bucket ensured: $$S3_BUCKET"
+    restart: "no"
+
+volumes:
+  gryt-dev-scylla-data:
+  gryt-dev-minio-data:
+

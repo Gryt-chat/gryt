@@ -25,11 +25,27 @@
 ## Self-Hosting
 
 ```bash
-curl -O https://raw.githubusercontent.com/Gryt-chat/gryt/main/docker-compose.yml
+mkdir gryt && cd gryt
+curl -LO https://raw.githubusercontent.com/Gryt-chat/gryt/main/docker-compose.yml
+curl -LO https://raw.githubusercontent.com/Gryt-chat/gryt/main/.env.example
+cp .env.example .env
+```
+
+Open `.env` and review the key settings:
+
+```bash
+SERVER_NAME=My Gryt Server          # display name shown to users
+SERVER_PASSWORD=                     # leave empty for open access, or set a password
+JWT_SECRET=change-me-in-production   # IMPORTANT: run `openssl rand -base64 48` for a real secret
+```
+
+Then start the server:
+
+```bash
 docker compose up -d
 ```
 
-Once running, go to **[app.gryt.chat](https://app.gryt.chat)** and connect to your server using your machine's local IP (e.g. `192.168.x.x:5000`).
+Connect using the [Gryt desktop app](https://github.com/Gryt-chat/gryt/releases) or [app.gryt.chat](https://app.gryt.chat) — enter your server address (e.g. `localhost` or your public IP).
 
 See the [deployment docs](https://docs.gryt.chat/docs/deployment) for configuration, `.env` options, and production setup.
 

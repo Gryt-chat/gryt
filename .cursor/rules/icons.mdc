@@ -1,0 +1,21 @@
+---
+description: Icon library conventions — use react-icons (Material Design) only
+globs: "**/*.tsx"
+alwaysApply: false
+---
+
+# Icons: react-icons/md only
+
+- **Use `react-icons/md`** (Material Design icons) for all icons.
+- **Never use `lucide-react`**, `@heroicons`, `@phosphor-icons`, or other icon libraries.
+- Always set an explicit `size` prop on every icon (e.g. `<MdRefresh size={16} />`).
+
+```tsx
+// BAD
+import { RotateCw } from "lucide-react";
+<RotateCw size={14} />
+
+// GOOD
+import { MdRefresh } from "react-icons/md";
+<MdRefresh size={14} />
+```

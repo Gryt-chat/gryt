@@ -1,0 +1,8 @@
+---
+description: Git commit message conventions
+alwaysApply: true
+---
+
+# Git commit rules
+
+- **Never** add `Co-authored-by` trailers to commit messages.

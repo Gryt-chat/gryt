@@ -10,7 +10,7 @@
     <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=white" alt="Go" /></a>
   </p>
 
-  <img src="/packages/site/public/preview.png" width="700" alt="Gryt preview" />
+  <img src="/.github/preview.png" width="700" alt="Gryt preview" />
 
   <br />
 

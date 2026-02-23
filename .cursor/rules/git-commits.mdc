@@ -1,8 +1,9 @@
 ---
-description: Git commit message conventions
+description: Git commit rules
 alwaysApply: true
 ---
 
 # Git commit rules
 
+- **Never** run `git commit`. The user will commit manually. You may stage files with `git add`, but do **not** create commits.
 - **Never** add `Co-authored-by` trailers to commit messages.

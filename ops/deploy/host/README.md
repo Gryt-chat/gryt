@@ -38,6 +38,8 @@ Example `cloudflared` ingress mapping (conceptually):
 
 Make sure your client is configured to connect to the **server** hostname you expose (typically a subdomain like `api.*`).
 
+**DNS proxy status**: All three hostnames must be set to **Proxied** (orange cloud) in Cloudflare DNS. This includes `sfu.example.com` — even though WebRTC media goes direct over UDP, the SFU WebSocket signaling still routes through the tunnel.
+
 ### Firewall / networking (critical)
 
 Cloudflare Tunnel does **not** proxy WebRTC media (UDP). You must expose the SFU UDP range directly.

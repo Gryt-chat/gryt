@@ -1,0 +1,43 @@
+---
+description: Do not bypass lint/type errors; use real types
+alwaysApply: true
+---
+
+# Strict typing and linting (no bypasses)
+
+- Fix lint/type errors **properly**. Do not “silence” them.
+- **Never introduce `any`**. Use the platform/library types (DOM/WebRTC/React/Node) or project types.
+- **Do not use double-casts** like `as unknown as X` to force a type.
+- **Do not disable rules** (no `eslint-disable`, no “turn off” pragmas) to make lint pass.
+- When a type parameter is required (e.g. React module augmentation), reference it via correct `extends` / proper declarations rather than suppressing unused warnings.
+
+## Examples
+
+### Timers
+
+Prefer:
+
+```ts
+const t = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+```
+
+Avoid:
+
+```ts
+const t = useRef<number | null>(null);
+t.current = window.setTimeout(fn, 1000) as unknown as number;
+```
+
+### WebRTC stats
+
+Prefer:
+
+```ts
+const s = stat as RTCIceCandidateStats;
+```
+
+Avoid:
+
+```ts
+const s = stat as any;
+```

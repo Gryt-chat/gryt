@@ -33,3 +33,9 @@ auth/backups/*.dump.gz
 # OS/editor noise
 .DS_Store
 
+# Release/download binaries (served by site via mounted folders; never commit)
+ops/release/**
+!ops/release/.gitkeep
+ops/downloads/**
+!ops/downloads/.gitkeep
+

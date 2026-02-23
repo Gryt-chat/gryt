@@ -12,4 +12,7 @@ services:
       context: ../packages/site
     ports:
       - "9472:80"
+    volumes:
+      - ./release:/usr/share/nginx/html/release:ro
+      - ./downloads:/usr/share/nginx/html/downloads:ro
     restart: unless-stopped

@@ -1,0 +1,97 @@
+name: Release (macOS signed + notarized)
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Git tag to upload assets to (e.g. v1.0.51)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-sign-notarize:
+    if: github.repository == 'Gryt-chat/gryt'
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # electron-builder signing (P12)
+      CSC_LINK: ${{ runner.temp }}/mac-cert.p12
+      CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      # @electron/notarize (path to .p8 + issuer)
+      APPLE_API_KEY: ${{ runner.temp }}/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: packages/client/package-lock.json
+
+      - name: Decode signing certificate (.p12)
+        shell: bash
+        run: |
+          if [[ -z "${{ secrets.MACOS_CERT_P12_BASE64 }}" ]]; then
+            echo "Missing secret MACOS_CERT_P12_BASE64"
+            exit 1
+          fi
+          echo "${{ secrets.MACOS_CERT_P12_BASE64 }}" | base64 --decode > "${CSC_LINK}"
+
+      - name: Decode notarization API key (.p8)
+        shell: bash
+        run: |
+          if [[ -z "${{ secrets.APPLE_API_KEY_P8_BASE64 }}" ]]; then
+            echo "Missing secret APPLE_API_KEY_P8_BASE64"
+            exit 1
+          fi
+          echo "${{ secrets.APPLE_API_KEY_P8_BASE64 }}" | base64 --decode > "${APPLE_API_KEY}"
+
+      - name: Install dependencies
+        working-directory: packages/client
+        run: npm ci
+
+      - name: Build renderer + package (macOS)
+        working-directory: packages/client
+        shell: bash
+        run: |
+          ELECTRON=1 npx vite build
+          npx electron-builder --mac --publish never
+
+      - name: Upload mac assets to GitHub Release
+        working-directory: packages/client
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          if [[ -z "$TAG" ]]; then
+            TAG="${{ inputs.tag }}"
+          fi
+          if [[ -z "$TAG" ]]; then
+            exit 1
+          fi
+
+          shopt -s nullglob
+          ASSETS=(
+            "release/"*"-mac-"*.dmg
+            "release/"*"-mac-"*.zip
+            "release/"*"-mac-"*.zip.blockmap
+            "release/latest-mac.yml"
+          )
+          shopt -u nullglob
+
+          if [[ "${#ASSETS[@]}" -eq 0 ]]; then
+            echo "No mac assets found in packages/client/release/"
+            ls -la release || true
+            exit 1
+          fi
+
+          gh release upload "$TAG" "${ASSETS[@]}" --repo "${{ github.repository }}" --clobber
+

@@ -11,6 +11,6 @@ echo "Pulling latest images…"
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
 
 echo "Restarting services…"
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --force-recreate
 
 echo "Done."

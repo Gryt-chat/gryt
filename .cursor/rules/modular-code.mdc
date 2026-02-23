@@ -1,0 +1,21 @@
+---
+description: Keep files short, modular, and DRY
+alwaysApply: true
+---
+
+# Modular code & DRY
+
+- **Max ~400 lines per file.** If a file grows beyond that, split it into smaller, focused modules.
+- **Extract reusable components.** Repeated UI patterns, logic blocks, or layout wrappers should become their own components/hooks.
+- **Don't repeat yourself.** If the same logic or markup appears in two or more places, extract it into a shared helper, hook, or component.
+- **One concern per file.** A component file should own one component (plus small private helpers). Move large sub-trees into separate files.
+- **Colocate related code.** Keep a component, its types, and its hook(s) close together in the directory tree rather than scattering across distant folders.
+
+## Refactoring checklist
+
+When editing a file that already exceeds ~400 lines:
+
+1. Identify self-contained sections (sub-components, hooks, utils).
+2. Move each into its own file with a clear name.
+3. Re-export from an `index.ts` barrel if it helps the consumer.
+4. Verify no circular imports were introduced.

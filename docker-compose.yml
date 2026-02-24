@@ -118,8 +118,8 @@ services:
       NODE_ENV: production
       SERVER_NAME: ${SERVER_NAME:-My Gryt Server}
       SERVER_DESCRIPTION: ${SERVER_DESCRIPTION:-A Gryt voice chat server}
+      # Optional server↔SFU shared secret (NOT a user join password)
       SERVER_PASSWORD: ${SERVER_PASSWORD:-}
-      SERVER_INVITE_ONLY: ${SERVER_INVITE_ONLY:-false}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3666,https://app.gryt.chat}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       SFU_WS_HOST: ws://sfu:5005

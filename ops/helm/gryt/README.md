@@ -44,7 +44,7 @@ A Helm chart for deploying the Gryt Voice Chat Platform on Kubernetes.
      
    server:
      secrets:
-       serverPassword: "your-secure-password"
+       serverPassword: "your-internal-sfu-shared-secret"
        corsOrigin: "https://app.gryt.chat,https://gryt.yourdomain.com"
    ```
 
@@ -63,7 +63,7 @@ A Helm chart for deploying the Gryt Voice Chat Platform on Kubernetes.
 | `gryt.tls.enabled` | Enable TLS/SSL | `true` |
 | `gryt.tls.certManager.enabled` | Use cert-manager for certificates | `true` |
 | `gryt.auth.apiUrl` | Gryt authentication API URL | `https://auth.gryt.chat` |
-| `server.secrets.serverPassword` | Server password for client authentication | `your-secure-password` |
+| `server.secrets.serverPassword` | Optional server↔SFU shared secret (**not** a user join password) | `your-internal-sfu-shared-secret` |
 
 **Note**: This Helm chart does **not** deploy/manage Keycloak. `gryt.auth.apiUrl` should point at an existing auth service (backed by Keycloak). Settings like **user self-registration** are toggled in the **Keycloak realm** (Admin Console → Realm settings → Login → User registration).
 
@@ -152,7 +152,7 @@ server:
     minReplicas: 3
     maxReplicas: 20
   secrets:
-    serverPassword: "super-secure-production-password"
+    serverPassword: "super-secure-internal-sfu-shared-secret"
     corsOrigin: "https://app.gryt.chat,https://gryt.mycompany.com"
   resources:
     requests:

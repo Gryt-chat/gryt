@@ -108,7 +108,8 @@ server:
   
   # Secrets (will be base64 encoded)
   secrets:
-    serverPassword: "your-secure-password"
+    # Optional server↔SFU shared secret (NOT a user join password)
+    serverPassword: "your-internal-sfu-shared-secret"
     corsOrigin: "https://app.gryt.chat,https://yourdomain.com"
   
   # Health checks

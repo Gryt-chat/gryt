@@ -103,8 +103,8 @@ services:
       NODE_ENV: production
       SERVER_NAME: ${SERVER_NAME:-My Gryt Server}
       SERVER_DESCRIPTION: ${SERVER_DESCRIPTION:-A Gryt voice chat server}
+      # Optional server↔SFU shared secret (NOT a user join password)
       SERVER_PASSWORD: ${SERVER_PASSWORD:-}
-      SERVER_INVITE_ONLY: ${SERVER_INVITE_ONLY:-false}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3666,https://gryt.sivert.io,https://app.gryt.chat}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.prod}
       SFU_WS_HOST: ws://sfu:5005
@@ -116,7 +116,6 @@ services:
       GRYT_OIDC_ISSUER: ${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}
       GRYT_OIDC_AUDIENCE: ${GRYT_OIDC_AUDIENCE:-gryt-web}
       GRYT_AUTH_API: ${GRYT_AUTH_API:-https://auth.gryt.chat}
-      OWNER_ID: ${OWNER_ID:-}
       SCYLLA_CONTACT_POINTS: scylla
       SCYLLA_LOCAL_DATACENTER: datacenter1
       SCYLLA_KEYSPACE: ${SCYLLA_KEYSPACE:-gryt}

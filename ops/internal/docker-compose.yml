@@ -1,0 +1,67 @@
+services:
+  docs:
+    build:
+      context: ../../packages/docs
+      network: host
+    ports:
+      - "${INTERNAL_DOCS_HTTP_PORT:-9471}:3000"
+    restart: unless-stopped
+
+  site:
+    build:
+      context: ../../packages/site
+    ports:
+      - "${INTERNAL_SITE_HTTP_PORT:-9472}:80"
+    volumes:
+      - ./downloads:/usr/share/nginx/html/downloads:ro
+    restart: unless-stopped
+
+  # Feature requests / user feedback (Fider)
+  fider-db:
+    image: postgres:17
+    container_name: gryt-fider-db
+    environment:
+      POSTGRES_USER: "${FIDER_DB_USER:-fider}"
+      POSTGRES_PASSWORD: "${FIDER_DB_PASSWORD:-changeme}"
+      POSTGRES_DB: "${FIDER_DB_NAME:-fider}"
+    volumes:
+      - gryt-fider-pg-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $$POSTGRES_DB -U $$POSTGRES_USER"]
+      interval: 5s
+      timeout: 20s
+      retries: 10
+
+  fider:
+    image: getfider/fider:stable
+    container_name: gryt-fider
+    ports:
+      - "${FIDER_HTTP_PORT:-9473}:3000"
+    environment:
+      # Public Host Name (must match Cloudflared hostname + scheme)
+      BASE_URL: "${FIDER_BASE_URL:-https://feedback.gryt.chat}"
+      # Connection string to the PostgreSQL database
+      DATABASE_URL: "${FIDER_DATABASE_URL:-postgres://${FIDER_DB_USER:-fider}:${FIDER_DB_PASSWORD:-changeme}@fider-db:5432/${FIDER_DB_NAME:-fider}?sslmode=disable}"
+      # Generate a secure secret, for example using https://jwtsecrets.com
+      JWT_SECRET: "${FIDER_JWT_SECRET:-}"
+      # From which account e-mails will be sent
+      EMAIL_NOREPLY: "${FIDER_EMAIL_NOREPLY:-${GRYT_SMTP_FROM:-hello@gryt.chat}}"
+      # SMTP (required)
+      EMAIL_SMTP_HOST: "${FIDER_EMAIL_SMTP_HOST:-${GRYT_SMTP_HOST:-}}"
+      EMAIL_SMTP_PORT: "${FIDER_EMAIL_SMTP_PORT:-${GRYT_SMTP_PORT:-587}}"
+      EMAIL_SMTP_USERNAME: "${FIDER_EMAIL_SMTP_USERNAME:-${GRYT_SMTP_USER:-}}"
+      EMAIL_SMTP_PASSWORD: "${FIDER_EMAIL_SMTP_PASSWORD:-${GRYT_SMTP_PASS:-}}"
+      EMAIL_SMTP_ENABLE_STARTTLS: "${FIDER_EMAIL_SMTP_ENABLE_STARTTLS:-true}"
+    depends_on:
+      fider-db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/app/fider", "ping"]
+      interval: 2s
+      timeout: 10s
+      retries: 10
+
+volumes:
+  gryt-fider-pg-data:

@@ -58,7 +58,6 @@ services:
       - S3_BUCKET=${S3_BUCKET:-gryt}
       - S3_FORCE_PATH_STYLE=true
       - JWT_SECRET=${JWT_SECRET:-dev-secret-do-not-use-in-production}
-      - OWNER_ID=${OWNER_ID:-}
       # Optional: voice seat limit (derived if SFU_UDP_* set)
       # - SFU_UDP_PORT_MIN=${SFU_UDP_MIN:-10000}
       # - SFU_UDP_PORT_MAX=${SFU_UDP_MAX:-10019}
@@ -106,7 +105,6 @@ services:
       - S3_BUCKET=${S3_BUCKET:-gryt}
       - S3_FORCE_PATH_STYLE=true
       - JWT_SECRET=${JWT_SECRET:-dev-secret-do-not-use-in-production}
-      - OWNER_ID=${OWNER_ID:-}
       # Optional: voice seat limit (derived if SFU_UDP_* set)
       # - SFU_UDP_PORT_MIN=${SFU_UDP_MIN:-10000}
       # - SFU_UDP_PORT_MAX=${SFU_UDP_MAX:-10019}

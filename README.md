@@ -35,7 +35,8 @@ Open `.env` and review the key settings:
 
 ```bash
 SERVER_NAME=My Gryt Server          # display name shown to users
-SERVER_PASSWORD=                     # leave empty for open access, or set a password
+# Optional server-to-SFU shared secret (NOT a user join password)
+SERVER_PASSWORD=
 JWT_SECRET=change-me-in-production   # IMPORTANT: run `openssl rand -base64 48` for a real secret
 ```
 
@@ -46,6 +47,8 @@ docker compose up -d
 ```
 
 Connect using the [Gryt desktop app](https://github.com/Gryt-chat/gryt/releases) or [app.gryt.chat](https://app.gryt.chat) — enter your server address (e.g. `localhost` or your public IP).
+
+The **first user to join** a brand-new server automatically becomes the **owner/admin**. After that, servers are **invite-only**: create invite codes in **Server settings → Invites** and share invite links.
 
 See the [deployment docs](https://docs.gryt.chat/docs/deployment) for configuration, `.env` options, and production setup.
 

@@ -61,7 +61,7 @@ server:
     SERVER_NAME: "Gryt Production Server"
   
   secrets:
-    serverPassword: "super-secure-production-password-change-me"
+    serverPassword: "super-secure-internal-sfu-shared-secret-change-me"
     corsOrigin: "https://app.gryt.chat,https://gryt.mycompany.com"
 
 # Web Client Configuration

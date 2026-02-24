@@ -54,7 +54,7 @@ server:
     SERVER_NAME: "Gryt Development Server"
   
   secrets:
-    serverPassword: "dev-password-123"
+    serverPassword: "dev-internal-sfu-shared-secret"
     corsOrigin: "https://app.gryt.chat,http://gryt-dev.local"
 
 # Web Client Configuration

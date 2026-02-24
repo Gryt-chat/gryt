@@ -19,7 +19,7 @@ cp .env.example .env
 2) Edit `deploy/host/.env`:
 - Set **`JWT_SECRET`** (required)
 - Set **`SFU_PUBLIC_HOST`** to your public `wss://` SFU hostname
-- Set **`CORS_ORIGIN`** to include `https://app.gryt.chat` and your client origin (e.g. `https://app.gryt.chat,https://gryt.example.com`)
+- Set **`CORS_ORIGIN`** to include `http://127.0.0.1:15738` (desktop app), `https://app.gryt.chat` (web client), and your custom domain if applicable
 
 3) Start:
 

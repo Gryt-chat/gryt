@@ -62,7 +62,7 @@ server:
   
   secrets:
     serverPassword: "super-secure-internal-sfu-shared-secret-change-me"
-    corsOrigin: "https://app.gryt.chat,https://gryt.mycompany.com"
+    corsOrigin: "http://127.0.0.1:15738,https://app.gryt.chat,https://gryt.mycompany.com"
 
 # Web Client Configuration
 client:

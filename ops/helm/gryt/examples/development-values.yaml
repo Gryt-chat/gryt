@@ -55,7 +55,7 @@ server:
   
   secrets:
     serverPassword: "dev-internal-sfu-shared-secret"
-    corsOrigin: "https://app.gryt.chat,http://gryt-dev.local"
+    corsOrigin: "http://127.0.0.1:15738,https://app.gryt.chat,http://gryt-dev.local"
 
 # Web Client Configuration
 client:

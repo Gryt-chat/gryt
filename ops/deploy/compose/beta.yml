@@ -103,7 +103,7 @@ services:
       SERVER_NAME: ${SERVER_NAME:-Gryt (Beta)}
       SERVER_DESCRIPTION: ${SERVER_DESCRIPTION:-A Gryt voice chat server (beta)}
       SERVER_PASSWORD: ${SERVER_PASSWORD:-}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://127.0.0.1:15738,http://localhost:3667,https://app.gryt.chat}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://127.0.0.1:15738,http://localhost:3667,https://app.gryt.chat,https://beta.gryt.chat}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.beta}
       SFU_WS_HOST: ws://sfu:5005
       SFU_PUBLIC_HOST: ${SFU_PUBLIC_HOST:-ws://localhost:5015}

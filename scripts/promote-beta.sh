@@ -74,6 +74,24 @@ done
 
 ok "All images promoted to ${BOLD}:latest${RESET}"
 
+# ── Promote GitHub prereleases to stable ──────────────────────────────────
+# This makes the latest prerelease visible to Electron auto-update users
+# who don't have the beta toggle enabled.
+echo ""
+info "Promoting latest GitHub prereleases to stable…"
+
+GH_REPOS=("Gryt-chat/gryt" "Gryt-chat/server" "Gryt-chat/sfu")
+for repo in "${GH_REPOS[@]}"; do
+  TAG=$(gh release list --repo "$repo" --limit 1 --json tagName,isPrerelease -q '.[] | select(.isPrerelease) | .tagName' 2>/dev/null || true)
+  if [ -n "$TAG" ]; then
+    gh release edit "$TAG" --repo "$repo" --prerelease=false --latest 2>/dev/null && \
+      ok "${repo} release ${BOLD}${TAG}${RESET} promoted to stable" || \
+      warn "Failed to promote ${repo} release ${TAG}"
+  else
+    warn "No prerelease found for ${repo} — skipping"
+  fi
+done
+
 # ── Optionally update production ──────────────────────────────────────────
 echo ""
 read -rp "$(echo -e "${CYAN}?${RESET}  Run update-prod.sh now? ${YELLOW}[Y/n]${RESET}: ")" UPDATE_PROD

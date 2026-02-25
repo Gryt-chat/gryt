@@ -1,0 +1,77 @@
+##
+## Local override — merged on top of beta.yml:
+##   docker compose -f beta.yml -f beta.local.yml --env-file .env.beta up -d
+##
+
+services:
+  # Override minio-init to also create the NT beta bucket
+  minio-init:
+    environment:
+      NT_S3_BUCKET: ${NT_S3_BUCKET:-nts-beta}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        echo "Configuring MinIO..."
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb -p "local/$$S3_BUCKET" 2>/dev/null || true
+        echo "Bucket ready: $$S3_BUCKET"
+        mc mb -p "local/$$NT_S3_BUCKET" 2>/dev/null || true
+        echo "Bucket ready: $$NT_S3_BUCKET"
+
+  # ── Signaling Server (NT) ──────────────────────────────────────────────────
+  server-nt:
+    image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest-beta}
+    container_name: gryt-beta-server-nt
+    ports:
+      - "${NT_SERVER_PORT:-5011}:5000"
+    environment:
+      PORT: "5000"
+      NODE_ENV: production
+      SERVER_NAME: ${NT_SERVER_NAME:-NT (Beta)}
+      SERVER_DESCRIPTION: ${NT_SERVER_DESCRIPTION:-A Gryt voice chat server (beta)}
+      SERVER_PASSWORD: ${NT_SERVER_PASSWORD:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://127.0.0.1:15738,http://localhost:3667,https://app.gryt.chat}
+      JWT_SECRET: ${NT_JWT_SECRET:?Set NT_JWT_SECRET in .env.beta}
+      SFU_WS_HOST: ws://sfu:5005
+      SFU_PUBLIC_HOST: ${SFU_PUBLIC_HOST:-ws://localhost:5015}
+      STUN_SERVERS: ${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
+      SFU_UDP_PORT_MIN: ${SFU_UDP_MIN:-10020}
+      SFU_UDP_PORT_MAX: ${SFU_UDP_MAX:-10039}
+      GRYT_AUTH_MODE: ${GRYT_AUTH_MODE:-disabled}
+      GRYT_OIDC_ISSUER: ${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}
+      GRYT_OIDC_AUDIENCE: ${GRYT_OIDC_AUDIENCE:-gryt-web}
+      GRYT_AUTH_API: ${GRYT_AUTH_API:-https://auth.gryt.chat}
+      SCYLLA_CONTACT_POINTS: scylla
+      SCYLLA_LOCAL_DATACENTER: datacenter1
+      SCYLLA_KEYSPACE: ${NT_SCYLLA_KEYSPACE:-gryt_beta_nt}
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: auto
+      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${NT_S3_BUCKET:-nts-beta}
+      S3_FORCE_PATH_STYLE: "true"
+    depends_on:
+      scylla:
+        condition: service_healthy
+      sfu:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    networks:
+      - gryt-beta
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

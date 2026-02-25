@@ -6,6 +6,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 COMPOSE_DIR="$ROOT_DIR/ops/deploy/compose"
 COMPOSE_FILE="$COMPOSE_DIR/beta.yml"
+LOCAL_FILE="$COMPOSE_DIR/beta.local.yml"
 ENV_FILE="$COMPOSE_DIR/.env.beta"
 
 if [[ ! -f "$COMPOSE_FILE" ]]; then
@@ -17,7 +18,12 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
-COMPOSE_ARGS=(-f "$COMPOSE_FILE" --env-file "$ENV_FILE")
+COMPOSE_ARGS=(-f "$COMPOSE_FILE")
+if [[ -f "$LOCAL_FILE" ]]; then
+  COMPOSE_ARGS+=(-f "$LOCAL_FILE")
+  echo "Using local override: $LOCAL_FILE"
+fi
+COMPOSE_ARGS+=(--env-file "$ENV_FILE")
 
 # Include web client
 COMPOSE_ARGS+=(--profile web)

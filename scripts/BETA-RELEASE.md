@@ -11,6 +11,18 @@ All releases land on `:latest-beta`. Production (`:latest`) is only updated via 
 | `scripts/promote-beta.sh` | Re-tag `:latest-beta` → `:latest`, optionally update prod |
 | `scripts/update-prod.sh` | Pull `:latest` and restart production stack |
 
+## Port Mapping
+
+| Service | Prod | Beta |
+|---|---|---|
+| Server | 5000 | 5010 |
+| SFU | 5005 | 5015 |
+| Client (web) | 3666 | 3667 |
+| NT Server | 5001 | 5011 |
+| UDP range | 10000–10019 | 10020–10039 |
+
+Beta and production can run side-by-side on the same host without port conflicts.
+
 ## Day-to-Day Workflow
 
 ### 1. Release a new version (server example)
@@ -34,7 +46,7 @@ Same flow for `packages/sfu/scripts/release.sh` and `packages/client/scripts/rel
 bash scripts/update-beta.sh
 ```
 
-Pulls the latest `:latest-beta` images and restarts the beta stack (`ops/deploy/compose/beta.yml`).
+Pulls the latest `:latest-beta` images and restarts the beta stack (`ops/deploy/compose/beta.yml`). If `beta.local.yml` exists, it is automatically merged (adds the NT server).
 
 ### 3. Iterate
 
@@ -67,11 +79,28 @@ docker compose -f beta.yml --env-file .env.beta --profile web up -d
 
 Or just run `scripts/update-beta.sh` which does the same thing.
 
-The beta stack runs on different ports (server: 5010, sfu: 5015, client: 3667) with its own database keyspace (`gryt_beta`) and S3 bucket (`gryt-beta`), so it can coexist alongside production on the same host.
+## Local Overlay (NT Server)
+
+To add the NT server to the beta stack, the file `ops/deploy/compose/beta.local.yml` is used. It mirrors `local.yml` but for the beta environment:
+
+- NT server on port 5011 (prod uses 5001)
+- Separate keyspace (`gryt_beta_nt`) and bucket (`nts-beta`)
+- Uses `:latest-beta` images
+
+`update-beta.sh` automatically detects and merges `beta.local.yml` if present. You can also run it manually:
+
+```bash
+cd ops/deploy/compose
+docker compose -f beta.yml -f beta.local.yml --env-file .env.beta --profile web up -d
+```
 
 ## Configuration
 
-- **Beta env**: `ops/deploy/compose/.env.beta` — image tags, ports, server name, DB keyspace
-- **Beta compose**: `ops/deploy/compose/beta.yml` — service definitions
-- **Prod env**: `ops/deploy/compose/.env.prod` — unchanged, still pulls `:latest`
-- **Prod compose**: `ops/deploy/compose/prod.yml` — unchanged
+| File | Purpose |
+|---|---|
+| `ops/deploy/compose/beta.yml` | Beta service definitions |
+| `ops/deploy/compose/beta.local.yml` | Local overlay (adds NT server) |
+| `ops/deploy/compose/.env.beta` | Beta image tags, ports, server name, DB keyspace |
+| `ops/deploy/compose/prod.yml` | Production service definitions (unchanged) |
+| `ops/deploy/compose/local.yml` | Production local overlay (unchanged) |
+| `ops/deploy/compose/.env.prod` | Production config — pulls `:latest` (unchanged) |

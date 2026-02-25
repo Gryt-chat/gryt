@@ -181,6 +181,43 @@ services:
       retries: 3
       start_period: 40s
 
+  # ── Monitoring (optional) ──────────────────────────────────────────────────
+  # Enable with: docker compose --profile monitoring up -d
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: gryt-prod-prometheus
+    profiles: ["monitoring"]
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - gryt-prod-prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    networks:
+      - gryt-prod
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    container_name: gryt-prod-grafana
+    profiles: ["monitoring"]
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - gryt-prod-grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - gryt-prod
+    restart: unless-stopped
+
 networks:
   gryt-prod:
     driver: bridge
@@ -188,3 +225,5 @@ networks:
 volumes:
   gryt-prod-scylla-data:
   gryt-prod-minio-data:
+  gryt-prod-prometheus-data:
+  gryt-prod-grafana-data:

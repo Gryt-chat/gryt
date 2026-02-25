@@ -16,6 +16,11 @@ if [[ -f "$LOCAL_FILE" ]]; then
 fi
 COMPOSE_ARGS+=(--env-file "$ENV_FILE")
 
+# Include monitoring profile if monitoring config exists
+if [[ -f "$COMPOSE_DIR/monitoring/prometheus.yml" ]]; then
+  COMPOSE_ARGS+=(--profile monitoring)
+fi
+
 echo "Pulling latest images…"
 docker compose "${COMPOSE_ARGS[@]}" pull
 

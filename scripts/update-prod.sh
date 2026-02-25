@@ -4,13 +4,22 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-COMPOSE_FILE="$ROOT_DIR/ops/deploy/compose/prod.yml"
-ENV_FILE="$ROOT_DIR/ops/deploy/compose/.env.prod"
+COMPOSE_DIR="$ROOT_DIR/ops/deploy/compose"
+COMPOSE_FILE="$COMPOSE_DIR/prod.yml"
+LOCAL_FILE="$COMPOSE_DIR/local.yml"
+ENV_FILE="$COMPOSE_DIR/.env.prod"
+
+COMPOSE_ARGS=(-f "$COMPOSE_FILE")
+if [[ -f "$LOCAL_FILE" ]]; then
+  COMPOSE_ARGS+=(-f "$LOCAL_FILE")
+  echo "Using local override: $LOCAL_FILE"
+fi
+COMPOSE_ARGS+=(--env-file "$ENV_FILE")
 
 echo "Pulling latest images…"
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
+docker compose "${COMPOSE_ARGS[@]}" pull
 
 echo "Restarting services…"
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --force-recreate
+docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate
 
 echo "Done."

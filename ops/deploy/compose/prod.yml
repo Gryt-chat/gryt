@@ -49,12 +49,13 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
       S3_BUCKET: ${S3_BUCKET:-gryt}
     entrypoint: ["/bin/sh", "-c"]
-    command: |
-      set -e
-      echo "Configuring MinIO..."
-      mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
-      mc mb -p "local/$$S3_BUCKET" 2>/dev/null || true
-      echo "Bucket ready: $$S3_BUCKET"
+    command:
+      - |
+        set -e
+        echo "Configuring MinIO..."
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb -p "local/$$S3_BUCKET" 2>/dev/null || true
+        echo "Bucket ready: $$S3_BUCKET"
     networks:
       - gryt-prod
     restart: "no"

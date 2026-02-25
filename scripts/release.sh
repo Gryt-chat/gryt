@@ -53,8 +53,9 @@ echo ""
 for i in "${!PACKAGES[@]}"; do
   IFS='|' read -r name repo script desc <<< "${PACKAGES[$i]}"
 
-  # Fetch latest release tag from GitHub
-  tag=$(gh release view --repo "$repo" --json tagName -q .tagName 2>/dev/null || echo "")
+  # Fetch latest release tag from GitHub (including prereleases)
+  tag=$(gh release list --repo "$repo" --limit 1 2>/dev/null | head -1 | cut -f3)
+  tag="${tag:-}"
 
   if [[ -z "$tag" ]]; then
     version="unreleased"

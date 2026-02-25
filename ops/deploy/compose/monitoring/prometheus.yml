@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: gryt-server
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - server:5000
+
+  - job_name: gryt-sfu
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - sfu:5005

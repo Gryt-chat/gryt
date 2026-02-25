@@ -150,10 +150,12 @@ services:
       retries: 3
       start_period: 40s
 
-  # ── Web Client ─────────────────────────────────────────────────────────────
+  # ── Web Client (optional) ──────────────────────────────────────────────────
+  # Enable with: docker compose --profile web up -d
   client:
     image: ghcr.io/gryt-chat/client:${CLIENT_VERSION:-latest}
     container_name: gryt-prod-client
+    profiles: ["web"]
     ports:
       - "${CLIENT_PORT:-3666}:80"
     environment:
@@ -191,10 +193,22 @@ services:
     ports:
       - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - gryt-prod-prometheus-data:/prometheus
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
+      - |
+        cat > /tmp/prometheus.yml <<'CFG'
+        global:
+          scrape_interval: 15s
+        scrape_configs:
+          - job_name: gryt-server
+            static_configs:
+              - targets: ["server:5000"]
+          - job_name: gryt-sfu
+            static_configs:
+              - targets: ["sfu:5005"]
+        CFG
+        exec /bin/prometheus --config.file=/tmp/prometheus.yml
     networks:
       - gryt-prod
     restart: unless-stopped
@@ -213,7 +227,21 @@ services:
       - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
     volumes:
       - gryt-prod-grafana-data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mkdir -p /etc/grafana/provisioning/datasources
+        cat > /etc/grafana/provisioning/datasources/prometheus.yml <<'CFG'
+        apiVersion: 1
+        datasources:
+          - name: Prometheus
+            type: prometheus
+            access: proxy
+            url: http://prometheus:9090
+            isDefault: true
+            editable: false
+        CFG
+        exec /run.sh
     networks:
       - gryt-prod
     restart: unless-stopped

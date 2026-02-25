@@ -26,9 +26,8 @@
 
 ```bash
 mkdir gryt && cd gryt
-curl -LO https://raw.githubusercontent.com/Gryt-chat/gryt/main/docker-compose.yml
-curl -LO https://raw.githubusercontent.com/Gryt-chat/gryt/main/.env.example
-cp .env.example .env
+curl -Lo docker-compose.yml https://raw.githubusercontent.com/Gryt-chat/gryt/main/ops/deploy/compose/prod.yml
+curl -Lo .env https://raw.githubusercontent.com/Gryt-chat/gryt/main/ops/deploy/compose/.env.example
 ```
 
 Open `.env` and review the key settings:

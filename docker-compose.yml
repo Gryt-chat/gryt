@@ -16,6 +16,10 @@
 #   docker compose --profile web up -d
 #   Then open http://localhost:3666
 #
+# Optional — enable monitoring (Prometheus + Grafana):
+#   docker compose --profile monitoring up -d
+#   Then open http://localhost:3000 (Grafana)
+#
 # Images are published to ghcr.io/gryt-chat/* on every release.
 ##############################################################################
 
@@ -187,6 +191,44 @@ services:
       retries: 3
       start_period: 10s
 
+  # ── Monitoring (optional) ──────────────────────────────────────────────────
+  # Prometheus + Grafana for metrics and dashboards.
+  # Enable with: docker compose --profile monitoring up -d
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: gryt-prometheus
+    profiles: ["monitoring"]
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    networks:
+      - gryt
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    container_name: gryt-grafana
+    profiles: ["monitoring"]
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - gryt
+    restart: unless-stopped
+
 networks:
   gryt:
     driver: bridge
@@ -194,3 +236,5 @@ networks:
 volumes:
   scylla-data:
   minio-data:
+  prometheus-data:
+  grafana-data:

@@ -16,9 +16,13 @@ if [[ -f "$LOCAL_FILE" ]]; then
 fi
 COMPOSE_ARGS+=(--env-file "$ENV_FILE")
 
-# Include monitoring profile if monitoring config exists
-if [[ -f "$COMPOSE_DIR/monitoring/prometheus.yml" ]]; then
+# Always include web client
+COMPOSE_ARGS+=(--profile web)
+
+# Include monitoring profile if GRYT_MONITORING=1 is set in .env.prod
+if grep -qE '^GRYT_MONITORING=1' "$ENV_FILE" 2>/dev/null; then
   COMPOSE_ARGS+=(--profile monitoring)
+  echo "Monitoring profile enabled"
 fi
 
 echo "Pulling latest images…"

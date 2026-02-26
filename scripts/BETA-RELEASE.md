@@ -23,6 +23,20 @@ All releases land on `:latest-beta`. Production (`:latest`) is only updated via 
 
 Beta and production can run side-by-side on the same host without port conflicts.
 
+## Versioning
+
+Each beta release **bumps the patch number** and appends `-beta`:
+
+```
+Prod release:    1.0.95
+1st beta patch:  1.0.96-beta
+2nd beta patch:  1.0.97-beta
+3rd beta patch:  1.0.98-beta
+Promote to prod: 1.0.98          (drop the -beta suffix)
+```
+
+The gap between production version numbers (95 → 98) tells you exactly how many beta iterations happened. Minor/major bumps work the same way — e.g. `1.1.0-beta`, `1.1.1-beta`, etc.
+
 ## Day-to-Day Workflow
 
 ### 1. Release a new version (server example)

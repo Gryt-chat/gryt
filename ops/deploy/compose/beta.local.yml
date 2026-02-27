@@ -38,10 +38,11 @@ services:
       STUN_SERVERS: ${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
       SFU_UDP_PORT_MIN: ${SFU_UDP_MIN:-10020}
       SFU_UDP_PORT_MAX: ${SFU_UDP_MAX:-10039}
-      GRYT_AUTH_MODE: ${GRYT_AUTH_MODE:-disabled}
+      GRYT_AUTH_MODE: ${GRYT_AUTH_MODE:-required}
       GRYT_OIDC_ISSUER: ${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}
       GRYT_OIDC_AUDIENCE: ${GRYT_OIDC_AUDIENCE:-gryt-web}
       GRYT_AUTH_API: ${GRYT_AUTH_API:-https://auth.gryt.chat}
+      GRYT_IDENTITY_JWKS_URL: ${GRYT_IDENTITY_JWKS_URL:-https://id.gryt.chat/.well-known/jwks.json}
       SCYLLA_CONTACT_POINTS: scylla
       SCYLLA_LOCAL_DATACENTER: datacenter1
       SCYLLA_KEYSPACE: ${NT_SCYLLA_KEYSPACE:-gryt_beta_nt}

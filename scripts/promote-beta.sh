@@ -57,17 +57,11 @@ echo ""
 for img in "${IMAGES[@]}"; do
   FULL="${REGISTRY}/${img}"
 
-  info "Pulling ${BOLD}${FULL}:latest-beta${RESET}…"
-  if ! docker pull "${FULL}:latest-beta"; then
-    err "Failed to pull ${FULL}:latest-beta — skipping"
+  info "Promoting ${BOLD}${FULL}:latest-beta${RESET} → ${BOLD}:latest${RESET}…"
+  if ! docker buildx imagetools create --tag "${FULL}:latest" "${FULL}:latest-beta"; then
+    err "Failed to promote ${FULL}:latest-beta — skipping"
     continue
   fi
-
-  info "Re-tagging as ${BOLD}:latest${RESET}…"
-  docker tag "${FULL}:latest-beta" "${FULL}:latest"
-
-  info "Pushing ${BOLD}${FULL}:latest${RESET}…"
-  docker push "${FULL}:latest"
   ok "${img} promoted"
   echo ""
 done

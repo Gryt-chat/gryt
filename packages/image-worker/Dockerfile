@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM node:22-alpine AS builder
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS builder
 WORKDIR /app
 
 COPY package.json yarn.lock ./
@@ -7,17 +7,14 @@ RUN yarn install --frozen-lockfile --ignore-scripts --ignore-engines
 COPY . .
 RUN yarn build
 
-FROM node:22-alpine AS deps
-RUN apk add --no-cache python3 make g++
+FROM --platform=$TARGETPLATFORM node:22-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json yarn.lock ./
-RUN yarn install --production --ignore-engines
+RUN yarn install --production --ignore-engines --network-timeout 600000
 
-FROM node:22-alpine
+FROM --platform=$TARGETPLATFORM node:22-bookworm-slim
 
-RUN addgroup -g 1001 -S gryt \
-  && adduser -S gryt -u 1001 -G gryt -h /app -s /sbin/nologin
-
+RUN groupadd -g 1001 gryt && useradd -m -u 1001 -g 1001 -d /app -s /usr/sbin/nologin gryt
 WORKDIR /app
 ENV NODE_ENV=production
 

@@ -16,6 +16,44 @@ ok()    { echo -e "${GREEN}✔${RESET}  $*"; }
 warn()  { echo -e "${YELLOW}⚠${RESET}  $*"; }
 err()   { echo -e "${RED}✖${RESET}  $*" >&2; }
 
+rename_release_assets() {
+  local repo="$1" release_id="$2" old_ver="$3" new_ver="$4" tag="$5"
+
+  if [ "$old_ver" = "$new_ver" ]; then return; fi
+
+  info "Renaming release assets: ${BOLD}${old_ver}${RESET} → ${BOLD}${new_ver}${RESET}…"
+
+  local asset_lines
+  asset_lines=$(gh api "repos/${repo}/releases/${release_id}/assets" \
+    --jq '.[] | select(.name | contains("'"$old_ver"'")) | "\(.id)\t\(.name)"' 2>/dev/null || true)
+
+  if [ -z "$asset_lines" ]; then return; fi
+
+  while IFS=$'\t' read -r asset_id asset_name; do
+    local new_name="${asset_name//$old_ver/$new_ver}"
+
+    if [[ "$asset_name" =~ \.yml$ ]]; then
+      local tmp_dir
+      tmp_dir=$(mktemp -d)
+      gh api "repos/${repo}/releases/assets/${asset_id}" \
+        -H "Accept: application/octet-stream" 2>/dev/null \
+        | sed "s/${old_ver}/${new_ver}/g" > "${tmp_dir}/${new_name}" || {
+        rm -rf "$tmp_dir"; continue
+      }
+      gh api "repos/${repo}/releases/assets/${asset_id}" -X DELETE 2>/dev/null || true
+      gh release upload "$tag" "${tmp_dir}/${new_name}" --repo "$repo" 2>/dev/null && \
+        ok "  ${asset_name} → ${new_name} (content updated)" || \
+        warn "  Failed to upload ${new_name}"
+      rm -rf "$tmp_dir"
+    else
+      gh api "repos/${repo}/releases/assets/${asset_id}" -X PATCH \
+        -f name="$new_name" 2>/dev/null && \
+        ok "  ${asset_name} → ${new_name}" || \
+        warn "  Failed to rename ${asset_name}"
+    fi
+  done <<< "$asset_lines"
+}
+
 REGISTRY="ghcr.io/gryt-chat"
 IMAGES=(server sfu client)
 
@@ -111,6 +149,7 @@ for repo in "${GH_REPOS[@]}"; do
         ok "${repo} ${BOLD}${TAG}${RESET} → ${BOLD}${STABLE_TAG}${RESET}" || \
         warn "Failed to promote ${repo} ${TAG}"
       gh api "repos/${repo}/git/refs/tags/${TAG}" -X DELETE 2>/dev/null || true
+      rename_release_assets "$repo" "$RELEASE_ID" "${TAG#v}" "$STABLE_TITLE" "$STABLE_TAG"
       continue
     fi
   fi

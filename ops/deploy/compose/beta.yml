@@ -130,7 +130,8 @@ services:
       retries: 3
       start_period: 40s
 
-  # ── Web Client (optional) ──────────────────────────────────────────────────
+  # ── Web Client (official hosted instance at app.gryt.chat) ────────────────
+  # Used internally for beta.gryt.chat — not recommended for self-hosting.
   # Enable with: docker compose --profile web up -d
   client:
     image: ghcr.io/gryt-chat/client:${CLIENT_VERSION:-latest-beta}

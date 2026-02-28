@@ -149,6 +149,46 @@ services:
       retries: 3
       start_period: 40s
 
+  # ── Image Worker (sharp processing) ─────────────────────────────────────────
+  image-worker:
+    image: ghcr.io/gryt-chat/image-worker:${IMAGE_WORKER_VERSION:-latest-beta}
+    container_name: gryt-beta-image-worker
+    environment:
+      NODE_ENV: production
+      IMAGE_WORKER_CONCURRENCY: ${IMAGE_WORKER_CONCURRENCY:-2}
+      IMAGE_WORKER_POLL_MS: ${IMAGE_WORKER_POLL_MS:-1000}
+      SCYLLA_CONTACT_POINTS: scylla
+      SCYLLA_LOCAL_DATACENTER: datacenter1
+      SCYLLA_KEYSPACE: ${SCYLLA_KEYSPACE:-gryt_beta}
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: auto
+      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${S3_BUCKET:-gryt-beta}
+      S3_FORCE_PATH_STYLE: "true"
+    depends_on:
+      scylla:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    networks:
+      - gryt-beta
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
   # ── Web Client (optional) ──────────────────────────────────────────────────
   # Enable with: docker compose --profile web up -d
   client:

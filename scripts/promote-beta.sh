@@ -76,14 +76,49 @@ info "Promoting latest GitHub prereleases to stable…"
 
 GH_REPOS=("Gryt-chat/gryt" "Gryt-chat/server" "Gryt-chat/sfu")
 for repo in "${GH_REPOS[@]}"; do
-  TAG=$(gh release list --repo "$repo" --limit 1 --json tagName,isPrerelease -q '.[] | select(.isPrerelease) | .tagName' 2>/dev/null || true)
-  if [ -n "$TAG" ]; then
-    gh release edit "$TAG" --repo "$repo" --prerelease=false --latest 2>/dev/null && \
-      ok "${repo} release ${BOLD}${TAG}${RESET} promoted to stable" || \
-      warn "Failed to promote ${repo} release ${TAG}"
-  else
+  TAG=$(gh api "repos/${repo}/releases" --jq '[.[] | select(.prerelease)][0].tag_name' 2>/dev/null || true)
+  if [ -z "$TAG" ]; then
     warn "No prerelease found for ${repo} — skipping"
+    continue
   fi
+
+  STABLE_TAG="${TAG%%-beta*}"
+  STABLE_TITLE="${STABLE_TAG#v}"
+  RELEASE_ID=$(gh api "repos/${repo}/releases" \
+    --jq "[.[] | select(.tag_name == \"${TAG}\")][0].id" 2>/dev/null || true)
+
+  if [ -z "$RELEASE_ID" ]; then
+    warn "Could not find release ID for ${TAG} in ${repo}"
+    continue
+  fi
+
+  if [ "$STABLE_TAG" != "$TAG" ]; then
+    # Resolve the commit SHA behind the beta tag (dereference annotated tags)
+    REF_TYPE=$(gh api "repos/${repo}/git/ref/tags/${TAG}" --jq '.object.type' 2>/dev/null || true)
+    REF_SHA=$(gh api "repos/${repo}/git/ref/tags/${TAG}" --jq '.object.sha' 2>/dev/null || true)
+    if [ "$REF_TYPE" = "tag" ]; then
+      COMMIT_SHA=$(gh api "repos/${repo}/git/tags/${REF_SHA}" --jq '.object.sha' 2>/dev/null || true)
+    else
+      COMMIT_SHA="$REF_SHA"
+    fi
+
+    if [ -n "$COMMIT_SHA" ]; then
+      gh api "repos/${repo}/git/refs" \
+        -f ref="refs/tags/${STABLE_TAG}" -f sha="$COMMIT_SHA" 2>/dev/null || true
+      gh api "repos/${repo}/releases/${RELEASE_ID}" -X PATCH \
+        -f tag_name="$STABLE_TAG" -f name="$STABLE_TITLE" \
+        -F prerelease=false -f make_latest=true 2>/dev/null && \
+        ok "${repo} ${BOLD}${TAG}${RESET} → ${BOLD}${STABLE_TAG}${RESET}" || \
+        warn "Failed to promote ${repo} ${TAG}"
+      gh api "repos/${repo}/git/refs/tags/${TAG}" -X DELETE 2>/dev/null || true
+      continue
+    fi
+  fi
+
+  # Fallback: promote without tag rename
+  gh release edit "$TAG" --repo "$repo" --prerelease=false --latest --title "$STABLE_TITLE" 2>/dev/null && \
+    ok "${repo} release ${BOLD}${TAG}${RESET} promoted to stable" || \
+    warn "Failed to promote ${repo} release ${TAG}"
 done
 
 # ── Optionally update production ──────────────────────────────────────────

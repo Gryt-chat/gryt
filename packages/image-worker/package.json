@@ -1,0 +1,22 @@
+{
+  "name": "image-worker",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "license": "AGPL-3.0-or-later",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.994.0",
+    "cassandra-driver": "^4.8.0",
+    "consola": "^3.4.2",
+    "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.33",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "node --watch -r ts-node/register src/index.ts",
+    "start": "node dist/index.js"
+  }
+}

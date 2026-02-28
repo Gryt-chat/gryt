@@ -43,6 +43,16 @@ services:
       - gryt-prod
     restart: "no"
 
+  server-data-init:
+    image: alpine:3
+    container_name: gryt-prod-server-data-init
+    command: ["/bin/sh", "-c", "mkdir -p /data && chown -R 1001:1001 /data"]
+    volumes:
+      - gryt-prod-server-data:/data
+    networks:
+      - gryt-prod
+    restart: "no"
+
   # ── SFU (Media Server) ────────────────────────────────────────────────────
   sfu:
     image: ghcr.io/gryt-chat/sfu:${SFU_VERSION:-latest}
@@ -110,6 +120,8 @@ services:
       sfu:
         condition: service_healthy
       minio-init:
+        condition: service_completed_successfully
+      server-data-init:
         condition: service_completed_successfully
     networks:
       - gryt-prod

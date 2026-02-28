@@ -3,18 +3,11 @@ set -euo pipefail
 
 # Shared dev defaults for running components in separate terminals.
 
-# Dev defaults: run with local Scylla + MinIO (full feature set)
+# Dev defaults: run with local MinIO (full feature set for object storage)
 export DEV_WITH_DB="${DEV_WITH_DB:-1}"
 export DEV_WITH_S3="${DEV_WITH_S3:-1}"
 
-# Local dev dependency config (only used when DEV_WITH_DB/DEV_WITH_S3 enabled)
-export SCYLLA_CONTACT_POINTS="${SCYLLA_CONTACT_POINTS:-127.0.0.1}"
-export SCYLLA_LOCAL_DATACENTER="${SCYLLA_LOCAL_DATACENTER:-datacenter1}"
-# Default keyspace for single-server workflows.
-export SCYLLA_KEYSPACE="${SCYLLA_KEYSPACE:-gryt_dev}"
-# Per-server keyspaces (DB isolation). `ws1.sh`/`ws2.sh` override SCYLLA_KEYSPACE using these.
-export SCYLLA_KEYSPACE_WS1="${SCYLLA_KEYSPACE_WS1:-ws1}"
-export SCYLLA_KEYSPACE_WS2="${SCYLLA_KEYSPACE_WS2:-ws2}"
+# Local dev dependency config (only used when DEV_WITH_S3 enabled)
 
 export MINIO_ROOT_USER="${MINIO_ROOT_USER:-minioadmin}"
 export MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-minioadmin}"

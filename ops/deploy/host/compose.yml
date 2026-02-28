@@ -1,5 +1,6 @@
 services:
-  # Web client (optional — most users connect via the Gryt desktop app)
+  # Web client (dev/local only — won't authenticate against auth.gryt.chat in production)
+  # Use for local development or with your own Keycloak.
   # Enable with: docker compose --profile web up -d
   client:
     build:

@@ -1,11 +1,10 @@
 ## Hosting with Cloudflare Tunnel (Docker Compose)
 
 This folder contains a **single compose stack** that runs:
-- **client** (static web app)
-- **server** (Socket.IO signaling + REST)
+- **server** (Socket.IO signaling + REST, with embedded SQLite)
 - **sfu** (WebRTC media SFU)
-- **scylla** (persistent DB)
 - **minio** (S3-compatible uploads) + **minio-init**
+- **client** (web UI — dev/local only, behind `--profile web`)
 
 ### Quick start
 
@@ -19,7 +18,7 @@ cp .env.example .env
 2) Edit `deploy/host/.env`:
 - Set **`JWT_SECRET`** (required)
 - Set **`SFU_PUBLIC_HOST`** to your public `wss://` SFU hostname
-- Set **`CORS_ORIGIN`** to include `http://127.0.0.1:15738` (desktop app), `https://app.gryt.chat` (web client), and your custom domain if applicable
+- Set **`CORS_ORIGIN`** to include `http://127.0.0.1:15738` (desktop app) and `https://app.gryt.chat` (hosted web client)
 
 3) Start:
 
@@ -32,13 +31,12 @@ docker compose -f compose.yml up -d --build
 Cloudflare Tunnel terminates TLS at the edge. Your origin can stay HTTP on localhost.
 
 Example `cloudflared` ingress mapping (conceptually):
-- **Client**: `https://gryt.example.com`  → `http://127.0.0.1:8080`
 - **Server**: `https://api.gryt.example.com` → `http://127.0.0.1:5000` (must support WebSocket upgrade)
 - **SFU WS**: `https://sfu.example.com` → `http://127.0.0.1:5005` (must support WebSocket upgrade)
 
-Make sure your client is configured to connect to the **server** hostname you expose (typically a subdomain like `api.*`).
+Users connect via the [Gryt desktop app](https://github.com/Gryt-chat/gryt/releases) or the hosted web client at [app.gryt.chat](https://app.gryt.chat).
 
-**DNS proxy status**: All three hostnames must be set to **Proxied** (orange cloud) in Cloudflare DNS. This includes `sfu.example.com` — even though WebRTC media goes direct over UDP, the SFU WebSocket signaling still routes through the tunnel.
+**DNS proxy status**: Both hostnames must be set to **Proxied** (orange cloud) in Cloudflare DNS. This includes `sfu.example.com` — even though WebRTC media goes direct over UDP, the SFU WebSocket signaling still routes through the tunnel.
 
 ### Firewall / networking (critical)
 
@@ -49,7 +47,6 @@ Cloudflare Tunnel does **not** proxy WebRTC media (UDP). You must expose the SFU
 
 ### Health endpoints
 
-- Client: `GET /health` (on `CLIENT_HTTP_PORT`)
 - Server: `GET /health` (on `SERVER_HTTP_PORT`)
 - SFU: `GET /health` (on `SFU_WS_PORT`)
 

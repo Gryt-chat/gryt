@@ -88,7 +88,7 @@ services:
       SERVER_NAME: ${SERVER_NAME:-My Gryt Server}
       SERVER_DESCRIPTION: ${SERVER_DESCRIPTION:-A Gryt voice chat server}
       SERVER_PASSWORD: ${SERVER_PASSWORD:-}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://127.0.0.1:15738,http://localhost:3666,https://app.gryt.chat,https://beta.gryt.chat}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://127.0.0.1:15738,https://app.gryt.chat}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.prod}
       SFU_WS_HOST: ws://sfu:5005
       SFU_PUBLIC_HOST: ${SFU_PUBLIC_HOST:-ws://localhost:5005}
@@ -132,8 +132,11 @@ services:
       retries: 3
       start_period: 40s
 
-  # ── Web Client (optional) ──────────────────────────────────────────────────
-  # Enable with: docker compose --profile web up -d
+  # ── Web Client (dev / local only) ─────────────────────────────────────────
+  # The web client won't authenticate against auth.gryt.chat in production
+  # unless your domain is registered as a redirect URI (only official Gryt
+  # domains are whitelisted). Use for local development or with your own
+  # Keycloak. Enable with: docker compose --profile web up -d
   client:
     image: ghcr.io/gryt-chat/client:${CLIENT_VERSION:-latest}
     container_name: gryt-prod-client

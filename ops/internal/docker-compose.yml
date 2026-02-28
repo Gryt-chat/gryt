@@ -3,6 +3,7 @@ services:
     build:
       context: ../../packages/docs
       network: host
+    platform: linux/amd64
     ports:
       - "${INTERNAL_DOCS_HTTP_PORT:-9471}:3000"
     restart: unless-stopped
@@ -10,6 +11,7 @@ services:
   site:
     build:
       context: ../../packages/site
+    platform: linux/amd64
     ports:
       - "${INTERNAL_SITE_HTTP_PORT:-9472}:80"
     volumes:

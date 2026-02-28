@@ -15,9 +15,9 @@ auth/backups/*.dump.gz
 !.env.example
 !**/.env.example
 
-# Non-bun lockfiles (project uses bun)
+# Non-yarn lockfiles (project uses yarn)
 **/package-lock.json
-**/yarn.lock
+**/bun.lockb
 
 # Node / JS artifacts
 **/node_modules/

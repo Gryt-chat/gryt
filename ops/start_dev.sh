@@ -19,16 +19,11 @@ DEV_WITH_DB="${DEV_WITH_DB:-1}"
 DEV_WITH_S3="${DEV_WITH_S3:-1}"
 
 # ── Dev dependency config ────────────────────────────────────────────
-SCYLLA_KEYSPACE_WS1="${SCYLLA_KEYSPACE_WS1:-ws1}"
-SCYLLA_KEYSPACE_WS2="${SCYLLA_KEYSPACE_WS2:-ws2}"
-SCYLLA_ENV_WS1="SCYLLA_CONTACT_POINTS=127.0.0.1 SCYLLA_LOCAL_DATACENTER=datacenter1 SCYLLA_KEYSPACE=${SCYLLA_KEYSPACE_WS1}"
-SCYLLA_ENV_WS2="SCYLLA_CONTACT_POINTS=127.0.0.1 SCYLLA_LOCAL_DATACENTER=datacenter1 SCYLLA_KEYSPACE=${SCYLLA_KEYSPACE_WS2}"
 MINIO_ROOT_USER="${MINIO_ROOT_USER:-minioadmin}"
 MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-minioadmin}"
 S3_BUCKET="${S3_BUCKET:-gryt}"
 S3_ENV="S3_ENDPOINT=http://127.0.0.1:9000 S3_REGION=us-east-1 S3_ACCESS_KEY_ID=${MINIO_ROOT_USER} S3_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD} S3_BUCKET=${S3_BUCKET} S3_FORCE_PATH_STYLE=true"
 
-DB_DISABLE_ENV="DISABLE_SCYLLA=true"
 S3_DISABLE_ENV="DISABLE_S3=true"
 
 SFU_WS_HOST="${SFU_WS_HOST:-ws://127.0.0.1:5005}"
@@ -83,10 +78,10 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
   fi
 fi
 
-# ── Docker deps (ScyllaDB + MinIO) ──────────────────────────────────
-if [[ "$DEV_WITH_DB" == "1" || "$DEV_WITH_S3" == "1" ]]; then
+# ── Docker deps (MinIO) ─────────────────────────────────────────────
+if [[ "$DEV_WITH_S3" == "1" ]]; then
   if ! command -v docker >/dev/null 2>&1; then
-    echo "Docker is required. Install Docker or set DEV_WITH_DB=0 DEV_WITH_S3=0." >&2
+    echo "Docker is required. Install Docker or set DEV_WITH_S3=0." >&2
     exit 1
   fi
   if ! docker info >/dev/null 2>&1; then
@@ -94,21 +89,18 @@ if [[ "$DEV_WITH_DB" == "1" || "$DEV_WITH_S3" == "1" ]]; then
     exit 1
   fi
 
-  echo "Starting dev dependencies (ScyllaDB + MinIO)..."
+  echo "Starting dev dependencies (MinIO)..."
   docker compose -f ops/deploy/compose/dev-deps.yml up -d --wait 2>/dev/null \
     || docker compose -f ops/deploy/compose/dev-deps.yml up -d
 
-  [[ "$DEV_WITH_DB" == "1" ]] && wait_for_tcp 127.0.0.1 9042 "ScyllaDB" 90
-  if [[ "$DEV_WITH_S3" == "1" ]]; then
-    wait_for_tcp 127.0.0.1 9000 "MinIO" 60
-    wait_for_http "http://127.0.0.1:9000/minio/health/ready" "MinIO" 60 || true
-    # Best-effort init (compose service) + explicit bucket ensure (so avatar/file uploads don't 502).
-    docker compose -f ops/deploy/compose/dev-deps.yml up -d minio-init >/dev/null 2>&1 || true
-    echo "Ensuring MinIO bucket exists: ${S3_BUCKET}"
-    docker run --rm --network host --entrypoint /bin/sh minio/mc:latest -lc "\
-      mc alias set local http://127.0.0.1:9000 '${MINIO_ROOT_USER}' '${MINIO_ROOT_PASSWORD}' >/dev/null 2>&1 \
-      && mc mb -p 'local/${S3_BUCKET}' >/dev/null 2>&1 || true"
-  fi
+  wait_for_tcp 127.0.0.1 9000 "MinIO" 60
+  wait_for_http "http://127.0.0.1:9000/minio/health/ready" "MinIO" 60 || true
+  # Best-effort init (compose service) + explicit bucket ensure (so avatar/file uploads don't 502).
+  docker compose -f ops/deploy/compose/dev-deps.yml up -d minio-init >/dev/null 2>&1 || true
+  echo "Ensuring MinIO bucket exists: ${S3_BUCKET}"
+  docker run --rm --network host --entrypoint /bin/sh minio/mc:latest -lc "\
+    mc alias set local http://127.0.0.1:9000 '${MINIO_ROOT_USER}' '${MINIO_ROOT_PASSWORD}' >/dev/null 2>&1 \
+    && mc mb -p 'local/${S3_BUCKET}' >/dev/null 2>&1 || true"
   echo ""
 fi
 
@@ -120,12 +112,10 @@ wait
 echo ""
 
 # ── Build env strings for servers ────────────────────────────────────
-WS_DB_ENV="$DB_DISABLE_ENV"
 WS_S3_ENV="$S3_DISABLE_ENV"
-[[ "$DEV_WITH_DB" == "1" ]] && WS_DB_ENV=""
 [[ "$DEV_WITH_S3" == "1" ]] && WS_S3_ENV="$S3_ENV"
 
-COMMON_ENV="CORS_ORIGIN=${CORS_ORIGIN} GRYT_AUTH_MODE=${GRYT_AUTH_MODE} GRYT_OIDC_ISSUER=${GRYT_OIDC_ISSUER} GRYT_OIDC_AUDIENCE=${GRYT_OIDC_AUDIENCE} JWT_SECRET=${JWT_SECRET} SERVER_PASSWORD=${SERVER_PASSWORD} SFU_WS_HOST=${SFU_WS_HOST} SFU_PUBLIC_HOST=${SFU_PUBLIC_HOST} STUN_SERVERS=${STUN_SERVERS} ${WS_DB_ENV} ${WS_S3_ENV}"
+COMMON_ENV="CORS_ORIGIN=${CORS_ORIGIN} GRYT_AUTH_MODE=${GRYT_AUTH_MODE} GRYT_OIDC_ISSUER=${GRYT_OIDC_ISSUER} GRYT_OIDC_AUDIENCE=${GRYT_OIDC_AUDIENCE} JWT_SECRET=${JWT_SECRET} SERVER_PASSWORD=${SERVER_PASSWORD} SFU_WS_HOST=${SFU_WS_HOST} SFU_PUBLIC_HOST=${SFU_PUBLIC_HOST} STUN_SERVERS=${STUN_SERVERS} ${WS_S3_ENV}"
 
 # ── Create tmux session with separate windows ────────────────────────
 echo "Creating tmux session '$SESSION' with 5 windows..."
@@ -143,11 +133,11 @@ tmux new-window -t "$SESSION" -n client \
 
 # Window 2: Server 1 (ws1) on :5001
 tmux new-window -t "$SESSION" -n ws1 \
-  "bash -lc 'cd packages/server && echo \"── ws1 :5001 ──\" && env PORT=5001 SERVER_NAME=ws1 ${COMMON_ENV} ${DEV_WITH_DB:+${SCYLLA_ENV_WS1}} yarn dev; exec bash'"
+  "bash -lc 'cd packages/server && echo \"── ws1 :5001 ──\" && env PORT=5001 SERVER_NAME=ws1 ${COMMON_ENV} yarn dev; exec bash'"
 
 # Window 3: Server 2 (ws2) on :5002
 tmux new-window -t "$SESSION" -n ws2 \
-  "bash -lc 'cd packages/server && echo \"── ws2 :5002 ──\" && env PORT=5002 SERVER_NAME=ws2 ${COMMON_ENV} ${DEV_WITH_DB:+${SCYLLA_ENV_WS2}} yarn dev; exec bash'"
+  "bash -lc 'cd packages/server && echo \"── ws2 :5002 ──\" && env PORT=5002 SERVER_NAME=ws2 ${COMMON_ENV} yarn dev; exec bash'"
 
 # Window 4: spare shell for ad-hoc commands
 tmux new-window -t "$SESSION" -n shell

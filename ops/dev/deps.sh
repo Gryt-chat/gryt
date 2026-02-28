@@ -36,33 +36,27 @@ wait_for_http_ready() {
   return 1
 }
 
-if [[ "$DEV_WITH_DB" != "1" && "$DEV_WITH_S3" != "1" ]]; then
-  echo "DEV_WITH_DB=0 and DEV_WITH_S3=0: skipping deps."
+if [[ "$DEV_WITH_S3" != "1" ]]; then
+  echo "DEV_WITH_S3=0: skipping deps."
   exit 0
 fi
 
 cd "${ROOT_DIR}"
 
 if ! command -v docker >/dev/null 2>&1; then
-  echo "Docker is required to start dev dependencies. Install Docker or set DEV_WITH_DB=0 DEV_WITH_S3=0." >&2
+  echo "Docker is required to start dev dependencies. Install Docker or set DEV_WITH_S3=0." >&2
   exit 1
 fi
 if ! docker info >/dev/null 2>&1; then
-  echo "Docker daemon is not running. Start Docker or set DEV_WITH_DB=0 DEV_WITH_S3=0." >&2
+  echo "Docker daemon is not running. Start Docker or set DEV_WITH_S3=0." >&2
   exit 1
 fi
 
 docker compose -f ops/deploy/compose/dev-deps.yml up -d
 
-if [[ "$DEV_WITH_DB" == "1" ]]; then
-  wait_for_tcp 127.0.0.1 9042 "ScyllaDB" 90
-fi
-
-if [[ "$DEV_WITH_S3" == "1" ]]; then
-  wait_for_tcp 127.0.0.1 9000 "MinIO" 60
-  wait_for_http_ready "http://127.0.0.1:9000/minio/health/ready" "MinIO" 60 || true
-  docker compose -f ops/deploy/compose/dev-deps.yml up -d minio-init >/dev/null 2>&1 || true
-fi
+wait_for_tcp 127.0.0.1 9000 "MinIO" 60
+wait_for_http_ready "http://127.0.0.1:9000/minio/health/ready" "MinIO" 60 || true
+docker compose -f ops/deploy/compose/dev-deps.yml up -d minio-init >/dev/null 2>&1 || true
 
 echo "Dev deps started."
 

@@ -99,7 +99,7 @@ Or just run `scripts/update-beta.sh` which does the same thing.
 To add the NT server to the beta stack, the file `ops/deploy/compose/beta.local.yml` is used. It mirrors `local.yml` but for the beta environment:
 
 - NT server on port 5011 (prod uses 5001)
-- Separate keyspace (`gryt_beta_nt`) and bucket (`nts-beta`)
+- Separate instance ID (`gryt_beta_nt`) and bucket (`nts-beta`)
 - Uses `:latest-beta` images
 
 `update-beta.sh` automatically detects and merges `beta.local.yml` if present. You can also run it manually:
@@ -115,7 +115,7 @@ docker compose -f beta.yml -f beta.local.yml --env-file .env.beta --profile web 
 |---|---|
 | `ops/deploy/compose/beta.yml` | Beta service definitions |
 | `ops/deploy/compose/beta.local.yml` | Local overlay (adds NT server) |
-| `ops/deploy/compose/.env.beta` | Beta image tags, ports, server name, DB keyspace |
+| `ops/deploy/compose/.env.beta` | Beta image tags, ports, server name, server instance settings |
 | `ops/deploy/compose/prod.yml` | Production service definitions (unchanged) |
 | `ops/deploy/compose/local.yml` | Production local overlay (unchanged) |
 | `ops/deploy/compose/.env.prod` | Production config — pulls `:latest` (unchanged) |

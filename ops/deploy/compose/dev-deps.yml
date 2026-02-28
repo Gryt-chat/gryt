@@ -1,15 +1,4 @@
 services:
-  # ScyllaDB (Cassandra-compatible) for messages/users/files metadata
-  scylla:
-    image: scylladb/scylla:latest
-    container_name: gryt-dev-scylla
-    command: ["--overprovisioned", "1", "--smp", "1", "--listen-address", "0.0.0.0", "--rpc-address", "0.0.0.0", "--broadcast-address", "127.0.0.1", "--broadcast-rpc-address", "127.0.0.1"]
-    ports:
-      - "9042:9042"
-    volumes:
-      - gryt-dev-scylla-data:/var/lib/scylla
-    restart: unless-stopped
-
   # MinIO (S3-compatible object storage) for uploads
   minio:
     image: minio/minio:latest
@@ -51,6 +40,4 @@ services:
     restart: "no"
 
 volumes:
-  gryt-dev-scylla-data:
   gryt-dev-minio-data:
-

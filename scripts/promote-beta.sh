@@ -55,7 +55,7 @@ rename_release_assets() {
 }
 
 REGISTRY="ghcr.io/gryt-chat"
-IMAGES=(server sfu client)
+IMAGES=(server sfu client image-worker)
 
 # ── GHCR auth ────────────────────────────────────────────────────────────
 if [ -z "${GH_TOKEN:-}" ]; then
@@ -112,7 +112,7 @@ ok "All images promoted to ${BOLD}:latest${RESET}"
 echo ""
 info "Promoting latest GitHub prereleases to stable…"
 
-GH_REPOS=("Gryt-chat/gryt" "Gryt-chat/server" "Gryt-chat/sfu")
+GH_REPOS=("Gryt-chat/gryt" "Gryt-chat/server" "Gryt-chat/sfu" "Gryt-chat/image-worker")
 for repo in "${GH_REPOS[@]}"; do
   TAG=$(gh api "repos/${repo}/releases" --jq '[.[] | select(.prerelease)][0].tag_name' 2>/dev/null || true)
   if [ -z "$TAG" ]; then

@@ -1,9 +1,8 @@
-FROM node:22-alpine AS builder
-RUN apk add --no-cache python3 make g++
+FROM --platform=$BUILDPLATFORM node:22-alpine AS builder
 WORKDIR /app
 
 COPY package.json yarn.lock ./
-RUN yarn install --ignore-engines
+RUN yarn install --frozen-lockfile --ignore-scripts --ignore-engines
 
 COPY . .
 RUN yarn build

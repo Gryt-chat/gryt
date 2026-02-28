@@ -32,6 +32,6 @@ echo "Pulling latest-beta images…"
 docker compose "${COMPOSE_ARGS[@]}" pull
 
 echo "Restarting beta services…"
-docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate
+docker compose "${COMPOSE_ARGS[@]}" up -d
 
 echo "Beta environment updated."

@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 COMPOSE_DIR="$ROOT_DIR/ops/deploy/compose"
 COMPOSE_FILE="$COMPOSE_DIR/prod.yml"
-LOCAL_FILE="$COMPOSE_DIR/local.yml"
+LOCAL_FILE="$COMPOSE_DIR/prod.local.yml"
 ENV_FILE="$COMPOSE_DIR/.env.prod"
 
 COMPOSE_ARGS=(-f "$COMPOSE_FILE")
@@ -28,7 +28,7 @@ fi
 echo "Pulling latest images…"
 docker compose "${COMPOSE_ARGS[@]}" pull
 
-echo "Restarting services…"
-docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate
+echo "Starting services…"
+docker compose "${COMPOSE_ARGS[@]}" up -d
 
 echo "Done."

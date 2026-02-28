@@ -106,17 +106,17 @@ done
 
 ok "All images promoted to ${BOLD}:latest${RESET}"
 
-# ── Promote GitHub prereleases to stable ──────────────────────────────────
-# This makes the latest prerelease visible to Electron auto-update users
-# who don't have the beta toggle enabled.
+# ── Promote latest GitHub releases to stable ─────────────────────────────
+# Grabs the most recent release (pre-release or not) and marks it as
+# "latest". If the tag contains -beta, it is renamed to a stable tag.
 echo ""
-info "Promoting latest GitHub prereleases to stable…"
+info "Promoting latest GitHub releases…"
 
 GH_REPOS=("Gryt-chat/gryt" "Gryt-chat/server" "Gryt-chat/sfu" "Gryt-chat/image-worker")
 for repo in "${GH_REPOS[@]}"; do
-  TAG=$(gh api "repos/${repo}/releases" --jq '[.[] | select(.prerelease)][0].tag_name' 2>/dev/null || true)
+  TAG=$(gh api "repos/${repo}/releases" --jq '.[0].tag_name' 2>/dev/null || true)
   if [ -z "$TAG" ]; then
-    warn "No prerelease found for ${repo} — skipping"
+    warn "No releases found for ${repo} — skipping"
     continue
   fi
 

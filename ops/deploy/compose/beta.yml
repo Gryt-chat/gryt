@@ -49,12 +49,11 @@ services:
     container_name: gryt-beta-sfu
     ports:
       - "${SFU_PORT:-5015}:5005"
-      - "${SFU_UDP_MIN:-10020}-${SFU_UDP_MAX:-10039}:${SFU_UDP_MIN:-10020}-${SFU_UDP_MAX:-10039}/udp"
+      - "${ICE_UDP_MUX_PORT:-4443}:${ICE_UDP_MUX_PORT:-4443}/udp"
     environment:
       PORT: "5005"
       STUN_SERVERS: ${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
-      ICE_UDP_PORT_MIN: ${SFU_UDP_MIN:-10020}
-      ICE_UDP_PORT_MAX: ${SFU_UDP_MAX:-10039}
+      ICE_UDP_MUX_PORT: ${ICE_UDP_MUX_PORT:-4443}
       ICE_ADVERTISE_IP: ${ICE_ADVERTISE_IP:-}
     networks:
       - gryt-beta

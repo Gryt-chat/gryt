@@ -75,5 +75,32 @@ services:
       retries: 3
       start_period: 40s
 
+  # ── Image Worker (NT) ─────────────────────────────────────────────────────
+  image-worker-nt:
+    image: ghcr.io/gryt-chat/image-worker:${IMAGE_WORKER_VERSION:-latest-beta}
+    container_name: gryt-beta-image-worker-nt
+    environment:
+      DATA_DIR: /data
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: auto
+      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${NT_S3_BUCKET:-nts-beta}
+      S3_FORCE_PATH_STYLE: "true"
+    volumes:
+      - gryt-beta-server-nt-data:/data
+    depends_on:
+      server-nt:
+        condition: service_healthy
+    networks:
+      - gryt-beta
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
 volumes:
   gryt-beta-server-nt-data:

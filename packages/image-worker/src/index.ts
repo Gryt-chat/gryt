@@ -10,7 +10,7 @@ import {
   updateImageJobStatus,
 } from "./db";
 import { processUploadedImage } from "./processImage";
-import { initS3 } from "./storage";
+import { initStorage } from "./storage";
 
 function clampInt(
   value: string | undefined,
@@ -34,12 +34,12 @@ let errorCount = 0;
 async function runOne(jobId: string): Promise<void> {
   const bucket = process.env.S3_BUCKET || "";
   try {
-    const job = await getImageJob(jobId);
+    const job = getImageJob(jobId);
     if (!job || job.status !== "queued") return;
 
-    await updateImageJobStatus({ job_id: jobId, status: "processing" });
+    updateImageJobStatus({ job_id: jobId, status: "processing" });
 
-    const maxBytes = await getUploadMaxBytes();
+    const maxBytes = getUploadMaxBytes();
 
     const result = await processUploadedImage(
       bucket,
@@ -50,7 +50,7 @@ async function runOne(jobId: string): Promise<void> {
       maxBytes,
     );
 
-    const updates: Record<string, unknown> = {};
+    const updates: { s3_key?: string; mime?: string; size?: number; thumbnail_key?: string | null } = {};
     if (result.compressed && result.newKey && result.newMime && result.newSize !== null) {
       updates.s3_key = result.newKey;
       updates.mime = result.newMime;
@@ -61,10 +61,10 @@ async function runOne(jobId: string): Promise<void> {
     }
 
     if (Object.keys(updates).length > 0) {
-      await updateFileRecord(job.file_id, updates as Parameters<typeof updateFileRecord>[1]);
+      updateFileRecord(job.file_id, updates);
     }
 
-    await updateImageJobStatus({ job_id: jobId, status: "done" });
+    updateImageJobStatus({ job_id: jobId, status: "done" });
     processedCount++;
     consola.info(
       `[ImageWorker] Job ${jobId} done (file=${job.file_id}, compressed=${result.compressed}, thumb=${!!result.thumbKey})`,
@@ -73,62 +73,72 @@ async function runOne(jobId: string): Promise<void> {
     const msg = err instanceof Error ? err.message : String(err);
     consola.error(`[ImageWorker] Job ${jobId} failed:`, msg);
     errorCount++;
-    await updateImageJobStatus({
-      job_id: jobId,
-      status: "error",
-      error_message: msg,
-    }).catch((e) => consola.warn("Failed to update job status", e));
+    try {
+      updateImageJobStatus({ job_id: jobId, status: "error", error_message: msg });
+    } catch (e) {
+      consola.warn("Failed to update job status", e);
+    }
   } finally {
     await new Promise<void>((resolve) => setImmediate(resolve));
   }
 }
 
-async function tick(): Promise<void> {
+function tick(): void {
   if (inFlight >= concurrency) return;
   const capacity = concurrency - inFlight;
-  const queued = await listQueuedImageJobIds(capacity).catch(() => []);
+  let queued: Array<{ job_id: string }>;
+  try {
+    queued = listQueuedImageJobIds(capacity);
+  } catch {
+    return;
+  }
   if (queued.length === 0) return;
   for (const { job_id } of queued) {
     if (inFlight >= concurrency) break;
     inFlight++;
     runOne(job_id)
       .catch((e) => consola.warn("tick error", e))
-      .finally(() => { inFlight--; });
+      .finally(() => {
+        inFlight--;
+      });
   }
 }
 
 function startHealthServer(): void {
   const server = http.createServer((_req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({
-      status: "ok",
-      processed: processedCount,
-      errors: errorCount,
-      inFlight,
-    }));
+    res.end(
+      JSON.stringify({
+        status: "ok",
+        processed: processedCount,
+        errors: errorCount,
+        inFlight,
+      }),
+    );
   });
   server.listen(healthPort, () => {
     consola.info(`[ImageWorker] Health server on :${healthPort}`);
   });
 }
 
-async function main(): Promise<void> {
+function main(): void {
   consola.info("[ImageWorker] Starting...");
   consola.info(`[ImageWorker] concurrency=${concurrency}, pollMs=${pollMs}`);
 
-  initS3();
-  await initDb();
+  initStorage();
+  initDb();
 
   startHealthServer();
 
   setInterval(() => {
-    tick().catch((e) => consola.warn("poll error", e));
+    try {
+      tick();
+    } catch (e) {
+      consola.warn("poll error", e);
+    }
   }, pollMs);
 
   consola.info("[ImageWorker] Polling started");
 }
 
-main().catch((err) => {
-  consola.fatal("[ImageWorker] Failed to start:", err);
-  process.exit(1);
-});
+main();

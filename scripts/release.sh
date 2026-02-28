@@ -163,6 +163,21 @@ if [[ ${#SELECTED_IDX[@]} -eq 0 ]]; then
   exit 1
 fi
 
+# ── Channel ──────────────────────────────────────────────────────────
+echo ""
+info "Release channel:"
+echo "   1) Beta    — prerelease, deploys to beta  (default)"
+echo "   2) Latest  — stable, deploys to beta + production"
+echo ""
+read -rp "$(echo -e "${CYAN}?${RESET}  Channel ${YELLOW}[1]${RESET}: ")" CHANNEL_CHOICE
+CHANNEL_CHOICE="${CHANNEL_CHOICE:-1}"
+case "$CHANNEL_CHOICE" in
+  1) export CHANNEL="beta" ;;
+  2) export CHANNEL="latest" ;;
+  *) err "Invalid choice"; exit 1 ;;
+esac
+ok "Channel: ${BOLD}${CHANNEL}${RESET}"
+
 # ── Single package: run directly ──────────────────────────────────────
 if [[ ${#SELECTED_IDX[@]} -eq 1 ]]; then
   idx="${SELECTED_IDX[0]}"

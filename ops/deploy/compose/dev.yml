@@ -124,6 +124,64 @@ services:
       retries: 3
       start_period: 40s
 
+  # Image Worker for Server 1
+  image-worker-1:
+    build:
+      context: ../../../packages/image-worker
+    container_name: gryt-image-worker-1
+    environment:
+      - DATA_DIR=/data
+      - S3_ENDPOINT=http://gryt-dev-minio:9000
+      - S3_REGION=us-east-1
+      - S3_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - S3_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - S3_BUCKET=${S3_BUCKET:-gryt}
+      - S3_FORCE_PATH_STYLE=true
+    volumes:
+      - gryt-dev-server1-data:/data
+    networks:
+      - gryt-network
+      - dev-deps
+    depends_on:
+      server1:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Image Worker for Server 2
+  image-worker-2:
+    build:
+      context: ../../../packages/image-worker
+    container_name: gryt-image-worker-2
+    environment:
+      - DATA_DIR=/data
+      - S3_ENDPOINT=http://gryt-dev-minio:9000
+      - S3_REGION=us-east-1
+      - S3_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - S3_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - S3_BUCKET=${S3_BUCKET:-gryt}
+      - S3_FORCE_PATH_STYLE=true
+    volumes:
+      - gryt-dev-server2-data:/data
+    networks:
+      - gryt-network
+      - dev-deps
+    depends_on:
+      server2:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
   # Web Client
   client:
     build:

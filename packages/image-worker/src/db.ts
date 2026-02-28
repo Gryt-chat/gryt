@@ -1,21 +1,27 @@
-import { Client } from "cassandra-driver";
+import Database from "better-sqlite3";
 import consola from "consola";
+import { existsSync, mkdirSync } from "fs";
+import { dirname, join } from "path";
 
-let client: Client | null = null;
+let db: Database.Database | null = null;
 
-export function getClient(): Client {
-  if (!client) throw new Error("DB not initialized");
-  return client;
+function getDb(): Database.Database {
+  if (!db) throw new Error("DB not initialized. Call initDb() first.");
+  return db;
 }
 
-export async function initDb(): Promise<void> {
-  const contactPoints = (process.env.SCYLLA_CONTACT_POINTS || "localhost").split(",");
-  const localDataCenter = process.env.SCYLLA_LOCAL_DATACENTER || "datacenter1";
-  const keyspace = process.env.SCYLLA_KEYSPACE || "gryt";
+export function initDb(): void {
+  const dataDir = process.env.DATA_DIR || "./data";
+  const dbPath = join(dataDir, "gryt.db");
 
-  client = new Client({ contactPoints, localDataCenter, keyspace });
-  await client.connect();
-  consola.info(`[DB] Connected to ScyllaDB (keyspace=${keyspace})`);
+  const dir = dirname(dbPath);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+  db = new Database(dbPath);
+  db.pragma("journal_mode = WAL");
+  db.pragma("busy_timeout = 5000");
+
+  consola.info(`[DB] Connected to SQLite (${dbPath})`);
 }
 
 export type ImageJobStatus = "queued" | "processing" | "done" | "error";
@@ -32,111 +38,106 @@ export interface ImageJobRecord {
   updated_at: Date;
 }
 
-function statusFromDb(value: unknown): ImageJobStatus {
-  const v = typeof value === "string" ? value : "";
-  if (v === "queued" || v === "processing" || v === "done" || v === "error") return v;
-  return "error";
+function toIso(d: Date): string {
+  return d.toISOString();
 }
 
-export async function listQueuedImageJobIds(
-  limit: number,
-): Promise<Array<{ job_id: string; created_at: Date }>> {
-  const c = getClient();
-  const safeLimit = Math.max(1, Math.min(200, Math.floor(limit)));
-  const rs = await c.execute(
-    `SELECT created_at, job_id FROM server_image_jobs_by_status WHERE status = ? LIMIT ${safeLimit}`,
-    ["queued"],
-    { prepare: true },
-  );
-  return rs.rows.map((r) => ({
-    job_id: r["job_id"].toString(),
-    created_at: r["created_at"],
-  }));
+function fromIso(s: string | null | undefined): Date {
+  if (!s) return new Date(0);
+  return new Date(s);
 }
 
-export async function getImageJob(job_id: string): Promise<ImageJobRecord | null> {
-  const c = getClient();
-  const rs = await c.execute(
-    `SELECT job_id, file_id, status, raw_s3_key, raw_content_type, raw_bytes, error_message, created_at, updated_at
-     FROM server_image_jobs_by_id WHERE job_id = ?`,
-    [job_id],
-    { prepare: true },
-  );
-  const r = rs.first();
-  if (!r) return null;
+function mapRow(row: Record<string, unknown>): ImageJobRecord {
   return {
-    job_id: r["job_id"].toString(),
-    file_id: r["file_id"].toString(),
-    status: statusFromDb(r["status"]),
-    raw_s3_key: r["raw_s3_key"],
-    raw_content_type: r["raw_content_type"],
-    raw_bytes: Number(r["raw_bytes"] ?? 0),
-    error_message: r["error_message"] ?? null,
-    created_at: r["created_at"],
-    updated_at: r["updated_at"],
+    job_id: row.job_id as string,
+    file_id: row.file_id as string,
+    status: row.status as ImageJobStatus,
+    raw_s3_key: row.raw_s3_key as string,
+    raw_content_type: row.raw_content_type as string,
+    raw_bytes: (row.raw_bytes as number) || 0,
+    error_message: (row.error_message as string) || null,
+    created_at: fromIso(row.created_at as string),
+    updated_at: fromIso(row.updated_at as string),
   };
 }
 
-export async function updateImageJobStatus(input: {
+export function listQueuedImageJobIds(
+  limit: number,
+): Array<{ job_id: string; created_at: Date }> {
+  const d = getDb();
+  const safeLimit = Math.max(1, Math.min(200, Math.floor(limit)));
+  const rows = d
+    .prepare(
+      "SELECT job_id, created_at FROM image_jobs WHERE status = 'queued' ORDER BY created_at ASC LIMIT ?",
+    )
+    .all(safeLimit) as Array<{ job_id: string; created_at: string }>;
+  return rows.map((r) => ({ job_id: r.job_id, created_at: fromIso(r.created_at) }));
+}
+
+export function getImageJob(jobId: string): ImageJobRecord | null {
+  const d = getDb();
+  const row = d.prepare("SELECT * FROM image_jobs WHERE job_id = ?").get(jobId) as
+    | Record<string, unknown>
+    | undefined;
+  if (!row) return null;
+  return mapRow(row);
+}
+
+export function updateImageJobStatus(input: {
   job_id: string;
   status: ImageJobStatus;
   error_message?: string | null;
-}): Promise<void> {
-  const c = getClient();
-  const existing = await getImageJob(input.job_id);
-  if (!existing) return;
+}): void {
+  const d = getDb();
+  const now = toIso(new Date());
 
-  const updated_at = new Date();
-  const nextStatus = input.status;
-  const error_message = input.error_message ?? existing.error_message;
+  const sets: string[] = ["status = ?", "updated_at = ?"];
+  const vals: unknown[] = [input.status, now];
 
-  await c.execute(
-    `UPDATE server_image_jobs_by_id SET status = ?, error_message = ?, updated_at = ? WHERE job_id = ?`,
-    [nextStatus, error_message, updated_at, input.job_id],
-    { prepare: true },
-  );
+  if (input.error_message !== undefined) {
+    sets.push("error_message = ?");
+    vals.push(input.error_message);
+  }
 
-  await c.execute(
-    `INSERT INTO server_image_jobs_by_status (status, created_at, job_id, file_id, updated_at) VALUES (?, ?, ?, ?, ?)`,
-    [nextStatus, existing.created_at, input.job_id, existing.file_id, updated_at],
-    { prepare: true },
-  );
-
-  await c.execute(
-    `DELETE FROM server_image_jobs_by_status WHERE status = ? AND created_at = ? AND job_id = ?`,
-    [existing.status, existing.created_at, input.job_id],
-    { prepare: true },
-  );
+  vals.push(input.job_id);
+  d.prepare(`UPDATE image_jobs SET ${sets.join(", ")} WHERE job_id = ?`).run(...vals);
 }
 
-export async function updateFileRecord(
+export function updateFileRecord(
   fileId: string,
   updates: { s3_key?: string; mime?: string; size?: number; thumbnail_key?: string | null },
-): Promise<void> {
-  const c = getClient();
+): void {
+  const d = getDb();
   const sets: string[] = [];
   const vals: unknown[] = [];
-  if (updates.s3_key !== undefined) { sets.push("s3_key = ?"); vals.push(updates.s3_key); }
-  if (updates.mime !== undefined) { sets.push("mime = ?"); vals.push(updates.mime); }
-  if (updates.size !== undefined) { sets.push("size = ?"); vals.push(updates.size); }
-  if (updates.thumbnail_key !== undefined) { sets.push("thumbnail_key = ?"); vals.push(updates.thumbnail_key); }
+  if (updates.s3_key !== undefined) {
+    sets.push("s3_key = ?");
+    vals.push(updates.s3_key);
+  }
+  if (updates.mime !== undefined) {
+    sets.push("mime = ?");
+    vals.push(updates.mime);
+  }
+  if (updates.size !== undefined) {
+    sets.push("size = ?");
+    vals.push(updates.size);
+  }
+  if (updates.thumbnail_key !== undefined) {
+    sets.push("thumbnail_key = ?");
+    vals.push(updates.thumbnail_key);
+  }
   if (sets.length === 0) return;
   vals.push(fileId);
-  await c.execute(`UPDATE files_by_id SET ${sets.join(", ")} WHERE file_id = ?`, vals, { prepare: true });
+  d.prepare(`UPDATE files SET ${sets.join(", ")} WHERE file_id = ?`).run(...vals);
 }
 
 const DEFAULT_UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
-const SERVER_CONFIG_ID = "config";
 
-export async function getUploadMaxBytes(): Promise<number> {
-  const c = getClient();
-  const rs = await c.execute(
-    `SELECT upload_max_bytes FROM server_config_singleton WHERE id = ?`,
-    [SERVER_CONFIG_ID],
-    { prepare: true },
-  );
-  const r = rs.first();
-  if (!r) return DEFAULT_UPLOAD_MAX_BYTES;
-  const val = r["upload_max_bytes"];
-  return typeof val === "number" ? val : Number(val ?? DEFAULT_UPLOAD_MAX_BYTES);
+export function getUploadMaxBytes(): number {
+  const d = getDb();
+  const row = d
+    .prepare("SELECT upload_max_bytes FROM server_config WHERE id = 'config'")
+    .get() as { upload_max_bytes: number | null } | undefined;
+  if (!row || row.upload_max_bytes == null) return DEFAULT_UPLOAD_MAX_BYTES;
+  return row.upload_max_bytes;
 }

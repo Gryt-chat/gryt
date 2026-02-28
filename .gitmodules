@@ -22,3 +22,7 @@
 	path = packages/sfu
 	url = https://github.com/Gryt-chat/sfu.git
 	branch = main
+[submodule "image-worker"]
+	path = packages/image-worker
+	url = https://github.com/Gryt-chat/image-worker.git
+	branch = main

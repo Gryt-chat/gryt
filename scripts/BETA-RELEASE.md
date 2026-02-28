@@ -18,6 +18,7 @@ All releases land on `:latest-beta`. Production (`:latest`) is only updated via 
 | Server | 5000 | 5010 |
 | SFU | 5005 | 5015 |
 | Client (web) | 3666 | 3667 |
+| Image Worker (health) | 8080 | 8080 |
 | NT Server | 5001 | 5011 |
 | UDP range | 10000–10019 | 10020–10039 |
 
@@ -52,7 +53,7 @@ Pick your version bump (patch/minor/major). The script will:
 - Push to `ghcr.io/gryt-chat/server:latest-beta` (and the versioned tags)
 - Commit + create a GitHub release
 
-Same flow for `packages/sfu/scripts/release.sh` and `packages/client/scripts/release.sh`.
+Same flow for `packages/sfu/scripts/release.sh`, `packages/client/scripts/release.sh`, and `packages/image-worker/scripts/release.sh`.
 
 ### 2. Update the beta server
 
@@ -75,7 +76,7 @@ bash scripts/promote-beta.sh
 ```
 
 This will:
-1. Pull `:latest-beta` for server, sfu, and client
+1. Pull `:latest-beta` for server, sfu, client, and image-worker
 2. Re-tag each as `:latest`
 3. Push `:latest` to the registry
 4. Ask if you want to run `update-prod.sh` to restart production

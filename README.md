@@ -3,11 +3,16 @@
   <h1>Gryt</h1>
   <p><strong>Open-source WebRTC voice chat platform</strong></p>
   <p>
-    <a href="https://docs.gryt.chat"><img src="https://img.shields.io/badge/docs-docs.gryt.chat-blue" alt="Docs" /></a>
+    <a href="https://github.com/Gryt-chat/gryt/releases/latest"><img src="https://img.shields.io/github/v/release/Gryt-chat/gryt" alt="GitHub Release" /></a>
+    <a href="https://github.com/Gryt-chat/gryt/stargazers"><img src="https://img.shields.io/github/stars/Gryt-chat/gryt" alt="GitHub Stars" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License: AGPL-3.0" /></a>
-    <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white" alt="TypeScript" /></a>
-    <a href="https://reactjs.org/"><img src="https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB" alt="React" /></a>
-    <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=white" alt="Go" /></a>
+    <a href="https://docs.gryt.chat"><img src="https://img.shields.io/badge/docs-docs.gryt.chat-blue" alt="Docs" /></a>
+  </p>
+  <p>
+    <a href="https://snapcraft.io/gryt-chat"><img alt="Snap Store" src="https://snapcraft.io/gryt-chat/badge.svg" /></a>
+    <a href="https://flathub.org/apps/com.gryt.Chat"><img alt="Flathub" src="https://img.shields.io/flathub/v/com.gryt.Chat" /></a>
+    <a href="https://aur.archlinux.org/packages/gryt-chat-bin"><img alt="AUR package" src="https://img.shields.io/aur/version/gryt-chat-bin" /></a>
+    <a href="https://ghcr.io/gryt-chat/server"><img src="https://img.shields.io/badge/Docker-ghcr.io-blue?logo=docker&logoColor=white" alt="Docker" /></a>
   </p>
 
   <img src="/.github/preview.png" width="700" alt="Gryt preview" />
@@ -21,6 +26,29 @@
 
 > [!CAUTION]
 > **Early Development Stage** — This project is experimental and under active development. Expect breaking changes.
+
+## Features
+
+- Crystal-clear voice chat powered by WebRTC with Opus codec
+- Screen sharing with audio capture
+- Text chat with Markdown, mentions, and file sharing
+- Self-hostable with Docker Compose
+- LAN server discovery via mDNS
+- Global push-to-talk with configurable keybinds
+- RNNoise-based noise suppression
+- Auto-updates
+
+## Download
+
+| Platform | Link |
+|----------|------|
+| Web | [app.gryt.chat](https://app.gryt.chat) |
+| Linux (AppImage / deb) | [GitHub Releases](https://github.com/Gryt-chat/gryt/releases/latest) |
+| Linux (Snap) | [Snap Store](https://snapcraft.io/gryt-chat) |
+| Linux (Flatpak) | [Flathub](https://flathub.org/apps/com.gryt.Chat) |
+| Linux (Arch) | [AUR: gryt-chat-bin](https://aur.archlinux.org/packages/gryt-chat-bin) |
+| Windows | [GitHub Releases](https://github.com/Gryt-chat/gryt/releases/latest) |
+| macOS | [GitHub Releases](https://github.com/Gryt-chat/gryt/releases/latest) |
 
 ## Self-Hosting
 

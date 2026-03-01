@@ -7,6 +7,9 @@ auth/backups/*.sql.gz
 auth/backups/*.dump
 auth/backups/*.dump.gz
 
+# Snapcraft credentials
+snapcraft-creds
+
 # Env files (never commit secrets)
 .env
 .env.*

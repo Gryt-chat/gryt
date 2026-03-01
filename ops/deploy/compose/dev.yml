@@ -16,8 +16,8 @@ services:
       # Optional: pin ICE UDP ports + capacity and control what IP is advertised in ICE candidates
       # - ICE_UDP_PORT_MIN=${SFU_UDP_MIN:-10000}
       # - ICE_UDP_PORT_MAX=${SFU_UDP_MAX:-10019}
-      # - ICE_ADVERTISE_IP=${SFU_ADVERTISE_IP:-}
-      # - DISABLE_STUN=${SFU_DISABLE_STUN:-false}
+      # - ICE_ADVERTISE_IP=${ICE_ADVERTISE_IP:-}
+      # - DISABLE_STUN=${DISABLE_STUN:-false}
     volumes:
       - ../../../packages/sfu/.env:/root/.env:ro
     networks:

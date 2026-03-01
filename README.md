@@ -10,7 +10,7 @@
   </p>
   <p>
     <a href="https://snapcraft.io/gryt-chat"><img alt="Snap Store" src="https://snapcraft.io/gryt-chat/badge.svg" /></a>
-    <a href="https://flathub.org/apps/com.gryt.Chat"><img alt="Flathub" src="https://img.shields.io/flathub/v/com.gryt.Chat" /></a>
+
     <a href="https://aur.archlinux.org/packages/gryt-chat-bin"><img alt="AUR package" src="https://img.shields.io/aur/version/gryt-chat-bin" /></a>
     <a href="https://ghcr.io/gryt-chat/server"><img src="https://img.shields.io/badge/Docker-ghcr.io-blue?logo=docker&logoColor=white" alt="Docker" /></a>
   </p>
@@ -45,7 +45,7 @@
 | Web | [app.gryt.chat](https://app.gryt.chat) |
 | Linux (AppImage / deb) | [GitHub Releases](https://github.com/Gryt-chat/gryt/releases/latest) |
 | Linux (Snap) | [Snap Store](https://snapcraft.io/gryt-chat) |
-| Linux (Flatpak) | [Flathub](https://flathub.org/apps/com.gryt.Chat) |
+
 | Linux (Arch) | [AUR: gryt-chat-bin](https://aur.archlinux.org/packages/gryt-chat-bin) |
 | Windows | [GitHub Releases](https://github.com/Gryt-chat/gryt/releases/latest) |
 | macOS | [GitHub Releases](https://github.com/Gryt-chat/gryt/releases/latest) |

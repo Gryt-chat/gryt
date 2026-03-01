@@ -10,7 +10,6 @@
   </p>
   <p>
     <a href="https://snapcraft.io/gryt-chat"><img alt="Snap Store" src="https://snapcraft.io/gryt-chat/badge.svg" /></a>
-
     <a href="https://aur.archlinux.org/packages/gryt-chat-bin"><img alt="AUR package" src="https://img.shields.io/aur/version/gryt-chat-bin" /></a>
     <a href="https://ghcr.io/gryt-chat/server"><img src="https://img.shields.io/badge/Docker-ghcr.io-blue?logo=docker&logoColor=white" alt="Docker" /></a>
   </p>

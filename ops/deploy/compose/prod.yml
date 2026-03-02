@@ -254,25 +254,12 @@ services:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/provisioning/dashboards/gryt-overview.json
     ports:
       - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
     volumes:
       - gryt-prod-grafana-data:/var/lib/grafana
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        mkdir -p /etc/grafana/provisioning/datasources
-        cat > /etc/grafana/provisioning/datasources/prometheus.yml <<'CFG'
-        apiVersion: 1
-        datasources:
-          - name: Prometheus
-            type: prometheus
-            access: proxy
-            url: http://prometheus:9090
-            isDefault: true
-            editable: false
-        CFG
-        exec /run.sh
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
     networks:
       - gryt-prod
     restart: unless-stopped

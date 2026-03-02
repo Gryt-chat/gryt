@@ -49,4 +49,5 @@ ops/downloads/**
 
 # Local compose overrides (per-host server config, not committed)
 ops/deploy/compose/local.yml
+ops/deploy/compose/pp.yml
 

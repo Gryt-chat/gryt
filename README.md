@@ -71,6 +71,30 @@ Full docs at **[docs.gryt.chat](https://docs.gryt.chat)** — architecture, conf
 
 See the [contributing guide](https://docs.gryt.chat/docs/guide/contributing) for how to get involved.
 
+## Acknowledgments
+
+Gryt wouldn't exist without these projects and resources. I'm forever grateful to the people behind them for sharing their work with the world.
+
+**Libraries that power Gryt:**
+
+- [Pion WebRTC](https://github.com/pion/webrtc) — Pure Go WebRTC stack that the entire SFU is built on. Sean DuBois and the Pion community taught me more about WebRTC than anything else
+- [RNNoise](https://jmvalin.ca/demo/rnnoise/) via [@shiguredo/rnnoise-wasm](https://github.com/niccokunzmann/rnnoise-wasm) — Jean-Marc Valin's neural network noise suppression, compiled to WASM for the browser
+- [Radix UI](https://www.radix-ui.com/) — Accessible, unstyled component primitives that form the backbone of the UI
+- [Socket.IO](https://socket.io/) — Real-time signaling between client and server
+- [Electron](https://www.electronjs.org/) — Desktop app shell with native OS integration
+
+**Specs and references:**
+
+- [MDN WebRTC API docs](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API) — The single best reference for understanding WebRTC in the browser
+- [AV1 RTP spec (Dependency Descriptor)](https://aomediacodec.github.io/av1-rtp-spec/#dependency-descriptor-rtp-header-extension) — The spec that made SVC layer-aware forwarding possible
+- [WebRTC Simulcast Playground](https://orphis.github.io/webrtc-sandbox/simulcast-playground.html) by Orphis — Invaluable for understanding simulcast, SVC scalability modes, and encoder behavior
+- [mediasoup documentation](https://mediasoup.org/documentation/) — Excellent SFU architecture reference that shaped how I think about track forwarding
+- [Microsoft Application Loopback Audio Capture sample](https://learn.microsoft.com/en-us/samples/microsoft/windows-classic-samples/applicationloopbackaudio-sample/) — The WASAPI example that showed how to capture per-process audio on Windows while excluding Gryt's own audio
+
+**Projects that inspired the journey:**
+
+- [Mumble](https://www.mumble.info/), [Jitsi](https://meet.jit.si/), [Revolt](https://revolt.chat/), [LiveKit](https://livekit.io/), [coturn](https://github.com/coturn/coturn), and many others — see [The Projects That Paved the Way](https://gryt.chat/blog/the-projects-that-paved-the-way) for the full story
+
 ## License
 
 This project is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE).

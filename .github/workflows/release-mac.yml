@@ -19,11 +19,7 @@ jobs:
     runs-on: macos-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # electron-builder signing (P12)
-      CSC_LINK: ${{ runner.temp }}/mac-cert.p12
       CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
-      # @electron/notarize (path to .p8 + issuer)
-      APPLE_API_KEY: ${{ runner.temp }}/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
       APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
 
     steps:
@@ -44,7 +40,9 @@ jobs:
             echo "Missing secret MACOS_CERT_P12_BASE64"
             exit 1
           fi
+          CSC_LINK="${RUNNER_TEMP}/mac-cert.p12"
           echo "${{ secrets.MACOS_CERT_P12_BASE64 }}" | base64 --decode > "${CSC_LINK}"
+          echo "CSC_LINK=${CSC_LINK}" >> "$GITHUB_ENV"
 
       - name: Decode notarization API key (.p8)
         shell: bash
@@ -53,7 +51,9 @@ jobs:
             echo "Missing secret APPLE_API_KEY_P8_BASE64"
             exit 1
           fi
+          APPLE_API_KEY="${RUNNER_TEMP}/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8"
           echo "${{ secrets.APPLE_API_KEY_P8_BASE64 }}" | base64 --decode > "${APPLE_API_KEY}"
+          echo "APPLE_API_KEY=${APPLE_API_KEY}" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         working-directory: packages/client

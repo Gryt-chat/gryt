@@ -15,7 +15,10 @@ permissions:
 
 jobs:
   build-sign-notarize:
-    if: github.repository == 'Gryt-chat/gryt'
+    if: >-
+      github.repository == 'Gryt-chat/gryt'
+      && (github.event_name == 'workflow_dispatch'
+          || startsWith(github.event.release.tag_name, 'v'))
     runs-on: macos-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

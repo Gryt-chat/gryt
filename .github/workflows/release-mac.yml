@@ -59,6 +59,10 @@ jobs:
         working-directory: packages/client
         run: npm ci
 
+      - name: Build native audio capture binary
+        working-directory: packages/client
+        run: bash native/audio-capture/build.sh
+
       - name: Build renderer + package (macOS)
         working-directory: packages/client
         shell: bash

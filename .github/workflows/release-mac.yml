@@ -29,8 +29,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: true
           token: ${{ secrets.GH_PAT }}
+
+      - name: Fetch client submodule
+        run: git submodule update --init packages/client
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -61,7 +63,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: packages/client
-        run: npm ci
+        run: npm install
 
       - name: Build native audio capture binary
         working-directory: packages/client

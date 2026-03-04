@@ -19,12 +19,10 @@ jobs:
       github.repository == 'Gryt-chat/gryt'
       && (github.event_name == 'workflow_dispatch'
           || startsWith(github.event.release.tag_name, 'v'))
-    runs-on: macos-latest
+    runs-on: [self-hosted, macOS]
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
-      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_NOTARYTOOL_KEYCHAIN_PROFILE: ${{ secrets.APPLE_NOTARYTOOL_KEYCHAIN_PROFILE }}
 
     steps:
       - name: Checkout
@@ -39,28 +37,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Decode signing certificate (.p12)
-        shell: bash
-        run: |
-          if [[ -z "${{ secrets.MACOS_CERT_P12_BASE64 }}" ]]; then
-            echo "Missing secret MACOS_CERT_P12_BASE64"
-            exit 1
-          fi
-          CSC_LINK="${RUNNER_TEMP}/mac-cert.p12"
-          echo "${{ secrets.MACOS_CERT_P12_BASE64 }}" | base64 --decode > "${CSC_LINK}"
-          echo "CSC_LINK=${CSC_LINK}" >> "$GITHUB_ENV"
-
-      - name: Decode notarization API key (.p8)
-        shell: bash
-        run: |
-          if [[ -z "${{ secrets.APPLE_API_KEY_P8_BASE64 }}" ]]; then
-            echo "Missing secret APPLE_API_KEY_P8_BASE64"
-            exit 1
-          fi
-          APPLE_API_KEY="${RUNNER_TEMP}/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8"
-          echo "${{ secrets.APPLE_API_KEY_P8_BASE64 }}" | base64 --decode > "${APPLE_API_KEY}"
-          echo "APPLE_API_KEY=${APPLE_API_KEY}" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         working-directory: packages/client

@@ -102,8 +102,8 @@ services:
       SFU_WS_HOST: ws://sfu:5005
       SFU_PUBLIC_HOST: ${SFU_PUBLIC_HOST:-ws://localhost:5005}
       STUN_SERVERS: ${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
-      SFU_UDP_PORT_MIN: ${SFU_UDP_MIN:-10000}
-      SFU_UDP_PORT_MAX: ${SFU_UDP_MAX:-10019}
+      SFU_UDP_PORT_MIN: ${SFU_UDP_MIN:-}
+      SFU_UDP_PORT_MAX: ${SFU_UDP_MAX:-}
       GRYT_AUTH_MODE: ${GRYT_AUTH_MODE:-required}
       GRYT_OIDC_ISSUER: ${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}
       GRYT_OIDC_AUDIENCE: ${GRYT_OIDC_AUDIENCE:-gryt-web}

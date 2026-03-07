@@ -6,6 +6,8 @@ services:
     image: minio/minio:latest
     container_name: gryt-prod-minio
     command: ["server", "/data", "--console-address", ":9001"]
+    ports:
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
@@ -84,20 +86,24 @@ services:
       start_period: 40s
 
   # ── Signaling Server ───────────────────────────────────────────────────────
+  # Uses host networking so mDNS multicast reaches the physical LAN,
+  # enabling automatic server discovery in Electron desktop clients.
   server:
     image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest}
     container_name: gryt-prod-server
-    ports:
-      - "${SERVER_PORT:-5000}:5000"
+    network_mode: host
+    extra_hosts:
+      - "sfu:127.0.0.1"
+      - "minio:127.0.0.1"
     environment:
-      PORT: "5000"
+      PORT: ${SERVER_PORT:-5000}
       NODE_ENV: production
       SERVER_NAME: ${SERVER_NAME:-My Gryt Server}
       SERVER_DESCRIPTION: ${SERVER_DESCRIPTION:-A Gryt voice chat server}
       SERVER_PASSWORD: ${SERVER_PASSWORD:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://127.0.0.1:15738,https://app.gryt.chat}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
-      SFU_WS_HOST: ws://sfu:5005
+      SFU_WS_HOST: ws://sfu:${SFU_PORT:-5005}
       SFU_PUBLIC_HOST: ${SFU_PUBLIC_HOST:-ws://localhost:5005}
       STUN_SERVERS: ${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
       SFU_UDP_PORT_MIN: ${SFU_UDP_MIN:-}
@@ -108,7 +114,7 @@ services:
       GRYT_AUTH_API: ${GRYT_AUTH_API:-https://auth.gryt.chat}
       GRYT_IDENTITY_JWKS_URL: ${GRYT_IDENTITY_JWKS_URL:-https://id.gryt.chat/.well-known/jwks.json}
       DATA_DIR: /data
-      S3_ENDPOINT: http://minio:9000
+      S3_ENDPOINT: http://minio:${MINIO_PORT:-9000}
       S3_REGION: auto
       S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
       S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
@@ -123,8 +129,6 @@ services:
         condition: service_completed_successfully
       server-data-init:
         condition: service_completed_successfully
-    networks:
-      - gryt-prod
     restart: unless-stopped
     deploy:
       resources:
@@ -133,7 +137,7 @@ services:
         reservations:
           memory: 256M
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:5000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch(`http://localhost:${process.env.PORT}/health`).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -215,6 +219,8 @@ services:
     profiles: ["monitoring"]
     ports:
       - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    extra_hosts:
+      - "server:host-gateway"
     volumes:
       - gryt-prod-prometheus-data:/prometheus
     entrypoint: ["/bin/sh", "-c"]

@@ -57,6 +57,10 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
           rm -f "$RUNNER_TEMP/cert.p12"
 
+      - name: Clean stale build artifacts
+        working-directory: packages/client
+        run: rm -rf release dist dist-electron
+
       - name: Build renderer + package (macOS)
         working-directory: packages/client
         shell: bash

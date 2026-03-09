@@ -187,6 +187,10 @@ services:
     profiles: ["web"]
     ports:
       - "${CLIENT_PORT:-3666}:80"
+    # Optional: mount a host directory with addon folders for client-side addons.
+    # Each addon folder must contain an addon.json manifest.
+    # volumes:
+    #   - ./addons:/addons:ro
     environment:
       GRYT_OIDC_ISSUER: ${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}
       GRYT_OIDC_REALM: ${GRYT_OIDC_REALM:-gryt}

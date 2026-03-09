@@ -1,0 +1,9 @@
+{
+  "id": "example-plugin",
+  "name": "Clock Widget",
+  "version": "1.0.0",
+  "type": "plugin",
+  "description": "Displays a live clock at the bottom of the sidebar.",
+  "author": "Gryt",
+  "main": "plugin.js"
+}

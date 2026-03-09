@@ -1,0 +1,58 @@
+/*
+ * Nord Theme for Gryt
+ *
+ * Overrides Gryt's CSS custom properties to apply the Nord color palette.
+ * See https://www.nordtheme.com for the full palette.
+ *
+ * Overridable variables (non-exhaustive):
+ *
+ *   --color-background         Main app background
+ *   --color-panel-solid        Panel/card background
+ *   --color-panel-translucent  Semi-transparent panel background
+ *   --color-surface            Surface color (inputs, etc.)
+ *   --color-overlay            Modal overlay backdrop
+ *   --gryt-titlebar-bg         Electron titlebar background
+ *   --default-font-family      Primary font family
+ *   --code-font-family         Monospace font family
+ *
+ * Stable layout selectors:
+ *
+ *   [data-gryt="sidebar"]      Sidebar root
+ *   [data-gryt="server-view"]  Main server content area
+ *   [data-gryt="chat-view"]    Chat panel
+ *   [data-gryt="voice-view"]   Voice panel
+ *   [data-gryt="titlebar"]     Electron titlebar
+ *   [data-gryt="settings"]     Settings dialog
+ */
+
+/* ── Dark theme overrides ───────────────────────────────────────────────── */
+
+.dark .radix-themes,
+.dark-theme .radix-themes,
+:is(.dark .radix-themes) {
+  --color-background: #2e3440;
+  --color-panel-solid: #3b4252;
+  --color-panel-translucent: rgba(59, 66, 82, 0.88);
+  --color-surface: #434c5e;
+  --color-overlay: rgba(46, 52, 64, 0.6);
+  --gryt-titlebar-bg: #2e3440;
+}
+
+/* ── Light theme overrides ──────────────────────────────────────────────── */
+
+.light .radix-themes,
+.light-theme .radix-themes,
+:is(.light .radix-themes) {
+  --color-background: #eceff4;
+  --color-panel-solid: #e5e9f0;
+  --color-panel-translucent: rgba(229, 233, 240, 0.88);
+  --color-surface: #d8dee9;
+  --color-overlay: rgba(216, 222, 233, 0.5);
+  --gryt-titlebar-bg: #d8dee9;
+}
+
+/* ── Optional: style specific areas ─────────────────────────────────────── */
+
+[data-gryt="chat-view"] {
+  background: var(--color-surface) !important;
+}

@@ -1,0 +1,9 @@
+{
+  "id": "example-theme",
+  "name": "Nord Theme",
+  "version": "1.0.0",
+  "type": "theme",
+  "description": "A calm, arctic color palette inspired by Nord.",
+  "author": "Gryt",
+  "styles": ["theme.css"]
+}

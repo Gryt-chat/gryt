@@ -86,8 +86,9 @@ services:
       start_period: 40s
 
   # ── Signaling Server ───────────────────────────────────────────────────────
-  # Uses host networking so mDNS multicast reaches the physical LAN,
-  # enabling automatic server discovery in Electron desktop clients.
+  # Uses host networking for LAN server discovery (mDNS via avahi).
+  # The /etc/avahi/services mount lets the server register with the host's
+  # avahi-daemon. Requires: chmod o+w /etc/avahi/services on the host.
   server:
     image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest}
     container_name: gryt-prod-server
@@ -123,6 +124,7 @@ services:
       S3_FORCE_PATH_STYLE: "true"
     volumes:
       - gryt-prod-server-data:/data
+      - /etc/avahi/services:/etc/avahi/services
     depends_on:
       sfu:
         condition: service_healthy

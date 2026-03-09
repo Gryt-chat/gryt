@@ -1,0 +1,70 @@
+name: Discord release notification
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  notify-discord:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Discord webhook
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+        run: |
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "DISCORD_RELEASE_WEBHOOK_URL secret not set — skipping"
+            exit 0
+          fi
+
+          REPO_NAME="${{ github.event.repository.name }}"
+          TAG="${{ github.event.release.tag_name }}"
+          PRERELEASE="${{ github.event.release.prerelease }}"
+          RELEASE_URL="${{ github.event.release.html_url }}"
+
+          case "$REPO_NAME" in
+            gryt)          COMPONENT="Client" ;;
+            server)        COMPONENT="Server" ;;
+            sfu)           COMPONENT="SFU" ;;
+            image-worker)  COMPONENT="Image Worker" ;;
+            docs)          COMPONENT="Docs" ;;
+            site)          COMPONENT="Site" ;;
+            *)             COMPONENT="$REPO_NAME" ;;
+          esac
+
+          if [ "$PRERELEASE" = "true" ]; then
+            CHANNEL="Beta"
+            COLOR=16750848
+          else
+            CHANNEL="Stable"
+            COLOR=5763719
+          fi
+
+          BODY=$(printf '%s' "$RELEASE_BODY" | head -c 1800)
+
+          PAYLOAD=$(jq -n \
+            --arg title "Gryt $COMPONENT $TAG" \
+            --arg url "$RELEASE_URL" \
+            --arg desc "$BODY" \
+            --arg channel "$CHANNEL" \
+            --arg component "$COMPONENT" \
+            --arg tag "$TAG" \
+            --argjson color "$COLOR" \
+            '{
+              embeds: [{
+                title: $title,
+                url: $url,
+                description: $desc,
+                color: $color,
+                fields: [
+                  { name: "Component", value: $component, inline: true },
+                  { name: "Channel",   value: $channel,   inline: true },
+                  { name: "Version",   value: $tag,        inline: true }
+                ],
+                footer: { text: "Gryt Releases" },
+                timestamp: (now | todate)
+              }]
+            }')
+
+          curl -sfS -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK_URL"

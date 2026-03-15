@@ -1,0 +1,11 @@
+node_modules
+dist
+build
+coverage
+vendor
+*.lock
+*.png
+*.jpg
+*.zip
+*.min.js
+*.map

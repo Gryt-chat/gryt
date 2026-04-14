@@ -3,10 +3,10 @@ name: Release
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+*'
-      - 'client-v[0-9]+.[0-9]+.[0-9]+*'
-      - 'server-v[0-9]+.[0-9]+.[0-9]+*'
-      - 'sfu-v[0-9]+.[0-9]+.[0-9]+*'
+      - 'v*'
+      - 'client-v*'
+      - 'server-v*'
+      - 'sfu-v*'
   workflow_dispatch:
     inputs:
       version:

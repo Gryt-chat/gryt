@@ -339,7 +339,17 @@ jobs:
   # the `release: published` event and uploads macOS assets automatically.
   # ---------------------------------------------------------------------------
   github-release:
-    if: ${{ needs.prepare.outputs.build_client == 'true' || needs.prepare.outputs.build_server == 'true' || needs.prepare.outputs.build_sfu == 'true' }}
+    if: >-
+      ${{
+        always()
+        && (needs.prepare.outputs.build_client == 'true'
+            || needs.prepare.outputs.build_server == 'true'
+            || needs.prepare.outputs.build_sfu == 'true')
+        && (needs['build-sfu'].result == 'success' || needs['build-sfu'].result == 'skipped')
+        && (needs['build-server'].result == 'success' || needs['build-server'].result == 'skipped')
+        && (needs['build-client-linux'].result == 'success' || needs['build-client-linux'].result == 'skipped')
+        && (needs['build-client-windows'].result == 'success' || needs['build-client-windows'].result == 'skipped')
+      }}
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [prepare, build-sfu, build-server, build-client-linux, build-client-windows]

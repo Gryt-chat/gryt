@@ -334,9 +334,76 @@ jobs:
           retention-days: 1
 
   # ---------------------------------------------------------------------------
+  # Build Electron client for macOS (signed + notarized).
+  # Runs on the self-hosted macOS runner to produce signed distributables.
+  # ---------------------------------------------------------------------------
+  build-client-mac:
+    if: ${{ needs.prepare.outputs.build_client == 'true' }}
+    name: Client (macOS signed + notarized)
+    runs-on: [self-hosted, macOS]
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Fetch client submodule
+        run: git submodule update --init packages/client
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        working-directory: packages/client
+        run: npm install
+
+      - name: Build native audio capture binary
+        working-directory: packages/client
+        run: bash native/audio-capture/build.sh
+
+      - name: Import signing certificate
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          security create-keychain -p "" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "" "$KEYCHAIN_PATH"
+          echo "${{ secrets.MACOS_CERT_P12_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN_PATH" -P "${{ secrets.MACOS_CERT_PASSWORD }}" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Clean stale build artifacts
+        working-directory: packages/client
+        run: rm -rf release dist dist-electron
+
+      - name: Build renderer + package (macOS)
+        working-directory: packages/client
+        shell: bash
+        env:
+          APPLE_API_KEY: ${{ runner.temp }}/AuthKey.p8
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          echo "${{ secrets.APPLE_API_KEY_P8_BASE64 }}" | base64 --decode > "${{ runner.temp }}/AuthKey.p8"
+          ELECTRON=1 npx vite build
+          npx electron-builder --mac --publish never
+          rm -f "${{ runner.temp }}/AuthKey.p8"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-mac
+          path: |
+            packages/client/release/*-mac-*.dmg
+            packages/client/release/*-mac-*.zip
+            packages/client/release/*-mac-*.zip.blockmap
+            packages/client/release/latest-mac.yml
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
   # Create the GitHub Release and attach all built artifacts.
-  # The existing release-mac.yml workflow (self-hosted macOS runner) fires on
-  # the `release: published` event and uploads macOS assets automatically.
   # ---------------------------------------------------------------------------
   github-release:
     if: >-
@@ -349,10 +416,11 @@ jobs:
         && (needs['build-server'].result == 'success' || needs['build-server'].result == 'skipped')
         && (needs['build-client-linux'].result == 'success' || needs['build-client-linux'].result == 'skipped')
         && (needs['build-client-windows'].result == 'success' || needs['build-client-windows'].result == 'skipped')
+        && (needs['build-client-mac'].result == 'success' || needs['build-client-mac'].result == 'skipped')
       }}
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [prepare, build-sfu, build-server, build-client-linux, build-client-windows]
+    needs: [prepare, build-sfu, build-server, build-client-linux, build-client-windows, build-client-mac]
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:

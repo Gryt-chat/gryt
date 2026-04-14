@@ -25,25 +25,30 @@ how to cut a new release.
 
 ### `release.yml` — Build & Publish a Release
 
-**Trigger (automatic):** push a version tag matching `v<major>.<minor>.<patch>`
-or `v<major>.<minor>.<patch>-<pre-release>` (e.g. `v1.2.0` or `v1.2.0-beta.1`).
+**Trigger (automatic):** push a version tag for either:
+
+- all components: `v<major>.<minor>.<patch>` (or pre-release with suffix)
+- client only: `client-v<major>.<minor>.<patch>`
+- server only: `server-v<major>.<minor>.<patch>`
+- SFU only: `sfu-v<major>.<minor>.<patch>`
 
 **Trigger (manual):** _Actions → Release → Run workflow_, supplying a version
-tag and an optional "pre-release" checkbox.
+plus a component selector and optional "pre-release" checkbox.
 
 #### Jobs
 
 | Job | Runner | Artifacts |
 |-----|--------|-----------|
-| `build-sfu` (× 3) | ubuntu-latest | `sfu-linux-amd64.zip`, `sfu-linux-arm64.zip`, `sfu-windows-amd64.zip` — standalone SFU binaries |
-| `build-server` (× 2) | ubuntu-latest | `gryt-server-linux-x64-v<ver>.zip`, `gryt-server-windows-x64-v<ver>.zip` — full self-hosted server bundles (server + SFU + image-worker) |
-| `build-client-linux` | ubuntu-latest | `Gryt-Chat-<ver>-linux-x64.AppImage`, `Gryt-Chat-<ver>-linux-x64.deb`, `latest-linux*.yml` |
-| `build-client-windows` | windows-latest | `Gryt-Chat-<ver>-win-x64.exe` (NSIS installer), `Gryt-Chat-<ver>-win-x64-portable.exe`, `latest.yml` |
+| `build-sfu` (× 3) | ubuntu-latest | `sfu-linux-amd64.zip`, `sfu-linux-arm64.zip`, `sfu-windows-amd64.zip` — standalone SFU binaries (runs for `sfu-v*` and `v*`) |
+| `build-server` (× 2) | ubuntu-latest | `gryt-server-linux-x64-v<ver>.zip`, `gryt-server-windows-x64-v<ver>.zip` — full self-hosted server bundles (runs for `server-v*` and `v*`) |
+| `build-client-linux` | ubuntu-latest | `Gryt-Chat-<ver>-linux-x64.AppImage`, `Gryt-Chat-<ver>-linux-x64.deb`, `latest-linux*.yml` (runs for `client-v*` and `v*`) |
+| `build-client-windows` | windows-latest | `Gryt-Chat-<ver>-win-x64.exe` (NSIS installer), `Gryt-Chat-<ver>-win-x64-portable.exe`, `latest.yml` (runs for `client-v*` and `v*`) |
 | `github-release` | ubuntu-latest | Creates the GitHub Release and attaches all artifacts from the jobs above |
 
 After the GitHub Release is published the existing **`release-mac.yml`**
-workflow fires automatically (via `release: published`) and attaches the signed
-& notarised macOS DMG / ZIP using the self-hosted macOS runner.
+workflow fires automatically (via `release: published`) for `client-v*` and
+`v*` tags, and attaches the signed & notarised macOS DMG / ZIP using the
+self-hosted macOS runner.
 
 ---
 
@@ -55,13 +60,20 @@ workflow fires automatically (via `release: published`) and attaches the signed
 # Make sure you are on main and everything is merged
 git checkout main && git pull
 
-# Create and push a signed tag
+# Create and push a signed tag for all components
 git tag -s v1.2.3 -m "Release v1.2.3"
 git push origin v1.2.3
 ```
 
 The `release.yml` workflow starts automatically.  Follow the run at
 **Actions → Release** in the repository.
+
+For a **component-only release**, use a component prefix:
+
+```bash
+git tag -s client-v1.2.3 -m "Client release v1.2.3"
+git push origin client-v1.2.3
+```
 
 For a **pre-release / beta**, append a pre-release identifier:
 
@@ -76,9 +88,10 @@ pre-releases on GitHub.
 ### Option B — Manual dispatch
 
 1. Go to **Actions → Release → Run workflow** in the GitHub UI.
-2. Enter the version tag (e.g. `v1.2.3`).
-3. Optionally check **Mark as pre-release**.
-4. Click **Run workflow**.
+2. Enter the version (e.g. `1.2.3`).
+3. Select the component (`all`, `client`, `server`, or `sfu`).
+4. Optionally check **Mark as pre-release**.
+5. Click **Run workflow**.
 
 ---
 

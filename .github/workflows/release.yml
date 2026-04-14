@@ -3,14 +3,26 @@ name: Release
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+      - 'client-v[0-9]+.[0-9]+.[0-9]+*'
+      - 'server-v[0-9]+.[0-9]+.[0-9]+*'
+      - 'sfu-v[0-9]+.[0-9]+.[0-9]+*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag to build and release (e.g. v1.2.3)'
+        description: 'Version to release (e.g. 1.2.3 or 1.2.3-beta.1)'
         required: true
         type: string
+      component:
+        description: 'Component to release'
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - client
+          - server
+          - sfu
       prerelease:
         description: 'Mark as pre-release'
         type: boolean
@@ -33,33 +45,98 @@ jobs:
     outputs:
       tag: ${{ steps.meta.outputs.tag }}
       version: ${{ steps.meta.outputs.version }}
+      component: ${{ steps.meta.outputs.component }}
       prerelease: ${{ steps.meta.outputs.prerelease }}
+      build_client: ${{ steps.meta.outputs.build_client }}
+      build_server: ${{ steps.meta.outputs.build_server }}
+      build_sfu: ${{ steps.meta.outputs.build_sfu }}
     steps:
       - name: Resolve tag / version / prerelease
         id: meta
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            TAG="${{ inputs.version }}"
+            VERSION="${{ inputs.version }}"
+            VERSION="${VERSION#v}"
+            COMPONENT="${{ inputs.component }}"
             PRERELEASE="${{ inputs.prerelease }}"
+
+            if [[ "$COMPONENT" == "all" ]]; then
+              TAG="v$VERSION"
+            else
+              TAG="$COMPONENT-v$VERSION"
+            fi
           else
             TAG="${{ github.ref_name }}"
-            # Any tag that contains a hyphen (e.g. v1.0.0-beta.1) is a pre-release
-            if [[ "$TAG" =~ -[a-zA-Z] ]]; then
+
+            case "$TAG" in
+              client-v*)
+                COMPONENT="client"
+                VERSION="${TAG#client-v}"
+                ;;
+              server-v*)
+                COMPONENT="server"
+                VERSION="${TAG#server-v}"
+                ;;
+              sfu-v*)
+                COMPONENT="sfu"
+                VERSION="${TAG#sfu-v}"
+                ;;
+              v*)
+                COMPONENT="all"
+                VERSION="${TAG#v}"
+                ;;
+              *)
+                echo "::error::Unsupported release tag: $TAG"
+                exit 1
+                ;;
+            esac
+
+            # Any version that contains a hyphen (e.g. 1.0.0-beta.1) is a pre-release
+            if [[ "$VERSION" == *-* ]]; then
               PRERELEASE="true"
             else
               PRERELEASE="false"
             fi
           fi
-          VERSION="${TAG#v}"
+
+          BUILD_CLIENT="false"
+          BUILD_SERVER="false"
+          BUILD_SFU="false"
+          case "$COMPONENT" in
+            all)
+              BUILD_CLIENT="true"
+              BUILD_SERVER="true"
+              BUILD_SFU="true"
+              ;;
+            client)
+              BUILD_CLIENT="true"
+              ;;
+            server)
+              BUILD_SERVER="true"
+              ;;
+            sfu)
+              BUILD_SFU="true"
+              ;;
+            *)
+              echo "::error::Unsupported component: $COMPONENT"
+              exit 1
+              ;;
+          esac
+
           echo "tag=$TAG"           >> "$GITHUB_OUTPUT"
           echo "version=$VERSION"   >> "$GITHUB_OUTPUT"
+          echo "component=$COMPONENT" >> "$GITHUB_OUTPUT"
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "build_client=$BUILD_CLIENT" >> "$GITHUB_OUTPUT"
+          echo "build_server=$BUILD_SERVER" >> "$GITHUB_OUTPUT"
+          echo "build_sfu=$BUILD_SFU" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------------------
   # Build standalone SFU binaries for all target platforms.
   # Go's built-in cross-compilation makes this straightforward from Ubuntu.
   # ---------------------------------------------------------------------------
   build-sfu:
+    if: ${{ needs.prepare.outputs.build_sfu == 'true' }}
     name: SFU (${{ matrix.goos }}-${{ matrix.goarch }})
     runs-on: ubuntu-latest
     needs: prepare
@@ -107,6 +184,7 @@ jobs:
   # build-selfhosted.sh handles both server and SFU compilation in one shot.
   # ---------------------------------------------------------------------------
   build-server:
+    if: ${{ needs.prepare.outputs.build_server == 'true' }}
     name: Server (${{ matrix.target }})
     runs-on: ubuntu-latest
     needs: prepare
@@ -155,6 +233,7 @@ jobs:
   # we skip that step.
   # ---------------------------------------------------------------------------
   build-client-linux:
+    if: ${{ needs.prepare.outputs.build_client == 'true' }}
     name: Client (Linux)
     runs-on: ubuntu-latest
     needs: prepare
@@ -205,6 +284,7 @@ jobs:
   # screen-capture helpers can be compiled via native/build.bat.
   # ---------------------------------------------------------------------------
   build-client-windows:
+    if: ${{ needs.prepare.outputs.build_client == 'true' }}
     name: Client (Windows)
     runs-on: windows-latest
     needs: prepare
@@ -259,6 +339,7 @@ jobs:
   # the `release: published` event and uploads macOS assets automatically.
   # ---------------------------------------------------------------------------
   github-release:
+    if: ${{ needs.prepare.outputs.build_client == 'true' || needs.prepare.outputs.build_server == 'true' || needs.prepare.outputs.build_sfu == 'true' }}
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [prepare, build-sfu, build-server, build-client-linux, build-client-windows]

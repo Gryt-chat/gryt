@@ -17,8 +17,13 @@ jobs:
   build-sign-notarize:
     if: >-
       github.repository == 'Gryt-chat/gryt'
-      && (github.event_name == 'workflow_dispatch'
-          || startsWith(github.event.release.tag_name, 'v'))
+      && (
+        (github.event_name == 'workflow_dispatch'
+         && (startsWith(inputs.tag, 'client-v') || startsWith(inputs.tag, 'v')))
+        || (github.event_name == 'release'
+            && (startsWith(github.event.release.tag_name, 'client-v')
+                || startsWith(github.event.release.tag_name, 'v')))
+      )
     runs-on: [self-hosted, macOS]
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -104,4 +109,3 @@ jobs:
           fi
 
           gh release upload "$TAG" "${ASSETS[@]}" --repo "${{ github.repository }}" --clobber
-

@@ -1,0 +1,95 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/client'
+      - 'packages/server'
+      - 'packages/sfu'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/client'
+      - 'packages/server'
+      - 'packages/sfu'
+
+permissions:
+  contents: read
+
+jobs:
+  build-client:
+    name: Build Client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Fetch client submodule
+        run: git submodule update --init packages/client
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: packages/client/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: packages/client
+        run: pnpm install --frozen-lockfile
+
+      - name: Build renderer
+        working-directory: packages/client
+        env:
+          ELECTRON: '1'
+        run: pnpm exec vite build
+
+  build-server:
+    name: Build Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Fetch server submodule
+        run: git submodule update --init packages/server
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: packages/server/package.json
+
+      - name: Install dependencies
+        working-directory: packages/server
+        run: npm install
+
+      - name: Build
+        working-directory: packages/server
+        run: npm run build
+
+  build-sfu:
+    name: Build SFU
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Fetch SFU submodule
+        run: git submodule update --init packages/sfu
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/sfu/go.mod
+          cache-dependency-path: packages/sfu/go.sum
+
+      - name: Build
+        working-directory: packages/sfu
+        run: CGO_ENABLED=0 go build ./cmd/sfu/

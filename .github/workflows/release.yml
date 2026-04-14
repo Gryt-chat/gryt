@@ -1,0 +1,390 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - 'client-v*'
+      - 'server-v*'
+      - 'sfu-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 1.2.3 or 1.2.3-beta.1)'
+        required: true
+        type: string
+      component:
+        description: 'Component to release'
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - client
+          - server
+          - sfu
+      prerelease:
+        description: 'Mark as pre-release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: '20'
+
+# ---------------------------------------------------------------------------
+# Shared helper: resolve version, tag, and prerelease flag from either a tag
+# push or a workflow_dispatch invocation.
+# ---------------------------------------------------------------------------
+jobs:
+  prepare:
+    name: Prepare metadata
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      component: ${{ steps.meta.outputs.component }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      build_client: ${{ steps.meta.outputs.build_client }}
+      build_server: ${{ steps.meta.outputs.build_server }}
+      build_sfu: ${{ steps.meta.outputs.build_sfu }}
+    steps:
+      - name: Resolve tag / version / prerelease
+        id: meta
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ inputs.version }}"
+            VERSION="${VERSION#v}"
+            COMPONENT="${{ inputs.component }}"
+            PRERELEASE="${{ inputs.prerelease }}"
+
+            if [[ "$COMPONENT" == "all" ]]; then
+              TAG="v$VERSION"
+            else
+              TAG="$COMPONENT-v$VERSION"
+            fi
+          else
+            TAG="${{ github.ref_name }}"
+
+            case "$TAG" in
+              client-v*)
+                COMPONENT="client"
+                VERSION="${TAG#client-v}"
+                ;;
+              server-v*)
+                COMPONENT="server"
+                VERSION="${TAG#server-v}"
+                ;;
+              sfu-v*)
+                COMPONENT="sfu"
+                VERSION="${TAG#sfu-v}"
+                ;;
+              v*)
+                COMPONENT="all"
+                VERSION="${TAG#v}"
+                ;;
+              *)
+                echo "::error::Unsupported release tag: $TAG"
+                exit 1
+                ;;
+            esac
+
+            # Any version that contains a hyphen (e.g. 1.0.0-beta.1) is a pre-release
+            if [[ "$VERSION" == *-* ]]; then
+              PRERELEASE="true"
+            else
+              PRERELEASE="false"
+            fi
+          fi
+
+          BUILD_CLIENT="false"
+          BUILD_SERVER="false"
+          BUILD_SFU="false"
+          case "$COMPONENT" in
+            all)
+              BUILD_CLIENT="true"
+              BUILD_SERVER="true"
+              BUILD_SFU="true"
+              ;;
+            client)
+              BUILD_CLIENT="true"
+              ;;
+            server)
+              BUILD_SERVER="true"
+              ;;
+            sfu)
+              BUILD_SFU="true"
+              ;;
+            *)
+              echo "::error::Unsupported component: $COMPONENT"
+              exit 1
+              ;;
+          esac
+
+          echo "tag=$TAG"           >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION"   >> "$GITHUB_OUTPUT"
+          echo "component=$COMPONENT" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "build_client=$BUILD_CLIENT" >> "$GITHUB_OUTPUT"
+          echo "build_server=$BUILD_SERVER" >> "$GITHUB_OUTPUT"
+          echo "build_sfu=$BUILD_SFU" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # Build standalone SFU binaries for all target platforms.
+  # Go's built-in cross-compilation makes this straightforward from Ubuntu.
+  # ---------------------------------------------------------------------------
+  build-sfu:
+    if: ${{ needs.prepare.outputs.build_sfu == 'true' }}
+    name: SFU (${{ matrix.goos }}-${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    needs: prepare
+    strategy:
+      matrix:
+        include:
+          - { goos: linux,   goarch: amd64 }
+          - { goos: linux,   goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Fetch SFU submodule
+        run: git submodule update --init packages/sfu
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/sfu/go.mod
+          cache-dependency-path: packages/sfu/go.sum
+
+      - name: Build SFU binary
+        working-directory: packages/sfu
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          EXT=""
+          [[ "$GOOS" == "windows" ]] && EXT=".exe"
+          BINARY="gryt-sfu-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}"
+          go build -ldflags="-s -w" -o "$BINARY" ./cmd/sfu/
+          # Archive into a zip so every artifact has the same format
+          zip "../sfu-${{ matrix.goos }}-${{ matrix.goarch }}.zip" "$BINARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sfu-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: packages/sfu-${{ matrix.goos }}-${{ matrix.goarch }}.zip
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Build self-hosted server packages (TypeScript → bundle + Go SFU included).
+  # build-selfhosted.sh handles both server and SFU compilation in one shot.
+  # ---------------------------------------------------------------------------
+  build-server:
+    if: ${{ needs.prepare.outputs.build_server == 'true' }}
+    name: Server (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    needs: prepare
+    strategy:
+      matrix:
+        target: [linux-x64, windows-x64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Fetch submodules (server + sfu + image-worker)
+        run: git submodule update --init packages/server packages/sfu packages/image-worker
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/sfu/go.mod
+          cache-dependency-path: packages/sfu/go.sum
+
+      - name: Install server dependencies
+        working-directory: packages/server
+        run: npm install
+
+      - name: Install image-worker dependencies
+        working-directory: packages/image-worker
+        run: npm install
+        continue-on-error: true   # image-worker is optional; skip if unavailable
+
+      - name: Build self-hosted package
+        working-directory: packages/server
+        run: bash build-selfhosted.sh ${{ matrix.target }} --version ${{ needs.prepare.outputs.version }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-${{ matrix.target }}
+          path: packages/server/dist-selfhosted/gryt-server-${{ matrix.target }}-v${{ needs.prepare.outputs.version }}.zip
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Build Electron client for Linux (AppImage + deb).
+  # The native audio-capture layer has no Linux implementation (by design), so
+  # we skip that step.
+  # ---------------------------------------------------------------------------
+  build-client-linux:
+    if: ${{ needs.prepare.outputs.build_client == 'true' }}
+    name: Client (Linux)
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Fetch client submodule
+        run: git submodule update --init packages/client
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: packages/client/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: packages/client
+        run: pnpm install --frozen-lockfile
+
+      - name: Build renderer
+        working-directory: packages/client
+        env:
+          ELECTRON: '1'
+        run: pnpm exec vite build
+
+      - name: Package (Linux — AppImage + deb)
+        working-directory: packages/client
+        run: pnpm exec electron-builder --linux AppImage deb --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-linux
+          path: |
+            packages/client/release/*.AppImage
+            packages/client/release/*.deb
+            packages/client/release/latest-linux*.yml
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Build Electron client for Windows (NSIS installer + portable exe).
+  # Runs on a Windows runner so that the MSVC-based native audio-capture and
+  # screen-capture helpers can be compiled via native/build.bat.
+  # ---------------------------------------------------------------------------
+  build-client-windows:
+    if: ${{ needs.prepare.outputs.build_client == 'true' }}
+    name: Client (Windows)
+    runs-on: windows-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Fetch client submodule
+        run: git submodule update --init packages/client
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: packages/client/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: packages/client
+        run: pnpm install --frozen-lockfile
+
+      - name: Build native audio/screen-capture binaries
+        working-directory: packages/client
+        run: pnpm run build:native
+
+      - name: Build renderer
+        working-directory: packages/client
+        env:
+          ELECTRON: '1'
+        run: pnpm exec vite build
+
+      - name: Package (Windows — NSIS + portable)
+        working-directory: packages/client
+        run: pnpm exec electron-builder --win --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-windows
+          path: |
+            packages/client/release/*.exe
+            packages/client/release/*.exe.blockmap
+            packages/client/release/latest.yml
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Create the GitHub Release and attach all built artifacts.
+  # The existing release-mac.yml workflow (self-hosted macOS runner) fires on
+  # the `release: published` event and uploads macOS assets automatically.
+  # ---------------------------------------------------------------------------
+  github-release:
+    if: >-
+      ${{
+        always()
+        && (needs.prepare.outputs.build_client == 'true'
+            || needs.prepare.outputs.build_server == 'true'
+            || needs.prepare.outputs.build_sfu == 'true')
+        && (needs['build-sfu'].result == 'success' || needs['build-sfu'].result == 'skipped')
+        && (needs['build-server'].result == 'success' || needs['build-server'].result == 'skipped')
+        && (needs['build-client-linux'].result == 'success' || needs['build-client-linux'].result == 'skipped')
+        && (needs['build-client-windows'].result == 'success' || needs['build-client-windows'].result == 'skipped')
+      }}
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [prepare, build-sfu, build-server, build-client-linux, build-client-windows]
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List collected assets
+        run: find release-assets -type f | sort
+
+      - name: Create GitHub Release and upload assets
+        run: |
+          TAG="${{ needs.prepare.outputs.tag }}"
+
+          FLAGS="--latest"
+          if [[ "${{ needs.prepare.outputs.prerelease }}" == "true" ]]; then
+            FLAGS="--prerelease"
+          fi
+
+          # Create the release (generate notes from commit log)
+          gh release create "$TAG" \
+            --repo "${{ github.repository }}" \
+            --title "$TAG" \
+            --generate-notes \
+            $FLAGS
+
+          # Upload every file found in the artifacts directory
+          find release-assets -type f -print0 \
+            | xargs -0 gh release upload "$TAG" \
+                --repo "${{ github.repository }}" \
+                --clobber

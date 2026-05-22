@@ -104,6 +104,7 @@ jobs:
           BUILD_SFU="false"
           case "$COMPONENT" in
             all)
+              # "all" always builds the client for Linux + Windows + macOS.
               BUILD_CLIENT="true"
               BUILD_SERVER="true"
               BUILD_SFU="true"
@@ -327,6 +328,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: client-windows
+          # Windows release assets are produced in packages/client/release/.
+          # They are later downloaded into release-assets/ and attached to the
+          # GitHub Release by the final github-release job.
           path: |
             packages/client/release/*.exe
             packages/client/release/*.exe.blockmap

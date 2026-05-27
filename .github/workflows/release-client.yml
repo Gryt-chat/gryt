@@ -1,0 +1,593 @@
+name: Release Client
+
+on:
+  push:
+    branches:
+      - beta
+      - main
+
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Release channel"
+        required: true
+        default: "beta"
+        type: choice
+        options:
+          - beta
+          - latest
+
+      bump:
+        description: "Version bump type"
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - custom
+
+      custom_version:
+        description: 'Custom version, if "custom" is selected'
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  RELEASE_OWNER: Gryt-chat
+  RELEASE_REPO: gryt
+  DOCKER_IMAGE: ghcr.io/gryt-chat/client
+
+jobs:
+  prepare-release:
+    name: Prepare release
+    runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      channel: ${{ steps.channel.outputs.channel }}
+      checkout_ref: ${{ steps.ref.outputs.checkout_ref }}
+      release_type: ${{ steps.release_type.outputs.release_type }}
+
+    steps:
+      - name: Checkout monorepo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up Git user
+        shell: bash
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+      - name: Determine channel
+        id: channel
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            CHANNEL="${{ github.event.inputs.channel }}"
+          elif [[ "${{ github.ref_name }}" == "main" ]]; then
+            CHANNEL="latest"
+          elif [[ "${{ github.ref_name }}" == "beta" ]]; then
+            CHANNEL="beta"
+          else
+            echo "Unsupported branch: ${{ github.ref_name }}"
+            exit 1
+          fi
+
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+
+      - name: Determine next version
+        id: bump
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CHANNEL="${{ steps.channel.outputs.channel }}"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            BUMP="${{ github.event.inputs.bump }}"
+            CUSTOM_VERSION="${{ github.event.inputs.custom_version }}"
+          else
+            BUMP="patch"
+            CUSTOM_VERSION=""
+          fi
+
+          LATEST_TAG="$(git tag --list 'v*' --sort=-v:refname | head -n 1 || true)"
+
+          if [[ -z "$LATEST_TAG" ]]; then
+            CURRENT_VERSION="0.0.0"
+          else
+            CURRENT_VERSION="${LATEST_TAG#v}"
+          fi
+
+          if [[ "$BUMP" == "custom" ]]; then
+            if [[ -z "$CUSTOM_VERSION" ]]; then
+              echo "custom_version is required when bump=custom"
+              exit 1
+            fi
+
+            if ! [[ "$CUSTOM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
+              echo "Invalid custom version: $CUSTOM_VERSION"
+              echo "Expected semver like 1.2.3 or 1.2.3-beta.1"
+              exit 1
+            fi
+
+            NEW_VERSION="$CUSTOM_VERSION"
+          else
+            node <<'NODE' "$CURRENT_VERSION" "$BUMP" > /tmp/new_version.txt
+          const current = process.argv[2];
+          const bump = process.argv[3];
+
+          const match = current.match(/^(\d+)\.(\d+)\.(\d+)(?:-.+)?$/);
+          if (!match) {
+            throw new Error(`Invalid current version: ${current}`);
+          }
+
+          let major = Number(match[1]);
+          let minor = Number(match[2]);
+          let patch = Number(match[3]);
+
+          if (bump === "major") {
+            major += 1;
+            minor = 0;
+            patch = 0;
+          } else if (bump === "minor") {
+            minor += 1;
+            patch = 0;
+          } else if (bump === "patch") {
+            patch += 1;
+          } else {
+            throw new Error(`Unsupported bump: ${bump}`);
+          }
+
+          console.log(`${major}.${minor}.${patch}`);
+          NODE
+
+            NEW_VERSION="$(cat /tmp/new_version.txt)"
+          fi
+
+          if [[ "$CHANNEL" == "beta" && "$NEW_VERSION" != *"-beta"* ]]; then
+            EXISTING_BETA_COUNT="$(git tag --list "v$NEW_VERSION-beta.*" | wc -l | tr -d ' ')"
+            BETA_NUMBER="$((EXISTING_BETA_COUNT + 1))"
+            NEW_VERSION="$NEW_VERSION-beta.$BETA_NUMBER"
+          fi
+
+          if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
+            echo "Tag v$NEW_VERSION already exists locally."
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/v$NEW_VERSION" >/dev/null 2>&1; then
+            echo "Tag v$NEW_VERSION already exists on origin."
+            exit 1
+          fi
+
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create release manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.bump.outputs.new_version }}"
+          CHANNEL="${{ steps.channel.outputs.channel }}"
+
+          mkdir -p .release
+
+          CLIENT_SHA="$(git -C packages/client rev-parse HEAD)"
+          SERVER_SHA="$(git -C packages/server rev-parse HEAD)"
+          SFU_SHA="$(git -C packages/sfu rev-parse HEAD)"
+
+          if [[ -d packages/image-worker ]]; then
+            IMAGE_WORKER_SHA="$(git -C packages/image-worker rev-parse HEAD)"
+          else
+            IMAGE_WORKER_SHA=""
+          fi
+
+          cat > .release/manifest.json <<EOF
+          {
+            "product": "gryt",
+            "version": "$VERSION",
+            "channel": "$CHANNEL",
+            "monorepoCommit": "$(git rev-parse HEAD)",
+            "components": {
+              "client": {
+                "repo": "Gryt-chat/client",
+                "path": "packages/client",
+                "commit": "$CLIENT_SHA"
+              },
+              "server": {
+                "repo": "Gryt-chat/server",
+                "path": "packages/server",
+                "commit": "$SERVER_SHA"
+              },
+              "sfu": {
+                "repo": "Gryt-chat/sfu",
+                "path": "packages/sfu",
+                "commit": "$SFU_SHA"
+              },
+              "imageWorker": {
+                "repo": "Gryt-chat/image-worker",
+                "path": "packages/image-worker",
+                "commit": "$IMAGE_WORKER_SHA"
+              }
+            }
+          }
+          EOF
+
+          cat .release/manifest.json
+
+      - name: Commit release manifest and tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.bump.outputs.new_version }}"
+          CHANNEL="${{ steps.channel.outputs.channel }}"
+
+          git add .release/manifest.json
+
+          if git diff --cached --quiet; then
+            echo "No manifest changes to commit."
+          else
+            git commit -m "release: v$VERSION ($CHANNEL)"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
+
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+
+      - name: Extract version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.bump.outputs.new_version }}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Determine checkout ref
+        id: ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "checkout_ref=v${{ steps.version.outputs.version }}" >> "$GITHUB_OUTPUT"
+
+      - name: Determine release type
+        id: release_type
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ steps.channel.outputs.channel }}" == "latest" ]]; then
+            echo "release_type=release" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_type=prerelease" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Gryt v${{ steps.version.outputs.version }}
+          prerelease: ${{ steps.channel.outputs.channel == 'beta' }}
+          files: .release/manifest.json
+          body: |
+            Gryt v${{ steps.version.outputs.version }}
+
+            Channel: ${{ steps.channel.outputs.channel }}
+
+            This release was built from the monorepo with pinned submodule commits.
+
+            See `manifest.json` for the exact client, server, SFU, and image-worker commits.
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+  build-electron:
+    name: Build Electron app (${{ matrix.os }})
+    needs: prepare-release
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      OWNER: Gryt-chat
+      REPO: gryt
+      VERSION: ${{ needs.prepare-release.outputs.version }}
+      CHANNEL: ${{ needs.prepare-release.outputs.channel }}
+      RELEASE_TYPE: ${{ needs.prepare-release.outputs.release_type }}
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.checkout_ref }}
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+          cache-dependency-path: packages/client/yarn.lock
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libasound2-dev \
+            libpulse-dev \
+            libx11-dev \
+            libxext-dev \
+            libxfixes-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxtst-dev \
+            libnss3-dev \
+            libatk-bridge2.0-dev \
+            libgtk-3-dev \
+            libgbm-dev \
+            rpm
+
+      - name: Install client dependencies
+        working-directory: packages/client
+        shell: bash
+        run: |
+          set -euo pipefail
+          yarn install --frozen-lockfile --ignore-engines
+
+      - name: Install server dependencies
+        working-directory: packages/server
+        shell: bash
+        run: |
+          set -euo pipefail
+          yarn install --frozen-lockfile --ignore-engines
+
+      - name: Install SFU dependencies
+        working-directory: packages/sfu
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f go.mod ]]; then
+            go mod download
+          fi
+
+      - name: Type-check and lint client
+        working-directory: packages/client
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc -b
+          npx eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0 || true
+
+      - name: Build embedded server and SFU
+        working-directory: packages/client
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build:embedded-server
+
+      - name: Build native audio Linux
+        if: runner.os == 'Linux'
+        working-directory: packages/client
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash native/audio-capture/build.sh
+
+      - name: Build native audio macOS
+        if: runner.os == 'macOS'
+        working-directory: packages/client
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash native/audio-capture/build.sh
+
+      - name: Set up MSVC Build Tools Windows
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build native Windows binaries
+        if: runner.os == 'Windows'
+        working-directory: packages/client
+        shell: cmd
+        run: |
+          native\build.bat
+
+      - name: Build Electron app
+        working-directory: packages/client
+        shell: bash
+        env:
+          ELECTRON: "1"
+        run: |
+          set -euo pipefail
+          npx vite build
+
+      - name: Set up Docker Buildx
+        if: runner.os == 'Linux'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: runner.os == 'Linux'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        if: runner.os == 'Linux'
+        working-directory: packages/client
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ env.VERSION }}"
+          CHANNEL="${{ env.CHANNEL }}"
+          IMAGE="${{ env.DOCKER_IMAGE }}"
+
+          CLEAN_VERSION="${VERSION%%-*}"
+          V_MAJOR="$(echo "$CLEAN_VERSION" | cut -d. -f1)"
+          V_MINOR="$(echo "$CLEAN_VERSION" | cut -d. -f2)"
+
+          TAGS=(
+            "${IMAGE}:${VERSION}"
+            "${IMAGE}:${V_MAJOR}.${V_MINOR}"
+            "${IMAGE}:${V_MAJOR}"
+          )
+
+          if [[ "$CHANNEL" == "latest" ]]; then
+            TAGS+=("${IMAGE}:latest")
+          else
+            TAGS+=("${IMAGE}:latest-beta")
+          fi
+
+          ARGS=()
+          for TAG in "${TAGS[@]}"; do
+            ARGS+=(-t "$TAG")
+          done
+
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --cache-from type=registry,ref=${IMAGE}:buildcache \
+            --cache-to type=registry,ref=${IMAGE}:buildcache,mode=max \
+            "${ARGS[@]}" \
+            --push \
+            .
+
+      - name: Install Snapcraft
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo snap install snapcraft --classic
+
+      - name: Package and publish Electron app
+        working-directory: packages/client
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+          OWNER: ${{ env.OWNER }}
+          REPO: ${{ env.REPO }}
+          CHANNEL: ${{ env.CHANNEL }}
+          RELEASE_TYPE: ${{ env.RELEASE_TYPE }}
+          VERSION: ${{ env.VERSION }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            TARGETS="--linux AppImage deb snap"
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            TARGETS="--mac"
+          elif [[ "$RUNNER_OS" == "Windows" ]]; then
+            TARGETS="--win"
+          else
+            echo "Unsupported runner OS: $RUNNER_OS"
+            exit 1
+          fi
+
+          npx electron-builder \
+            $TARGETS \
+            --publish always \
+            -c.extraMetadata.version="$VERSION" \
+            -c.publish.provider=github \
+            -c.publish.owner="$OWNER" \
+            -c.publish.repo="$REPO" \
+            -c.publish.releaseType="$RELEASE_TYPE"
+
+      - name: Notify Discord
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+          VERSION: ${{ env.VERSION }}
+          CHANNEL: ${{ env.CHANNEL }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${WEBHOOK_URL:-}" ]]; then
+            echo "DISCORD_RELEASE_WEBHOOK_URL secret not set, skipping"
+            exit 0
+          fi
+
+          TAG="v$VERSION"
+          RELEASE_URL="https://github.com/${{ env.RELEASE_OWNER }}/${{ env.RELEASE_REPO }}/releases/tag/$TAG"
+
+          if [[ "$CHANNEL" == "beta" ]]; then
+            DISP_CHANNEL="Beta"
+            COLOR=16750848
+          else
+            DISP_CHANNEL="Stable"
+            COLOR=5763719
+          fi
+
+          RELEASE_BODY="$(gh release view "$TAG" --repo "${{ env.RELEASE_OWNER }}/${{ env.RELEASE_REPO }}" --json body -q '.body' || true)"
+          BODY="$(printf '%s' "$RELEASE_BODY" | head -c 1800)"
+
+          PAYLOAD="$(jq -n \
+            --arg title "Gryt $TAG" \
+            --arg url "$RELEASE_URL" \
+            --arg desc "$BODY" \
+            --arg channel "$DISP_CHANNEL" \
+            --arg component "Desktop" \
+            --arg tag "$TAG" \
+            --argjson color "$COLOR" \
+            '{
+              embeds: [{
+                title: $title,
+                url: $url,
+                description: $desc,
+                color: $color,
+                fields: [
+                  { name: "Component", value: $component, inline: true },
+                  { name: "Channel", value: $channel, inline: true },
+                  { name: "Version", value: $tag, inline: true }
+                ],
+                footer: { text: "Gryt Releases" },
+                timestamp: (now | todate)
+              }]
+            }'
+          )"
+
+          curl -sfS \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "$WEBHOOK_URL"

@@ -59,7 +59,6 @@ jobs:
       - name: Checkout monorepo
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           fetch-depth: 0
           submodules: recursive
 
@@ -184,14 +183,8 @@ jobs:
           else
             BASE_VERSION="$CURRENT_BASE_VERSION"
 
-            if [[ "$CHANNEL" == "beta" ]]; then
-              if git rev-parse "v$BASE_VERSION" >/dev/null 2>&1; then
-                BASE_VERSION="$(bump_version "$BASE_VERSION" "$BUMP")"
-              fi
-            else
-              if git rev-parse "v$BASE_VERSION" >/dev/null 2>&1; then
-                BASE_VERSION="$(bump_version "$BASE_VERSION" "$BUMP")"
-              fi
+            if git rev-parse "v$BASE_VERSION" >/dev/null 2>&1; then
+              BASE_VERSION="$(bump_version "$BASE_VERSION" "$BUMP")"
             fi
           fi
 
@@ -369,7 +362,7 @@ jobs:
 
             See `manifest.json` for the exact client, server, SFU, and image-worker commits.
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
 
   build-electron:
     name: Build Electron app (${{ matrix.os }})
@@ -398,7 +391,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare-release.outputs.checkout_ref }}
-          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           fetch-depth: 0
           submodules: recursive
 
@@ -591,7 +583,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
 
       - name: Build and push Docker image
         if: runner.os == 'Linux'
@@ -644,7 +636,7 @@ jobs:
         working-directory: packages/client
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
           OWNER: ${{ env.OWNER }}
           REPO: ${{ env.REPO }}
@@ -681,7 +673,9 @@ jobs:
           WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
           VERSION: ${{ env.VERSION }}
           CHANNEL: ${{ env.CHANNEL }}
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          OWNER: ${{ env.OWNER }}
+          REPO: ${{ env.REPO }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -691,7 +685,7 @@ jobs:
           fi
 
           TAG="v$VERSION"
-          RELEASE_URL="https://github.com/${{ env.RELEASE_OWNER }}/${{ env.RELEASE_REPO }}/releases/tag/$TAG"
+          RELEASE_URL="https://github.com/${OWNER}/${REPO}/releases/tag/$TAG"
 
           if [[ "$CHANNEL" == "beta" ]]; then
             DISP_CHANNEL="Beta"
@@ -701,7 +695,7 @@ jobs:
             COLOR=5763719
           fi
 
-          RELEASE_BODY="$(gh release view "$TAG" --repo "${{ env.RELEASE_OWNER }}/${{ env.RELEASE_REPO }}" --json body -q '.body' || true)"
+          RELEASE_BODY="$(gh release view "$TAG" --repo "${OWNER}/${REPO}" --json body -q '.body' || true)"
           BODY="$(printf '%s' "$RELEASE_BODY" | head -c 1800)"
 
           PAYLOAD="$(jq -n \

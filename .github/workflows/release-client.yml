@@ -29,7 +29,7 @@ on:
           - custom
 
       custom_version:
-        description: 'Custom version, if "custom" is selected'
+        description: 'Custom version, if "custom" is selected. Example: 1.2.3'
         required: false
         default: ""
         type: string
@@ -50,6 +50,7 @@ jobs:
 
     outputs:
       version: ${{ steps.version.outputs.version }}
+      base_version: ${{ steps.version.outputs.base_version }}
       channel: ${{ steps.channel.outputs.channel }}
       checkout_ref: ${{ steps.ref.outputs.checkout_ref }}
       release_type: ${{ steps.release_type.outputs.release_type }}
@@ -58,7 +59,7 @@ jobs:
       - name: Checkout monorepo
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           fetch-depth: 0
           submodules: recursive
 
@@ -70,8 +71,32 @@ jobs:
       - name: Set up Git user
         shell: bash
         run: |
+          set -euo pipefail
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
+
+      - name: Validate release.json
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f release.json ]]; then
+            echo "Missing release.json at repository root."
+            exit 1
+          fi
+
+          PRODUCT="$(node -p "require('./release.json').product")"
+          VERSION="$(node -p "require('./release.json').version")"
+
+          if [[ "$PRODUCT" != "gryt" ]]; then
+            echo "release.json product must be gryt"
+            exit 1
+          fi
+
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "release.json version must be stable semver like 1.1.4"
+            exit 1
+          fi
 
       - name: Determine channel
         id: channel
@@ -92,13 +117,14 @@ jobs:
 
           echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
 
-      - name: Determine next version
-        id: bump
+      - name: Determine version
+        id: version
         shell: bash
         run: |
           set -euo pipefail
 
           CHANNEL="${{ steps.channel.outputs.channel }}"
+          CURRENT_BASE_VERSION="$(node -p "require('./release.json').version")"
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             BUMP="${{ github.event.inputs.bump }}"
@@ -108,35 +134,17 @@ jobs:
             CUSTOM_VERSION=""
           fi
 
-          LATEST_TAG="$(git tag --list 'v*' --sort=-v:refname | head -n 1 || true)"
+          bump_version() {
+            local version="$1"
+            local bump="$2"
 
-          if [[ -z "$LATEST_TAG" ]]; then
-            CURRENT_VERSION="0.0.0"
-          else
-            CURRENT_VERSION="${LATEST_TAG#v}"
-          fi
-
-          if [[ "$BUMP" == "custom" ]]; then
-            if [[ -z "$CUSTOM_VERSION" ]]; then
-              echo "custom_version is required when bump=custom"
-              exit 1
-            fi
-
-            if ! [[ "$CUSTOM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
-              echo "Invalid custom version: $CUSTOM_VERSION"
-              echo "Expected semver like 1.2.3 or 1.2.3-beta.1"
-              exit 1
-            fi
-
-            NEW_VERSION="$CUSTOM_VERSION"
-          else
-            node <<'NODE' "$CURRENT_VERSION" "$BUMP" > /tmp/new_version.txt
+            node <<'NODE' "$version" "$bump"
           const current = process.argv[2];
           const bump = process.argv[3];
 
-          const match = current.match(/^(\d+)\.(\d+)\.(\d+)(?:-.+)?$/);
+          const match = current.match(/^(\d+)\.(\d+)\.(\d+)$/);
           if (!match) {
-            throw new Error(`Invalid current version: ${current}`);
+            throw new Error(`Invalid version: ${current}`);
           }
 
           let major = Number(match[1]);
@@ -158,34 +166,90 @@ jobs:
 
           console.log(`${major}.${minor}.${patch}`);
           NODE
+          }
 
-            NEW_VERSION="$(cat /tmp/new_version.txt)"
+          if [[ "$BUMP" == "custom" ]]; then
+            if [[ -z "$CUSTOM_VERSION" ]]; then
+              echo "custom_version is required when bump=custom"
+              exit 1
+            fi
+
+            if ! [[ "$CUSTOM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Invalid custom version: $CUSTOM_VERSION"
+              echo "Expected stable semver like 1.2.3"
+              exit 1
+            fi
+
+            BASE_VERSION="$CUSTOM_VERSION"
+          else
+            BASE_VERSION="$CURRENT_BASE_VERSION"
+
+            if [[ "$CHANNEL" == "beta" ]]; then
+              if git rev-parse "v$BASE_VERSION" >/dev/null 2>&1; then
+                BASE_VERSION="$(bump_version "$BASE_VERSION" "$BUMP")"
+              fi
+            else
+              if git rev-parse "v$BASE_VERSION" >/dev/null 2>&1; then
+                BASE_VERSION="$(bump_version "$BASE_VERSION" "$BUMP")"
+              fi
+            fi
           fi
 
-          if [[ "$CHANNEL" == "beta" && "$NEW_VERSION" != *"-beta"* ]]; then
-            EXISTING_BETA_COUNT="$(git tag --list "v$NEW_VERSION-beta.*" | wc -l | tr -d ' ')"
-            BETA_NUMBER="$((EXISTING_BETA_COUNT + 1))"
-            NEW_VERSION="$NEW_VERSION-beta.$BETA_NUMBER"
+          if [[ "$CHANNEL" == "beta" ]]; then
+            LATEST_BETA_NUMBER="$(
+              git tag --list "v${BASE_VERSION}-beta.*" \
+                | sed -E "s/^v${BASE_VERSION}-beta\.([0-9]+)$/\1/" \
+                | sort -n \
+                | tail -n 1 || true
+            )"
+
+            if [[ -z "$LATEST_BETA_NUMBER" ]]; then
+              BETA_NUMBER=1
+            else
+              BETA_NUMBER="$((LATEST_BETA_NUMBER + 1))"
+            fi
+
+            RELEASE_VERSION="${BASE_VERSION}-beta.${BETA_NUMBER}"
+          else
+            RELEASE_VERSION="$BASE_VERSION"
           fi
 
-          if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
-            echo "Tag v$NEW_VERSION already exists locally."
+          if git rev-parse "v$RELEASE_VERSION" >/dev/null 2>&1; then
+            echo "Tag v$RELEASE_VERSION already exists locally."
             exit 1
           fi
 
-          if git ls-remote --exit-code --tags origin "refs/tags/v$NEW_VERSION" >/dev/null 2>&1; then
-            echo "Tag v$NEW_VERSION already exists on origin."
+          if git ls-remote --exit-code --tags origin "refs/tags/v$RELEASE_VERSION" >/dev/null 2>&1; then
+            echo "Tag v$RELEASE_VERSION already exists on origin."
             exit 1
           fi
 
-          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          node <<'NODE' "$BASE_VERSION"
+          const fs = require("fs");
+
+          const version = process.argv[2];
+          const path = "release.json";
+          const data = JSON.parse(fs.readFileSync(path, "utf8"));
+
+          data.product = data.product || "gryt";
+          data.version = version;
+
+          fs.writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+          NODE
+
+          echo "version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "base_version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
+
+          echo "Base version: $BASE_VERSION"
+          echo "Release version: $RELEASE_VERSION"
 
       - name: Create release manifest
         shell: bash
         run: |
           set -euo pipefail
 
-          VERSION="${{ steps.bump.outputs.new_version }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          BASE_VERSION="${{ steps.version.outputs.base_version }}"
           CHANNEL="${{ steps.channel.outputs.channel }}"
 
           mkdir -p .release
@@ -200,66 +264,75 @@ jobs:
             IMAGE_WORKER_SHA=""
           fi
 
-          cat > .release/manifest.json <<EOF
-          {
-            "product": "gryt",
-            "version": "$VERSION",
-            "channel": "$CHANNEL",
-            "monorepoCommit": "$(git rev-parse HEAD)",
-            "components": {
-              "client": {
-                "repo": "Gryt-chat/client",
-                "path": "packages/client",
-                "commit": "$CLIENT_SHA"
+          node <<'NODE' "$VERSION" "$BASE_VERSION" "$CHANNEL" "$CLIENT_SHA" "$SERVER_SHA" "$SFU_SHA" "$IMAGE_WORKER_SHA"
+          const fs = require("fs");
+          const { execSync } = require("child_process");
+
+          const [
+            version,
+            baseVersion,
+            channel,
+            clientSha,
+            serverSha,
+            sfuSha,
+            imageWorkerSha,
+          ] = process.argv.slice(2);
+
+          const manifest = {
+            product: "gryt",
+            version,
+            baseVersion,
+            channel,
+            monorepoCommit: execSync("git rev-parse HEAD", { encoding: "utf8" }).trim(),
+            createdAt: new Date().toISOString(),
+            components: {
+              client: {
+                repo: "Gryt-chat/client",
+                path: "packages/client",
+                commit: clientSha,
               },
-              "server": {
-                "repo": "Gryt-chat/server",
-                "path": "packages/server",
-                "commit": "$SERVER_SHA"
+              server: {
+                repo: "Gryt-chat/server",
+                path: "packages/server",
+                commit: serverSha,
               },
-              "sfu": {
-                "repo": "Gryt-chat/sfu",
-                "path": "packages/sfu",
-                "commit": "$SFU_SHA"
+              sfu: {
+                repo: "Gryt-chat/sfu",
+                path: "packages/sfu",
+                commit: sfuSha,
               },
-              "imageWorker": {
-                "repo": "Gryt-chat/image-worker",
-                "path": "packages/image-worker",
-                "commit": "$IMAGE_WORKER_SHA"
-              }
-            }
-          }
-          EOF
+              imageWorker: {
+                repo: "Gryt-chat/image-worker",
+                path: "packages/image-worker",
+                commit: imageWorkerSha,
+              },
+            },
+          };
+
+          fs.writeFileSync(".release/manifest.json", `${JSON.stringify(manifest, null, 2)}\n`);
+          NODE
 
           cat .release/manifest.json
 
-      - name: Commit release manifest and tag
+      - name: Commit release metadata and tag
         shell: bash
         run: |
           set -euo pipefail
 
-          VERSION="${{ steps.bump.outputs.new_version }}"
+          VERSION="${{ steps.version.outputs.version }}"
           CHANNEL="${{ steps.channel.outputs.channel }}"
 
-          git add .release/manifest.json
+          git add release.json .release/manifest.json
 
           if git diff --cached --quiet; then
-            echo "No manifest changes to commit."
+            echo "No release metadata changes to commit."
           else
-            git commit -m "release: v$VERSION ($CHANNEL)"
+            git commit -m "release: v$VERSION ($CHANNEL) [skip ci]"
             git push origin HEAD:${{ github.ref_name }}
           fi
 
           git tag "v$VERSION"
           git push origin "v$VERSION"
-
-      - name: Extract version
-        id: version
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="${{ steps.bump.outputs.new_version }}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Determine checkout ref
         id: ref
@@ -296,7 +369,7 @@ jobs:
 
             See `manifest.json` for the exact client, server, SFU, and image-worker commits.
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
   build-electron:
     name: Build Electron app (${{ matrix.os }})
@@ -316,6 +389,7 @@ jobs:
       OWNER: Gryt-chat
       REPO: gryt
       VERSION: ${{ needs.prepare-release.outputs.version }}
+      BASE_VERSION: ${{ needs.prepare-release.outputs.base_version }}
       CHANNEL: ${{ needs.prepare-release.outputs.channel }}
       RELEASE_TYPE: ${{ needs.prepare-release.outputs.release_type }}
 
@@ -324,7 +398,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare-release.outputs.checkout_ref }}
-          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           fetch-depth: 0
           submodules: recursive
 
@@ -388,13 +462,19 @@ jobs:
             go mod download
           fi
 
-      - name: Type-check and lint client
+      - name: Type-check client
         working-directory: packages/client
         shell: bash
         run: |
           set -euo pipefail
           npx tsc -b
-          npx eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0 || true
+
+      - name: Lint client
+        working-directory: packages/client
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0
 
       - name: Build embedded server and SFU
         working-directory: packages/client
@@ -430,6 +510,68 @@ jobs:
         run: |
           native\build.bat
 
+      - name: Prepare macOS signing and notarization
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APPLE_API_KEY_ID_SECRET: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_SECRET: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${MACOS_CERT_P12_BASE64:-}" ]]; then
+            echo "MACOS_CERT_P12_BASE64 is not set."
+            exit 1
+          fi
+
+          if [[ -z "${MACOS_CERT_PASSWORD:-}" ]]; then
+            echo "MACOS_CERT_PASSWORD is not set."
+            exit 1
+          fi
+
+          if [[ -z "${KEYCHAIN_PASSWORD:-}" ]]; then
+            echo "KEYCHAIN_PASSWORD is not set."
+            exit 1
+          fi
+
+          CERT_PATH="$RUNNER_TEMP/macos-cert.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/gryt-build.keychain-db"
+
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" \
+            -P "$MACOS_CERT_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo "CSC_LINK=$CERT_PATH" >> "$GITHUB_ENV"
+          echo "CSC_KEY_PASSWORD=$MACOS_CERT_PASSWORD" >> "$GITHUB_ENV"
+
+          if [[ -n "${APPLE_API_KEY_ID_SECRET:-}" && -n "${APPLE_API_ISSUER_SECRET:-}" && -n "${APPLE_API_KEY_P8_BASE64:-}" ]]; then
+            API_KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID_SECRET}.p8"
+            echo "$APPLE_API_KEY_P8_BASE64" | base64 --decode > "$API_KEY_PATH"
+
+            echo "APPLE_API_KEY=$API_KEY_PATH" >> "$GITHUB_ENV"
+            echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID_SECRET" >> "$GITHUB_ENV"
+            echo "APPLE_API_ISSUER=$APPLE_API_ISSUER_SECRET" >> "$GITHUB_ENV"
+            echo "APPLE_API_KEY_ISSUER=$APPLE_API_ISSUER_SECRET" >> "$GITHUB_ENV"
+          else
+            echo "Apple API key secrets are incomplete. macOS signing may work, but notarization may be skipped or fail depending on Electron Builder config."
+          fi
+
       - name: Build Electron app
         working-directory: packages/client
         shell: bash
@@ -449,7 +591,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
         if: runner.os == 'Linux'
@@ -502,7 +644,7 @@ jobs:
         working-directory: packages/client
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
           OWNER: ${{ env.OWNER }}
           REPO: ${{ env.REPO }}
@@ -539,7 +681,7 @@ jobs:
           WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
           VERSION: ${{ env.VERSION }}
           CHANNEL: ${{ env.CHANNEL }}
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 

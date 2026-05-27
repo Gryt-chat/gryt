@@ -24,12 +24,8 @@ on:
           - sfu
           - image-worker
 
-  schedule:
-    - cron: "0 */6 * * *"
-
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   update-submodules:
@@ -42,7 +38,7 @@ jobs:
         with:
           ref: ${{ github.event.inputs.target_branch || 'beta' }}
           fetch-depth: 0
-          submodules: recursive
+          submodules: false
 
       - name: Set up Git user
         shell: bash
@@ -51,56 +47,71 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
 
+      - name: Initialize top-level submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git submodule sync -- packages/client packages/server packages/sfu packages/image-worker
+          git submodule update --init --force -- packages/client packages/server packages/sfu packages/image-worker
+
       - name: Update selected submodules
         shell: bash
         run: |
           set -euo pipefail
 
           SELECTED="${{ github.event.inputs.submodules || 'all' }}"
+          TARGET_BRANCH="${{ github.event.inputs.target_branch || 'beta' }}"
+
+          if [[ "$TARGET_BRANCH" == "main" ]]; then
+            DEFAULT_SUBMODULE_BRANCH="main"
+          else
+            DEFAULT_SUBMODULE_BRANCH="beta"
+          fi
 
           update_submodule() {
             local path="$1"
-            local branch="$2"
+            local preferred_branch="$2"
+            local fallback_branch="main"
+            local branch=""
 
             if [[ ! -d "$path" ]]; then
               echo "Skipping missing submodule: $path"
               return 0
             fi
 
-            echo "Updating $path from branch $branch"
+            echo "Updating $path"
 
-            git -C "$path" fetch origin "$branch"
-            git -C "$path" checkout "$branch"
+            git -C "$path" fetch origin --tags
+
+            if git -C "$path" ls-remote --exit-code --heads origin "$preferred_branch" >/dev/null 2>&1; then
+              branch="$preferred_branch"
+            else
+              branch="$fallback_branch"
+            fi
+
+            echo "Using branch $branch for $path"
+
+            git -C "$path" checkout -B "$branch" "origin/$branch"
             git -C "$path" pull --ff-only origin "$branch"
 
             git add "$path"
           }
 
-          # Recommended branch convention:
-          # beta branch in gryt pulls beta branches from submodules if they exist.
-          # main branch in gryt pulls main branches from submodules.
-          TARGET_BRANCH="${{ github.event.inputs.target_branch || 'beta' }}"
-
-          if [[ "$TARGET_BRANCH" == "main" ]]; then
-            SUBMODULE_BRANCH="main"
-          else
-            SUBMODULE_BRANCH="beta"
-          fi
-
           if [[ "$SELECTED" == "all" || "$SELECTED" == "client" ]]; then
-            update_submodule "packages/client" "$SUBMODULE_BRANCH"
+            update_submodule "packages/client" "$DEFAULT_SUBMODULE_BRANCH"
           fi
 
           if [[ "$SELECTED" == "all" || "$SELECTED" == "server" ]]; then
-            update_submodule "packages/server" "$SUBMODULE_BRANCH"
+            update_submodule "packages/server" "$DEFAULT_SUBMODULE_BRANCH"
           fi
 
           if [[ "$SELECTED" == "all" || "$SELECTED" == "sfu" ]]; then
-            update_submodule "packages/sfu" "$SUBMODULE_BRANCH"
+            update_submodule "packages/sfu" "$DEFAULT_SUBMODULE_BRANCH"
           fi
 
           if [[ "$SELECTED" == "all" || "$SELECTED" == "image-worker" ]]; then
-            update_submodule "packages/image-worker" "$SUBMODULE_BRANCH"
+            update_submodule "packages/image-worker" "$DEFAULT_SUBMODULE_BRANCH"
           fi
 
       - name: Commit changes

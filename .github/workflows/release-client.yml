@@ -38,6 +38,10 @@ permissions:
   contents: write
   packages: write
 
+concurrency:
+  group: release-client-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   RELEASE_OWNER: Gryt-chat
   RELEASE_REPO: gryt
@@ -60,7 +64,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          submodules: recursive
+          submodules: false
+
+      - name: Checkout required submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git submodule sync -- packages/client packages/server packages/sfu
+          git submodule update --init --force -- packages/client packages/server packages/sfu
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -137,34 +149,34 @@ jobs:
             local version="$1"
             local bump="$2"
 
-            node <<'NODE' "$version" "$bump"
-          const current = process.argv[2];
-          const bump = process.argv[3];
+            node -e '
+              const current = process.argv[1];
+              const bump = process.argv[2];
 
-          const match = current.match(/^(\d+)\.(\d+)\.(\d+)$/);
-          if (!match) {
-            throw new Error(`Invalid version: ${current}`);
-          }
+              const match = current.match(/^(\d+)\.(\d+)\.(\d+)$/);
+              if (!match) {
+                throw new Error(`Invalid version: ${current}`);
+              }
 
-          let major = Number(match[1]);
-          let minor = Number(match[2]);
-          let patch = Number(match[3]);
+              let major = Number(match[1]);
+              let minor = Number(match[2]);
+              let patch = Number(match[3]);
 
-          if (bump === "major") {
-            major += 1;
-            minor = 0;
-            patch = 0;
-          } else if (bump === "minor") {
-            minor += 1;
-            patch = 0;
-          } else if (bump === "patch") {
-            patch += 1;
-          } else {
-            throw new Error(`Unsupported bump: ${bump}`);
-          }
+              if (bump === "major") {
+                major += 1;
+                minor = 0;
+                patch = 0;
+              } else if (bump === "minor") {
+                minor += 1;
+                patch = 0;
+              } else if (bump === "patch") {
+                patch += 1;
+              } else {
+                throw new Error(`Unsupported bump: ${bump}`);
+              }
 
-          console.log(`${major}.${minor}.${patch}`);
-          NODE
+              console.log(`${major}.${minor}.${patch}`);
+            ' "$version" "$bump"
           }
 
           if [[ "$BUMP" == "custom" ]]; then
@@ -217,18 +229,17 @@ jobs:
             exit 1
           fi
 
-          node <<'NODE' "$BASE_VERSION"
-          const fs = require("fs");
+          node -e '
+            const fs = require("fs");
+            const version = process.argv[1];
+            const path = "release.json";
+            const data = JSON.parse(fs.readFileSync(path, "utf8"));
 
-          const version = process.argv[2];
-          const path = "release.json";
-          const data = JSON.parse(fs.readFileSync(path, "utf8"));
+            data.product = data.product || "gryt";
+            data.version = version;
 
-          data.product = data.product || "gryt";
-          data.version = version;
-
-          fs.writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
-          NODE
+            fs.writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+          ' "$BASE_VERSION"
 
           echo "version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
           echo "base_version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
@@ -251,59 +262,47 @@ jobs:
           SERVER_SHA="$(git -C packages/server rev-parse HEAD)"
           SFU_SHA="$(git -C packages/sfu rev-parse HEAD)"
 
-          if [[ -d packages/image-worker ]]; then
-            IMAGE_WORKER_SHA="$(git -C packages/image-worker rev-parse HEAD)"
-          else
-            IMAGE_WORKER_SHA=""
-          fi
+          node -e '
+            const fs = require("fs");
+            const { execSync } = require("child_process");
 
-          node <<'NODE' "$VERSION" "$BASE_VERSION" "$CHANNEL" "$CLIENT_SHA" "$SERVER_SHA" "$SFU_SHA" "$IMAGE_WORKER_SHA"
-          const fs = require("fs");
-          const { execSync } = require("child_process");
+            const [
+              version,
+              baseVersion,
+              channel,
+              clientSha,
+              serverSha,
+              sfuSha,
+            ] = process.argv.slice(1);
 
-          const [
-            version,
-            baseVersion,
-            channel,
-            clientSha,
-            serverSha,
-            sfuSha,
-            imageWorkerSha,
-          ] = process.argv.slice(2);
+            const manifest = {
+              product: "gryt",
+              version,
+              baseVersion,
+              channel,
+              monorepoCommit: execSync("git rev-parse HEAD", { encoding: "utf8" }).trim(),
+              createdAt: new Date().toISOString(),
+              components: {
+                client: {
+                  repo: "Gryt-chat/client",
+                  path: "packages/client",
+                  commit: clientSha,
+                },
+                server: {
+                  repo: "Gryt-chat/server",
+                  path: "packages/server",
+                  commit: serverSha,
+                },
+                sfu: {
+                  repo: "Gryt-chat/sfu",
+                  path: "packages/sfu",
+                  commit: sfuSha,
+                },
+              },
+            };
 
-          const manifest = {
-            product: "gryt",
-            version,
-            baseVersion,
-            channel,
-            monorepoCommit: execSync("git rev-parse HEAD", { encoding: "utf8" }).trim(),
-            createdAt: new Date().toISOString(),
-            components: {
-              client: {
-                repo: "Gryt-chat/client",
-                path: "packages/client",
-                commit: clientSha,
-              },
-              server: {
-                repo: "Gryt-chat/server",
-                path: "packages/server",
-                commit: serverSha,
-              },
-              sfu: {
-                repo: "Gryt-chat/sfu",
-                path: "packages/sfu",
-                commit: sfuSha,
-              },
-              imageWorker: {
-                repo: "Gryt-chat/image-worker",
-                path: "packages/image-worker",
-                commit: imageWorkerSha,
-              },
-            },
-          };
-
-          fs.writeFileSync(".release/manifest.json", `${JSON.stringify(manifest, null, 2)}\n`);
-          NODE
+            fs.writeFileSync(".release/manifest.json", `${JSON.stringify(manifest, null, 2)}\n`);
+          ' "$VERSION" "$BASE_VERSION" "$CHANNEL" "$CLIENT_SHA" "$SERVER_SHA" "$SFU_SHA"
 
           cat .release/manifest.json
 
@@ -360,7 +359,7 @@ jobs:
 
             This release was built from the monorepo with pinned submodule commits.
 
-            See `manifest.json` for the exact client, server, SFU, and image-worker commits.
+            See `manifest.json` for the exact client, server, and SFU commits.
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
@@ -392,7 +391,25 @@ jobs:
         with:
           ref: ${{ needs.prepare-release.outputs.checkout_ref }}
           fetch-depth: 0
-          submodules: recursive
+          submodules: false
+
+      - name: Checkout required submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git submodule sync -- packages/client packages/server packages/sfu
+          git submodule update --init --force -- packages/client packages/server packages/sfu
+
+      - name: Checkout AUR submodule
+        if: runner.os == 'Linux'
+        working-directory: packages/client
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git submodule sync -- aur
+          git submodule update --init --force -- aur
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

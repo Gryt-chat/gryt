@@ -38,7 +38,7 @@ jobs:
         with:
           ref: ${{ github.event.inputs.target_branch || 'beta' }}
           fetch-depth: 0
-          submodules: false
+          submodules: recursive
 
       - name: Set up Git user
         shell: bash

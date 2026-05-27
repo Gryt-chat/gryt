@@ -1,0 +1,120 @@
+name: Update Submodules
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "Branch to update"
+        required: true
+        default: "beta"
+        type: choice
+        options:
+          - beta
+          - main
+
+      submodules:
+        description: "Submodules to update"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - client
+          - server
+          - sfu
+          - image-worker
+
+  schedule:
+    - cron: "0 */6 * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-submodules:
+    name: Update submodule pointers
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout monorepo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.target_branch || 'beta' }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Git user
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+      - name: Update selected submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SELECTED="${{ github.event.inputs.submodules || 'all' }}"
+
+          update_submodule() {
+            local path="$1"
+            local branch="$2"
+
+            if [[ ! -d "$path" ]]; then
+              echo "Skipping missing submodule: $path"
+              return 0
+            fi
+
+            echo "Updating $path from branch $branch"
+
+            git -C "$path" fetch origin "$branch"
+            git -C "$path" checkout "$branch"
+            git -C "$path" pull --ff-only origin "$branch"
+
+            git add "$path"
+          }
+
+          # Recommended branch convention:
+          # beta branch in gryt pulls beta branches from submodules if they exist.
+          # main branch in gryt pulls main branches from submodules.
+          TARGET_BRANCH="${{ github.event.inputs.target_branch || 'beta' }}"
+
+          if [[ "$TARGET_BRANCH" == "main" ]]; then
+            SUBMODULE_BRANCH="main"
+          else
+            SUBMODULE_BRANCH="beta"
+          fi
+
+          if [[ "$SELECTED" == "all" || "$SELECTED" == "client" ]]; then
+            update_submodule "packages/client" "$SUBMODULE_BRANCH"
+          fi
+
+          if [[ "$SELECTED" == "all" || "$SELECTED" == "server" ]]; then
+            update_submodule "packages/server" "$SUBMODULE_BRANCH"
+          fi
+
+          if [[ "$SELECTED" == "all" || "$SELECTED" == "sfu" ]]; then
+            update_submodule "packages/sfu" "$SUBMODULE_BRANCH"
+          fi
+
+          if [[ "$SELECTED" == "all" || "$SELECTED" == "image-worker" ]]; then
+            update_submodule "packages/image-worker" "$SUBMODULE_BRANCH"
+          fi
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if git diff --cached --quiet; then
+            echo "No submodule updates."
+            exit 0
+          fi
+
+          TARGET_BRANCH="${{ github.event.inputs.target_branch || 'beta' }}"
+          SELECTED="${{ github.event.inputs.submodules || 'all' }}"
+
+          git commit -m "chore: update $SELECTED submodules on $TARGET_BRANCH"
+          git push origin "HEAD:$TARGET_BRANCH"

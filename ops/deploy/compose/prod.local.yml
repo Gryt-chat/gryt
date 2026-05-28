@@ -27,6 +27,7 @@ services:
       - "${NT_SERVER_PORT:-5001}:5000"
     environment:
       PORT: "5000"
+      HOST: "0.0.0.0"
       NODE_ENV: production
       SERVER_NAME: ${NT_SERVER_NAME:-NT}
       SERVER_DESCRIPTION: ${NT_SERVER_DESCRIPTION:-A Gryt voice chat server}

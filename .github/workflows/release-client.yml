@@ -585,6 +585,29 @@ jobs:
           set -euo pipefail
           npm run build:embedded-server
 
+      - name: Verify embedded server dependencies
+        working-directory: packages/client
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Embedded server contents:"
+          find build/embedded-server/server -maxdepth 3 -type d | sort | head -100
+
+          if [[ ! -f build/embedded-server/server/bundle.js ]]; then
+            echo "Missing embedded server bundle.js"
+            exit 1
+          fi
+
+          if [[ ! -d build/embedded-server/server/node_modules/better-sqlite3 ]]; then
+            echo "Missing embedded better-sqlite3 dependency."
+            echo "The packaged app will crash with: Cannot find module 'better-sqlite3'"
+            exit 1
+          fi
+
+          echo "better-sqlite3 found:"
+          find build/embedded-server/server/node_modules/better-sqlite3 -maxdepth 3 -type f | sort | head -50
+
       - name: Build native audio Linux
         if: runner.os == 'Linux'
         working-directory: packages/client

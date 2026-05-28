@@ -598,20 +598,6 @@ jobs:
             "${FLAGS[@]}" \
             "${ASSETS[@]}"
 
-      - name: Print release summary
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          VERSION="${{ steps.version.outputs.version }}"
-          TAG="${{ steps.version.outputs.tag }}"
-
-          echo "Server release complete"
-          echo "Version: $VERSION"
-          echo "Tag: $TAG"
-          echo "Release: https://github.com/${{ env.RELEASE_OWNER }}/${{ env.RELEASE_REPO }}/releases/tag/$TAG"
-          echo "Docker: ${{ env.SERVER_IMAGE }}:$VERSION"
-
       - name: Notify Discord
         shell: bash
         env:
@@ -666,7 +652,23 @@ jobs:
             }'
           )"
 
-          curl -sfS \
+          if ! curl -sfS \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD" \
-            "$WEBHOOK_URL"
+            "$WEBHOOK_URL"; then
+            echo "Discord notification failed, but release already completed. Continuing."
+          fi
+
+      - name: Print release summary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+
+          echo "Server release complete"
+          echo "Version: $VERSION"
+          echo "Tag: $TAG"
+          echo "Release: https://github.com/${{ env.RELEASE_OWNER }}/${{ env.RELEASE_REPO }}/releases/tag/$TAG"
+          echo "Docker: ${{ env.SERVER_IMAGE }}:$VERSION"

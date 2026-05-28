@@ -591,11 +591,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "Embedded server contents:"
-          find build/embedded-server/server -maxdepth 3 -type d | sort | head -100
-
           if [[ ! -f build/embedded-server/server/bundle.js ]]; then
             echo "Missing embedded server bundle.js"
+            exit 1
+          fi
+
+          if [[ ! -d build/embedded-server/server/node_modules ]]; then
+            echo "Missing embedded server node_modules directory."
             exit 1
           fi
 
@@ -605,8 +607,15 @@ jobs:
             exit 1
           fi
 
-          echo "better-sqlite3 found:"
-          find build/embedded-server/server/node_modules/better-sqlite3 -maxdepth 3 -type f | sort | head -50
+          if [[ ! -d build/embedded-server/server/node_modules/better-sqlite3/build/Release ]]; then
+            echo "Missing better-sqlite3 native build output."
+            find build/embedded-server/server/node_modules/better-sqlite3 -maxdepth 4 -type f || true
+            exit 1
+          fi
+
+          echo "Embedded server dependencies are present."
+          echo "better-sqlite3:"
+          find build/embedded-server/server/node_modules/better-sqlite3 -maxdepth 3 -type f | sed -n '1,50p'
 
       - name: Build native audio Linux
         if: runner.os == 'Linux'

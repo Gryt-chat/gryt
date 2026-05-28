@@ -1,11 +1,6 @@
 name: Release Client
 
 on:
-  push:
-    branches:
-      - beta
-      - main
-
   workflow_dispatch:
     inputs:
       channel:
@@ -18,7 +13,7 @@ on:
           - latest
 
       bump:
-        description: "Version bump type"
+        description: "Client/product version bump"
         required: true
         default: "patch"
         type: choice

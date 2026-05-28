@@ -215,6 +215,13 @@ jobs:
                 echo "custom_version is required when bump=custom"
                 exit 1
               fi
+
+              if ! [[ "$CUSTOM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "Invalid custom version: $CUSTOM_VERSION"
+                echo "Expected stable semver like 1.2.3"
+                exit 1
+              fi
+
               BASE_VERSION="$CUSTOM_VERSION"
               ;;
             *)
@@ -222,12 +229,6 @@ jobs:
               exit 1
               ;;
           esac
-
-          if ! [[ "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid base version: $BASE_VERSION"
-            echo "Expected stable semver like 1.2.3"
-            exit 1
-          fi
 
           if [[ "$CHANNEL" == "beta" ]]; then
             LATEST_BETA_NUMBER="$(

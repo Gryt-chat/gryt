@@ -821,7 +821,6 @@ jobs:
           CHANNEL: ${{ env.CHANNEL }}
           OWNER: ${{ env.OWNER }}
           REPO: ${{ env.REPO }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -831,26 +830,26 @@ jobs:
           fi
 
           TAG="v$VERSION"
-          RELEASE_URL="https://github.com/${OWNER}/${REPO}/releases/tag/$TAG"
+          RELEASE_URL="https://github.com/${OWNER}/${REPO}/releases/tag/${TAG}"
 
           if [[ "$CHANNEL" == "beta" ]]; then
-            DISP_CHANNEL="Beta"
+            DISP_CHANNEL="BETA"
             COLOR=16750848
+            DESCRIPTION="A new beta desktop build is available."
           else
-            DISP_CHANNEL="Stable"
+            DISP_CHANNEL="STABLE"
             COLOR=5763719
+            DESCRIPTION="A new stable desktop build is available."
           fi
 
-          RELEASE_BODY="$(gh release view "$TAG" --repo "${OWNER}/${REPO}" --json body -q '.body' || true)"
-          BODY="$(printf '%s' "$RELEASE_BODY" | head -c 1800)"
-
           PAYLOAD="$(jq -n \
-            --arg title "Gryt $TAG" \
+            --arg title "Client release" \
             --arg url "$RELEASE_URL" \
-            --arg desc "$BODY" \
+            --arg desc "$DESCRIPTION" \
+            --arg component "Desktop Client" \
             --arg channel "$DISP_CHANNEL" \
-            --arg component "Desktop" \
-            --arg tag "$TAG" \
+            --arg version "$VERSION" \
+            --arg release "Open release" \
             --argjson color "$COLOR" \
             '{
               embeds: [{
@@ -861,7 +860,8 @@ jobs:
                 fields: [
                   { name: "Component", value: $component, inline: true },
                   { name: "Channel", value: $channel, inline: true },
-                  { name: "Version", value: $tag, inline: true }
+                  { name: "Version", value: $version, inline: true },
+                  { name: "Release", value: ("[" + $release + "](" + $url + ")"), inline: false }
                 ],
                 footer: { text: "Gryt Releases" },
                 timestamp: (now | todate)

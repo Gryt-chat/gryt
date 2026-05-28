@@ -75,10 +75,18 @@ jobs:
 
           git -C packages/client remote set-url origin "https://x-access-token:${RELEASE_PAT}@github.com/Gryt-chat/client.git"
 
+      - name: Move client submodule to client main
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git -C packages/client fetch origin main
+          git -C packages/client checkout -B main origin/main
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Set up Git user
         shell: bash
@@ -293,7 +301,6 @@ jobs:
           set -euo pipefail
 
           RELEASE_VERSION="${{ steps.version.outputs.version }}"
-          TARGET_BRANCH="${{ github.ref_name }}"
 
           git -C packages/client add package.json
 
@@ -301,7 +308,7 @@ jobs:
             echo "No client package.json changes to commit."
           else
             git -C packages/client commit -m "release: v${RELEASE_VERSION}"
-            git -C packages/client push origin "HEAD:${TARGET_BRANCH}"
+            git -C packages/client push origin "HEAD:main"
           fi
 
       - name: Create release manifest
@@ -487,7 +494,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "yarn"
           cache-dependency-path: packages/client/yarn.lock
 
@@ -528,6 +535,18 @@ jobs:
         run: |
           set -euo pipefail
           yarn install --frozen-lockfile --ignore-engines
+
+      - name: Generate app icons
+        working-directory: packages/client
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if node -e "process.exit(require('./package.json').scripts?.['icons:generate'] ? 0 : 1)"; then
+            yarn icons:generate
+          else
+            echo "No icons:generate script found, skipping."
+          fi
 
       - name: Install server dependencies
         working-directory: packages/server
@@ -631,13 +650,6 @@ jobs:
           security find-identity -v -p codesigning || true
 
           rm -f "$RUNNER_TEMP/cert.p12"
-
-      - name: Generate app icons
-        working-directory: packages/client
-        shell: bash
-        run: |
-          set -euo pipefail
-          yarn icons:generate
 
       - name: Build Electron app
         working-directory: packages/client

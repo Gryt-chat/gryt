@@ -611,3 +611,62 @@ jobs:
           echo "Tag: $TAG"
           echo "Release: https://github.com/${{ env.RELEASE_OWNER }}/${{ env.RELEASE_REPO }}/releases/tag/$TAG"
           echo "Docker: ${{ env.SERVER_IMAGE }}:$VERSION"
+
+      - name: Notify Discord
+        shell: bash
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+          CHANNEL: ${{ steps.channel.outputs.channel }}
+          OWNER: ${{ env.RELEASE_OWNER }}
+          REPO: ${{ env.RELEASE_REPO }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${WEBHOOK_URL:-}" ]]; then
+            echo "DISCORD_RELEASE_WEBHOOK_URL secret not set, skipping"
+            exit 0
+          fi
+
+          RELEASE_URL="https://github.com/${OWNER}/${REPO}/releases/tag/${TAG}"
+
+          if [[ "$CHANNEL" == "beta" ]]; then
+            TITLE="BETA Server release"
+            COLOR=16750848
+            DESCRIPTION="New self-hosted server build is available for testing."
+          else
+            TITLE="STABLE Server release"
+            COLOR=5763719
+            DESCRIPTION="New self-hosted server build is available."
+          fi
+
+          PAYLOAD="$(jq -n \
+            --arg title "$TITLE" \
+            --arg url "$RELEASE_URL" \
+            --arg desc "$DESCRIPTION" \
+            --arg version "$VERSION" \
+            --arg release "Open release" \
+            --arg docker "ghcr.io/gryt-chat/server:$VERSION" \
+            --argjson color "$COLOR" \
+            '{
+              embeds: [{
+                title: $title,
+                url: $url,
+                description: $desc,
+                color: $color,
+                fields: [
+                  { name: "Version", value: $version, inline: true },
+                  { name: "Release", value: ("[" + $release + "](" + $url + ")"), inline: true },
+                  { name: "Docker", value: ("`" + $docker + "`"), inline: false }
+                ],
+                footer: { text: "Gryt Server" },
+                timestamp: (now | todate)
+              }]
+            }'
+          )"
+
+          curl -sfS \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "$WEBHOOK_URL"

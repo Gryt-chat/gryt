@@ -578,17 +578,23 @@ jobs:
             FLAGS+=(--latest)
           fi
 
+          mkdir -p .release/server
+
+          cat > .release/server/release-notes.md <<EOF
+          Gryt Server ${TAG}
+
+          Channel: ${CHANNEL}
+
+          Docker image:
+          ghcr.io/gryt-chat/server:${VERSION}
+
+          The self-hosted bundles include the server, SFU, and image-worker commits listed in manifest.json.
+          EOF
+
           gh release create "$TAG" \
             --repo "${{ env.RELEASE_OWNER }}/${{ env.RELEASE_REPO }}" \
             --title "Gryt Server ${TAG}" \
-            --notes "Gryt Server ${TAG}
-
-Channel: ${CHANNEL}
-
-Docker image:
-ghcr.io/gryt-chat/server:${VERSION}
-
-The self-hosted bundles include the server, SFU, and image-worker commits listed in manifest.json." \
+            --notes-file .release/server/release-notes.md \
             "${FLAGS[@]}" \
             "${ASSETS[@]}"
 

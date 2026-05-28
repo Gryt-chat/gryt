@@ -109,18 +109,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            CHANNEL="${{ github.event.inputs.channel }}"
-          elif [[ "${{ github.ref_name }}" == "main" ]]; then
-            CHANNEL="latest"
-          elif [[ "${{ github.ref_name }}" == "beta" ]]; then
-            CHANNEL="beta"
-          else
-            echo "Unsupported branch: ${{ github.ref_name }}"
-            exit 1
-          fi
-
+          CHANNEL="${{ github.event.inputs.channel }}"
           echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
 
       - name: Determine version

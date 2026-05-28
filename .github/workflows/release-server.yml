@@ -3,37 +3,22 @@ name: Release Server
 on:
   workflow_dispatch:
     inputs:
-      channel:
-        description: "Release channel"
-        required: true
-        default: "beta"
-        type: choice
-        options:
-          - beta
-          - latest
-
       bump:
-        description: "Server version bump"
+        description: "Server version change"
         required: true
         default: "patch"
         type: choice
         options:
+          - none
           - patch
           - minor
           - major
           - custom
-          - rerelease
 
       custom_version:
-        description: 'Custom version, if "custom" or "rerelease" is selected. Example: 1.2.3'
+        description: 'Custom stable version, if "custom" is selected. Example: 1.2.3'
         required: false
         default: ""
-        type: string
-
-      server_branch:
-        description: "Server branch to push version bump to"
-        required: true
-        default: "main"
         type: string
 
       build_windows:
@@ -59,7 +44,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: release-server
+  group: release-server-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -95,7 +80,7 @@ jobs:
           set -euo pipefail
 
           if [[ -z "${RELEASE_PAT:-}" ]]; then
-            echo "RELEASE_PAT is required to publish releases/tags to Gryt-chat/server."
+            echo "RELEASE_PAT is required to publish tags/releases to Gryt-chat/server."
             exit 1
           fi
 
@@ -111,7 +96,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -119,6 +104,58 @@ jobs:
           go-version: "1.22"
           cache: true
           cache-dependency-path: packages/sfu/go.sum
+
+      - name: Determine channel from branch
+        id: channel
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            CHANNEL="latest"
+          elif [[ "${{ github.ref_name }}" == "beta" ]]; then
+            CHANNEL="beta"
+          else
+            echo "Server releases must be run from the beta or main branch."
+            echo "Current branch: ${{ github.ref_name }}"
+            exit 1
+          fi
+
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "Channel: $CHANNEL"
+
+      - name: Validate release.json
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f release.json ]]; then
+            echo "Missing release.json at repository root."
+            exit 1
+          fi
+
+          node -e '
+            const fs = require("fs");
+            const data = JSON.parse(fs.readFileSync("release.json", "utf8"));
+
+            if (data.product !== "gryt") {
+              throw new Error("release.json product must be gryt");
+            }
+
+            if (!/^\d+\.\d+\.\d+$/.test(data.version)) {
+              throw new Error("release.json version must be stable semver like 1.2.3");
+            }
+
+            if (!/^\d+\.\d+\.\d+$/.test(data.server)) {
+              throw new Error("release.json server must be stable semver like 1.2.3");
+            }
+          '
+
+      - name: Fetch server tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C packages/server fetch --tags origin
 
       - name: Determine server version
         id: version
@@ -128,21 +165,9 @@ jobs:
 
           BUMP="${{ github.event.inputs.bump }}"
           CUSTOM_VERSION="${{ github.event.inputs.custom_version }}"
-          CHANNEL="${{ github.event.inputs.channel }}"
+          CHANNEL="${{ steps.channel.outputs.channel }}"
 
-          if [[ -f release.json ]]; then
-            CURRENT_VERSION="$(node -e '
-              const fs = require("fs");
-              const data = JSON.parse(fs.readFileSync("release.json", "utf8"));
-              console.log(data.components?.server || "");
-            ')"
-          else
-            CURRENT_VERSION=""
-          fi
-
-          if [[ -z "$CURRENT_VERSION" ]]; then
-            CURRENT_VERSION="$(node -p "require('./packages/server/package.json').version")"
-          fi
+          CURRENT_VERSION="$(node -p "require('./release.json').server")"
 
           bump_version() {
             local version="$1"
@@ -152,7 +177,7 @@ jobs:
               const current = process.argv[1];
               const bump = process.argv[2];
 
-              const match = current.match(/^(\d+)\.(\d+)\.(\d+)(?:-.+)?$/);
+              const match = current.match(/^(\d+)\.(\d+)\.(\d+)$/);
               if (!match) {
                 throw new Error(`Invalid version: ${current}`);
               }
@@ -178,9 +203,10 @@ jobs:
             ' "$version" "$bump"
           }
 
-          RERELEASE=false
-
           case "$BUMP" in
+            none)
+              BASE_VERSION="$CURRENT_VERSION"
+              ;;
             patch|minor|major)
               BASE_VERSION="$(bump_version "$CURRENT_VERSION" "$BUMP")"
               ;;
@@ -190,14 +216,6 @@ jobs:
                 exit 1
               fi
               BASE_VERSION="$CUSTOM_VERSION"
-              ;;
-            rerelease)
-              RERELEASE=true
-              if [[ -n "$CUSTOM_VERSION" ]]; then
-                BASE_VERSION="$CUSTOM_VERSION"
-              else
-                BASE_VERSION="$CURRENT_VERSION"
-              fi
               ;;
             *)
               echo "Unsupported bump: $BUMP"
@@ -232,32 +250,27 @@ jobs:
 
           TAG="v${RELEASE_VERSION}"
 
-          if [[ "$RERELEASE" != "true" ]]; then
-            if git -C packages/server rev-parse "$TAG" >/dev/null 2>&1; then
-              echo "Tag $TAG already exists locally in server repo."
-              exit 1
-            fi
+          if git -C packages/server rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists locally in server repo."
+            exit 1
+          fi
 
-            if git -C packages/server ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-              echo "Tag $TAG already exists in Gryt-chat/server."
-              exit 1
-            fi
+          if git -C packages/server ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists in Gryt-chat/server."
+            exit 1
           fi
 
           echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
           echo "base_version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
           echo "version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "rerelease=$RERELEASE" >> "$GITHUB_OUTPUT"
 
-          echo "Current server version: $CURRENT_VERSION"
-          echo "Base server version: $BASE_VERSION"
+          echo "Current server base version: $CURRENT_VERSION"
+          echo "New server base version: $BASE_VERSION"
           echo "Release server version: $RELEASE_VERSION"
           echo "Tag: $TAG"
-          echo "Rerelease: $RERELEASE"
 
-      - name: Update release metadata
-        if: steps.version.outputs.rerelease != 'true'
+      - name: Update monorepo release.json
         shell: bash
         run: |
           set -euo pipefail
@@ -268,21 +281,30 @@ jobs:
             const fs = require("fs");
             const version = process.argv[1];
 
-            const releasePath = "release.json";
-            const releaseData = fs.existsSync(releasePath)
-              ? JSON.parse(fs.readFileSync(releasePath, "utf8"))
-              : { product: "gryt" };
+            const path = "release.json";
+            const data = JSON.parse(fs.readFileSync(path, "utf8"));
 
-            releaseData.product = releaseData.product || "gryt";
-            releaseData.components = releaseData.components || {};
-            releaseData.components.server = version;
+            data.product = data.product || "gryt";
+            data.server = version;
 
-            fs.writeFileSync(releasePath, `${JSON.stringify(releaseData, null, 2)}\n`);
+            fs.writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+          ' "$BASE_VERSION"
 
-            const pkgPath = "packages/server/package.json";
-            const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+      - name: Set working server package version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_VERSION="${{ steps.version.outputs.base_version }}"
+
+          node -e '
+            const fs = require("fs");
+            const version = process.argv[1];
+
+            const path = "packages/server/package.json";
+            const pkg = JSON.parse(fs.readFileSync(path, "utf8"));
             pkg.version = version;
-            fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+            fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
           ' "$BASE_VERSION"
 
       - name: Install server dependencies
@@ -343,7 +365,7 @@ jobs:
           set -euo pipefail
 
           VERSION="${{ steps.version.outputs.version }}"
-          CHANNEL="${{ github.event.inputs.channel }}"
+          CHANNEL="${{ steps.channel.outputs.channel }}"
           IMAGE="${{ env.SERVER_IMAGE }}"
 
           CLEAN_VERSION="${VERSION%%-*}"
@@ -427,7 +449,7 @@ jobs:
 
           VERSION="${{ steps.version.outputs.version }}"
           BASE_VERSION="${{ steps.version.outputs.base_version }}"
-          CHANNEL="${{ github.event.inputs.channel }}"
+          CHANNEL="${{ steps.channel.outputs.channel }}"
 
           mkdir -p .release/server
 
@@ -457,23 +479,38 @@ jobs:
               monorepoCommit: monorepoSha,
               createdAt: new Date().toISOString(),
               dockerImage: "ghcr.io/gryt-chat/server:" + version,
+              platforms: {
+                windows: {
+                  selfHostedBundle: "gryt-server-windows-x64-v" + version + ".zip",
+                  includes: ["server", "sfu", "image-worker"]
+                },
+                linux: {
+                  selfHostedBundle: "gryt-server-linux-x64-v" + version + ".zip",
+                  dockerImage: "ghcr.io/gryt-chat/server:" + version,
+                  includes: ["server", "sfu", "image-worker"]
+                },
+                macos: {
+                  supported: false,
+                  reason: "build-selfhosted.sh currently supports windows-x64 and linux-x64 only"
+                }
+              },
               components: {
                 server: {
                   repo: "Gryt-chat/server",
                   path: "packages/server",
-                  commit: serverSha,
+                  commit: serverSha
                 },
                 sfu: {
                   repo: "Gryt-chat/sfu",
                   path: "packages/sfu",
-                  commit: sfuSha,
+                  commit: sfuSha
                 },
                 imageWorker: {
                   repo: "Gryt-chat/image-worker",
                   path: "packages/image-worker",
-                  commit: imageWorkerSha,
-                },
-              },
+                  commit: imageWorkerSha
+                }
+              }
             };
 
             fs.writeFileSync(".release/server/manifest.json", `${JSON.stringify(manifest, null, 2)}\n`);
@@ -481,23 +518,21 @@ jobs:
 
           cat .release/server/manifest.json
 
-      - name: Commit server version bump
-        if: steps.version.outputs.rerelease != 'true'
-        working-directory: packages/server
+      - name: Commit monorepo release state
         shell: bash
         run: |
           set -euo pipefail
 
-          VERSION="${{ steps.version.outputs.base_version }}"
-          BRANCH="${{ github.event.inputs.server_branch }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          CHANNEL="${{ steps.channel.outputs.channel }}"
 
-          git add package.json
+          git add release.json
 
           if git diff --cached --quiet; then
-            echo "No server package version changes to commit."
+            echo "No release.json changes to commit."
           else
-            git commit -m "release: v${VERSION}"
-            git push origin "HEAD:${BRANCH}"
+            git commit -m "release: server v${VERSION} (${CHANNEL}) [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
           fi
 
       - name: Tag server repo
@@ -506,47 +541,9 @@ jobs:
           set -euo pipefail
 
           TAG="${{ steps.version.outputs.tag }}"
-          RERELEASE="${{ steps.version.outputs.rerelease }}"
-
-          if [[ "$RERELEASE" == "true" ]]; then
-            git -C packages/server tag -d "$TAG" || true
-            git -C packages/server push origin ":refs/tags/$TAG" || true
-          fi
 
           git -C packages/server tag "$TAG"
           git -C packages/server push origin "$TAG"
-
-      - name: Update monorepo release metadata
-        if: steps.version.outputs.rerelease != 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          VERSION="${{ steps.version.outputs.version }}"
-          CHANNEL="${{ github.event.inputs.channel }}"
-
-          git add release.json .release/server/manifest.json packages/server
-
-          if git diff --cached --quiet; then
-            echo "No monorepo release metadata changes to commit."
-          else
-            git commit -m "release: server v${VERSION} (${CHANNEL}) [skip ci]"
-            git push origin HEAD:${{ github.ref_name }}
-          fi
-
-      - name: Delete existing server release for rerelease
-        if: steps.version.outputs.rerelease == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          TAG="${{ steps.version.outputs.tag }}"
-
-          gh release delete "$TAG" \
-            --repo "${{ env.RELEASE_OWNER }}/${{ env.RELEASE_REPO }}" \
-            --yes || true
 
       - name: Create GitHub Release in server repo
         env:
@@ -557,7 +554,7 @@ jobs:
 
           VERSION="${{ steps.version.outputs.version }}"
           TAG="${{ steps.version.outputs.tag }}"
-          CHANNEL="${{ github.event.inputs.channel }}"
+          CHANNEL="${{ steps.channel.outputs.channel }}"
 
           ASSETS=(
             ".release/server/manifest.json"
@@ -580,16 +577,20 @@ jobs:
 
           mkdir -p .release/server
 
-          cat > .release/server/release-notes.md <<EOF
-          Gryt Server ${TAG}
-
-          Channel: ${CHANNEL}
-
-          Docker image:
-          ghcr.io/gryt-chat/server:${VERSION}
-
-          The self-hosted bundles include the server, SFU, and image-worker commits listed in manifest.json.
-          EOF
+          printf '%s\n' \
+            "Gryt Server ${TAG}" \
+            "" \
+            "Channel: ${CHANNEL}" \
+            "" \
+            "Docker image:" \
+            "ghcr.io/gryt-chat/server:${VERSION}" \
+            "" \
+            "Self-hosted bundles:" \
+            "- Windows x64: gryt-server-windows-x64-v${VERSION}.zip" \
+            "- Linux x64: gryt-server-linux-x64-v${VERSION}.zip" \
+            "" \
+            "The self-hosted bundles include the server, SFU, and image-worker commits listed in manifest.json." \
+            > .release/server/release-notes.md
 
           gh release create "$TAG" \
             --repo "${{ env.RELEASE_OWNER }}/${{ env.RELEASE_REPO }}" \

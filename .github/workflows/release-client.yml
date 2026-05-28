@@ -833,21 +833,19 @@ jobs:
           RELEASE_URL="https://github.com/${OWNER}/${REPO}/releases/tag/${TAG}"
 
           if [[ "$CHANNEL" == "beta" ]]; then
-            DISP_CHANNEL="BETA"
+            TITLE="BETA Client release"
             COLOR=16750848
-            DESCRIPTION="A new beta desktop build is available."
+            DESCRIPTION="New desktop build is available for testing."
           else
-            DISP_CHANNEL="STABLE"
+            TITLE="STABLE Client release"
             COLOR=5763719
-            DESCRIPTION="A new stable desktop build is available."
+            DESCRIPTION="New desktop build is available."
           fi
 
           PAYLOAD="$(jq -n \
-            --arg title "Client release" \
+            --arg title "$TITLE" \
             --arg url "$RELEASE_URL" \
             --arg desc "$DESCRIPTION" \
-            --arg component "Desktop Client" \
-            --arg channel "$DISP_CHANNEL" \
             --arg version "$VERSION" \
             --arg release "Open release" \
             --argjson color "$COLOR" \
@@ -858,12 +856,10 @@ jobs:
                 description: $desc,
                 color: $color,
                 fields: [
-                  { name: "Component", value: $component, inline: true },
-                  { name: "Channel", value: $channel, inline: true },
                   { name: "Version", value: $version, inline: true },
-                  { name: "Release", value: ("[" + $release + "](" + $url + ")"), inline: false }
+                  { name: "Release", value: ("[" + $release + "](" + $url + ")"), inline: true }
                 ],
-                footer: { text: "Gryt Releases" },
+                footer: { text: "Gryt Client" },
                 timestamp: (now | todate)
               }]
             }'

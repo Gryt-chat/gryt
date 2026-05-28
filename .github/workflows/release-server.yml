@@ -355,7 +355,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.RELEASE_PAT }}
+          password: ${{ github.token }}
 
       - name: Build and push server Docker image
         if: github.event.inputs.push_docker == 'true'

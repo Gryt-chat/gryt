@@ -3,28 +3,20 @@ name: Release Client
 on:
   workflow_dispatch:
     inputs:
-      channel:
-        description: "Release channel"
-        required: true
-        default: "beta"
-        type: choice
-        options:
-          - beta
-          - latest
-
       bump:
-        description: "Client/product version bump"
+        description: "Client/product version change"
         required: true
         default: "patch"
         type: choice
         options:
+          - none
           - patch
           - minor
           - major
           - custom
 
       custom_version:
-        description: 'Custom version, if "custom" is selected. Example: 1.2.3'
+        description: 'Custom stable version, if "custom" is selected. Example: 1.2.3'
         required: false
         default: ""
         type: string
@@ -69,6 +61,20 @@ jobs:
           git submodule sync -- packages/client packages/server packages/sfu
           git submodule update --init --force -- packages/client packages/server packages/sfu
 
+      - name: Configure client repository authentication
+        shell: bash
+        env:
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${RELEASE_PAT:-}" ]]; then
+            echo "RELEASE_PAT is required to push the client package.json version bump."
+            exit 1
+          fi
+
+          git -C packages/client remote set-url origin "https://x-access-token:${RELEASE_PAT}@github.com/Gryt-chat/client.git"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -81,6 +87,25 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
 
+      - name: Determine channel from branch
+        id: channel
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            CHANNEL="latest"
+          elif [[ "${{ github.ref_name }}" == "beta" ]]; then
+            CHANNEL="beta"
+          else
+            echo "Client releases must be run from the beta or main branch."
+            echo "Current branch: ${{ github.ref_name }}"
+            exit 1
+          fi
+
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "Channel: $CHANNEL"
+
       - name: Validate release.json
         shell: bash
         run: |
@@ -91,26 +116,28 @@ jobs:
             exit 1
           fi
 
-          PRODUCT="$(node -p "require('./release.json').product")"
-          VERSION="$(node -p "require('./release.json').version")"
+          node -e '
+            const fs = require("fs");
+            const data = JSON.parse(fs.readFileSync("release.json", "utf8"));
 
-          if [[ "$PRODUCT" != "gryt" ]]; then
-            echo "release.json product must be gryt"
-            exit 1
-          fi
+            if (data.product !== "gryt") {
+              throw new Error("release.json product must be gryt");
+            }
 
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "release.json version must be stable semver like 1.1.4"
-            exit 1
-          fi
+            if (!/^\d+\.\d+\.\d+$/.test(data.version)) {
+              throw new Error("release.json version must be stable semver like 1.2.3");
+            }
 
-      - name: Determine channel
-        id: channel
+            if (data.server && !/^\d+\.\d+\.\d+$/.test(data.server)) {
+              throw new Error("release.json server must be stable semver like 1.2.3");
+            }
+          '
+
+      - name: Fetch release tags
         shell: bash
         run: |
           set -euo pipefail
-          CHANNEL="${{ github.event.inputs.channel }}"
-          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          git fetch --tags origin
 
       - name: Determine version
         id: version
@@ -120,14 +147,8 @@ jobs:
 
           CHANNEL="${{ steps.channel.outputs.channel }}"
           CURRENT_BASE_VERSION="$(node -p "require('./release.json').version")"
-
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            BUMP="${{ github.event.inputs.bump }}"
-            CUSTOM_VERSION="${{ github.event.inputs.custom_version }}"
-          else
-            BUMP="patch"
-            CUSTOM_VERSION=""
-          fi
+          BUMP="${{ github.event.inputs.bump }}"
+          CUSTOM_VERSION="${{ github.event.inputs.custom_version }}"
 
           bump_version() {
             local version="$1"
@@ -163,26 +184,32 @@ jobs:
             ' "$version" "$bump"
           }
 
-          if [[ "$BUMP" == "custom" ]]; then
-            if [[ -z "$CUSTOM_VERSION" ]]; then
-              echo "custom_version is required when bump=custom"
+          case "$BUMP" in
+            none)
+              BASE_VERSION="$CURRENT_BASE_VERSION"
+              ;;
+            patch|minor|major)
+              BASE_VERSION="$(bump_version "$CURRENT_BASE_VERSION" "$BUMP")"
+              ;;
+            custom)
+              if [[ -z "$CUSTOM_VERSION" ]]; then
+                echo "custom_version is required when bump=custom"
+                exit 1
+              fi
+
+              if ! [[ "$CUSTOM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "Invalid custom version: $CUSTOM_VERSION"
+                echo "Expected stable semver like 1.2.3"
+                exit 1
+              fi
+
+              BASE_VERSION="$CUSTOM_VERSION"
+              ;;
+            *)
+              echo "Unsupported bump: $BUMP"
               exit 1
-            fi
-
-            if ! [[ "$CUSTOM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "Invalid custom version: $CUSTOM_VERSION"
-              echo "Expected stable semver like 1.2.3"
-              exit 1
-            fi
-
-            BASE_VERSION="$CUSTOM_VERSION"
-          else
-            BASE_VERSION="$CURRENT_BASE_VERSION"
-
-            if git rev-parse "v$BASE_VERSION" >/dev/null 2>&1; then
-              BASE_VERSION="$(bump_version "$BASE_VERSION" "$BUMP")"
-            fi
-          fi
+              ;;
+          esac
 
           if [[ "$CHANNEL" == "beta" ]]; then
             LATEST_BETA_NUMBER="$(
@@ -213,6 +240,20 @@ jobs:
             exit 1
           fi
 
+          echo "version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "base_version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
+
+          echo "Current base version: $CURRENT_BASE_VERSION"
+          echo "New base version: $BASE_VERSION"
+          echo "Release version: $RELEASE_VERSION"
+
+      - name: Update monorepo release.json
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_VERSION="${{ steps.version.outputs.base_version }}"
+
           node -e '
             const fs = require("fs");
             const version = process.argv[1];
@@ -225,11 +266,43 @@ jobs:
             fs.writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
           ' "$BASE_VERSION"
 
-          echo "version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
-          echo "base_version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
+      - name: Update client package version
+        shell: bash
+        run: |
+          set -euo pipefail
 
-          echo "Base version: $BASE_VERSION"
-          echo "Release version: $RELEASE_VERSION"
+          RELEASE_VERSION="${{ steps.version.outputs.version }}"
+
+          node -e '
+            const fs = require("fs");
+            const version = process.argv[1];
+            const path = "packages/client/package.json";
+            const pkg = JSON.parse(fs.readFileSync(path, "utf8"));
+
+            pkg.version = version;
+
+            fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          ' "$RELEASE_VERSION"
+
+          echo "Client package.json version set to $RELEASE_VERSION"
+          node -p "require('./packages/client/package.json').version"
+
+      - name: Commit client version bump
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RELEASE_VERSION="${{ steps.version.outputs.version }}"
+          TARGET_BRANCH="${{ github.ref_name }}"
+
+          git -C packages/client add package.json
+
+          if git -C packages/client diff --cached --quiet; then
+            echo "No client package.json changes to commit."
+          else
+            git -C packages/client commit -m "release: v${RELEASE_VERSION}"
+            git -C packages/client push origin "HEAD:${TARGET_BRANCH}"
+          fi
 
       - name: Create release manifest
         shell: bash
@@ -270,19 +343,19 @@ jobs:
                 client: {
                   repo: "Gryt-chat/client",
                   path: "packages/client",
-                  commit: clientSha,
+                  commit: clientSha
                 },
                 server: {
                   repo: "Gryt-chat/server",
                   path: "packages/server",
-                  commit: serverSha,
+                  commit: serverSha
                 },
                 sfu: {
                   repo: "Gryt-chat/sfu",
                   path: "packages/sfu",
-                  commit: sfuSha,
-                },
-              },
+                  commit: sfuSha
+                }
+              }
             };
 
             fs.writeFileSync(".release/manifest.json", `${JSON.stringify(manifest, null, 2)}\n`);
@@ -298,7 +371,7 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           CHANNEL="${{ steps.channel.outputs.channel }}"
 
-          git add release.json .release/manifest.json
+          git add release.json .release/manifest.json packages/client
 
           if git diff --cached --quiet; then
             echo "No release metadata changes to commit."
@@ -394,6 +467,22 @@ jobs:
 
           git submodule sync -- aur
           git submodule update --init --force -- aur
+
+      - name: Verify packaged client version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          EXPECTED="${{ env.VERSION }}"
+          ACTUAL="$(node -p "require('./packages/client/package.json').version")"
+
+          echo "Expected client package version: $EXPECTED"
+          echo "Actual client package version:   $ACTUAL"
+
+          if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+            echo "Client package.json version mismatch."
+            exit 1
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

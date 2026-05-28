@@ -545,6 +545,13 @@ jobs:
             go mod download
           fi
 
+      - name: Generate app icons
+        working-directory: packages/client
+        shell: bash
+        run: |
+          set -euo pipefail
+          yarn icons:generate
+
       - name: Type-check client
         working-directory: packages/client
         shell: bash

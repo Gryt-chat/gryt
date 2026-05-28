@@ -545,13 +545,6 @@ jobs:
             go mod download
           fi
 
-      - name: Generate app icons
-        working-directory: packages/client
-        shell: bash
-        run: |
-          set -euo pipefail
-          yarn icons:generate
-
       - name: Type-check client
         working-directory: packages/client
         shell: bash
@@ -638,6 +631,13 @@ jobs:
           security find-identity -v -p codesigning || true
 
           rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Generate app icons
+        working-directory: packages/client
+        shell: bash
+        run: |
+          set -euo pipefail
+          yarn icons:generate
 
       - name: Build Electron app
         working-directory: packages/client

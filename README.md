@@ -3,7 +3,7 @@
   <h1>Gryt</h1>
   <p><strong>Open-source WebRTC voice chat platform</strong></p>
   <p>
-    <a href="https://github.com/Gryt-chat/gryt/releases/latest"><img src="https://img.shields.io/github/v/release/Gryt-chat/gryt" alt="GitHub Release" /></a>
+    <a href="https://github.com/Gryt-chat/gryt/releases/latest"><img src="https://img.shields.io/github/v/release/Gryt-chat/gryt?cacheSeconds=3600" alt="GitHub Release" /></a>
     <a href="https://github.com/Gryt-chat/gryt/stargazers"><img src="https://img.shields.io/github/stars/Gryt-chat/gryt" alt="GitHub Stars" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License: AGPL-3.0" /></a>
     <a href="https://docs.gryt.chat"><img src="https://img.shields.io/badge/docs-docs.gryt.chat-blue" alt="Docs" /></a>

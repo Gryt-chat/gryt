@@ -71,10 +71,14 @@ task in step with the work:
 Vikunja has no status field, so the two intermediate states are labels and the final one is
 the native `done` flag — that way finished tasks drop out of open lists properly.
 
-The merge step is the unreliable one. Sivert clicks merge when Claude isn't running, so
-nothing observes it live. **Before starting any Vikunja work, list tasks labelled
-`in review`, check whether their PRs have merged, and close the ones that have.** Without
-that reconcile step, tasks pile up in `in review` forever.
+The merge step is handled by CI. `.github/workflows/vikunja-task-done.yml` calls a reusable
+workflow in `Gryt-chat/.github` that closes the task when a PR merges, so you don't need to
+do anything for it.
+
+That covers `gryt`, `client`, `server`, `docs` and `site`. It does **not** cover `sfu`,
+`auth` or `image-worker` — those are protected repos and have no workflow. For merges there,
+and for anything merged outside a PR, **list tasks labelled `in review` at the start of
+Vikunja work, check whether their PRs merged, and close the ones that did.**
 
 ## Submodules
 

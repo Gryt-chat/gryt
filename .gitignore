@@ -10,6 +10,9 @@ auth/backups/*.dump.gz
 # Snapcraft credentials
 snapcraft-creds
 
+# Claude Code local settings (CLAUDE.md itself is tracked)
+.claude/settings.local.json
+
 # Env files (never commit secrets)
 .env
 .env.*

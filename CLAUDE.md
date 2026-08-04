@@ -65,26 +65,30 @@ AI involvement with `git log`. Stripping the trailer breaks a promise Gryt made 
 
 ## Task tracking
 
-Tasks live in Vikunja at [tasks.sivert.io](https://tasks.sivert.io), project `GRYT`. Keep the
-task in step with the work:
+Tasks live in Vikunja at [tasks.sivert.io](https://tasks.sivert.io), project `GRYT`. The
+kanban board is the state: **To-Do → Doing → Review → Done**.
 
-| When | Do this |
-|------|---------|
-| Starting work | Apply the `in progress` label, and comment the branch name on the task |
-| PR opened | Swap `in progress` for `in review`, and comment the PR link |
-| PR merged | Remove `in review` and set `done` |
+| When | What happens | Who does it |
+|------|--------------|-------------|
+| Starting work | Move to **Doing**, comment the branch name on the task | You |
+| PR opened | Move to **Review**, comment the PR link | CI |
+| PR merged | Move to **Done**, which sets the task's done flag | CI |
 
-Vikunja has no status field, so the two intermediate states are labels and the final one is
-the native `done` flag — that way finished tasks drop out of open lists properly.
+CI covers the last two through `.github/workflows/vikunja-task-done.yml`, which calls a
+reusable workflow in `Gryt-chat/.github`. All eight repos have it, so you don't normally
+need to touch a task after opening the PR.
 
-The merge step is handled by CI. `.github/workflows/vikunja-task-done.yml` calls a reusable
-workflow in `Gryt-chat/.github` that closes the task when a PR merges, so you don't need to
-do anything for it.
+Moving a task is not exposed by the Vikunja MCP server, so use the REST API directly:
 
-That covers `gryt`, `client`, `server`, `docs` and `site`. It does **not** cover `sfu`,
-`auth` or `image-worker` — those are protected repos and have no workflow. For merges there,
-and for anything merged outside a PR, **list tasks labelled `in review` at the start of
-Vikunja work, check whether their PRs merged, and close the ones that did.**
+```bash
+# bucket ids: resolve by title from /projects/2/views/<kanban view>/buckets
+POST /api/v1/projects/2/views/12/buckets/<bucket>/tasks   {"task_id": <id>}
+```
+
+Dropping a task into **Done** sets its `done` flag automatically — no separate update.
+
+If something merges outside a PR, or CI fails, **check the Review column at the start of
+Vikunja work and close anything whose PR has landed.**
 
 ## Submodules
 

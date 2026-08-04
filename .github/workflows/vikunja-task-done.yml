@@ -1,0 +1,14 @@
+name: Close Vikunja task
+
+# Marks the Vikunja task named in the branch (e.g. claude/GRYT-1-slug) as done
+# when a PR merges. Implementation lives in Gryt-chat/.github so all repos share
+# one copy. Needs the org secret VIKUNJA_API_TOKEN.
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  close-task:
+    uses: Gryt-chat/.github/.github/workflows/vikunja-task-done.yml@main
+    secrets: inherit

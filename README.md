@@ -71,6 +71,8 @@ Full docs at **[docs.gryt.chat](https://docs.gryt.chat)** — architecture, conf
 
 See the [contributing guide](https://docs.gryt.chat/docs/guide/contributing) for how to get involved.
 
+Gryt's foundation — the SFU, authentication, identity, and anything that parses untrusted input — is hand-written and stays that way. See the [AI policy](https://docs.gryt.chat/docs/guide/ai) for where AI assistance is and isn't used, and the disclosure rules for contributions.
+
 ## Acknowledgments
 
 Gryt wouldn't exist without these projects and resources. I'm forever grateful to the people behind them for sharing their work with the world.

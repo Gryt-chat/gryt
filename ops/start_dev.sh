@@ -29,7 +29,9 @@ S3_DISABLE_ENV="DISABLE_S3=true"
 SFU_WS_HOST="${SFU_WS_HOST:-ws://127.0.0.1:5005}"
 SFU_PUBLIC_HOST="${SFU_PUBLIC_HOST:-wss://sfu.example.com}"
 STUN_SERVERS="${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}"
-CORS_ORIGIN="${CORS_ORIGIN:-http://127.0.0.1:15738,http://localhost:3777,https://app.gryt.chat}"
+# 3666 is the Vite dev server port (packages/client/vite.config.ts); the server
+# matches Origin exactly, so it must be listed verbatim.
+CORS_ORIGIN="${CORS_ORIGIN:-http://127.0.0.1:15738,http://localhost:3666,http://127.0.0.1:3666,https://app.gryt.chat}"
 GRYT_AUTH_MODE="${GRYT_AUTH_MODE:-required}"
 GRYT_OIDC_ISSUER="${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}"
 GRYT_OIDC_AUDIENCE="${GRYT_OIDC_AUDIENCE:-gryt-web}"
@@ -106,8 +108,8 @@ fi
 
 # ── Install JS dependencies ──────────────────────────────────────────
 echo "Installing JS dependencies..."
-(cd packages/client && npm install --silent) &
-(cd packages/server && npm install --silent) &
+(cd packages/client && yarn install --silent) &
+(cd packages/server && yarn install --silent) &
 wait
 echo ""
 
@@ -132,12 +134,14 @@ tmux new-window -t "$SESSION" -n client \
   "bash -lc 'cd packages/client && echo \"── Client ──\" && yarn dev --host; exec bash'"
 
 # Window 2: Server 1 (ws1) on :5001
+# Each instance needs its own DATA_DIR — servers are fully independent, and two
+# processes on one SQLite file race for the write lock ("database is locked").
 tmux new-window -t "$SESSION" -n ws1 \
-  "bash -lc 'cd packages/server && echo \"── ws1 :5001 ──\" && env PORT=5001 SERVER_NAME=ws1 ${COMMON_ENV} yarn dev; exec bash'"
+  "bash -lc 'cd packages/server && echo \"── ws1 :5001 ──\" && env PORT=5001 SERVER_NAME=ws1 SERVER_INSTANCE_ID=ws1 DATA_DIR=./data/ws1 ${COMMON_ENV} yarn dev; exec bash'"
 
 # Window 3: Server 2 (ws2) on :5002
 tmux new-window -t "$SESSION" -n ws2 \
-  "bash -lc 'cd packages/server && echo \"── ws2 :5002 ──\" && env PORT=5002 SERVER_NAME=ws2 ${COMMON_ENV} yarn dev; exec bash'"
+  "bash -lc 'cd packages/server && echo \"── ws2 :5002 ──\" && env PORT=5002 SERVER_NAME=ws2 SERVER_INSTANCE_ID=ws2 DATA_DIR=./data/ws2 ${COMMON_ENV} yarn dev; exec bash'"
 
 # Window 4: spare shell for ad-hoc commands
 tmux new-window -t "$SESSION" -n shell

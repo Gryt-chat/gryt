@@ -57,6 +57,25 @@ tracker they can't reach.
 **Keep `Co-Authored-By` trailers on every commit.** The public policy tells readers to audit
 AI involvement with `git log`. Stripping the trailer breaks a promise Gryt made in writing.
 
+## Task tracking
+
+Tasks live in Vikunja at [tasks.sivert.io](https://tasks.sivert.io), project `GRYT`. Keep the
+task in step with the work:
+
+| When | Do this |
+|------|---------|
+| Starting work | Apply the `in progress` label, and comment the branch name on the task |
+| PR opened | Swap `in progress` for `in review`, and comment the PR link |
+| PR merged | Remove `in review` and set `done` |
+
+Vikunja has no status field, so the two intermediate states are labels and the final one is
+the native `done` flag — that way finished tasks drop out of open lists properly.
+
+The merge step is the unreliable one. Sivert clicks merge when Claude isn't running, so
+nothing observes it live. **Before starting any Vikunja work, list tasks labelled
+`in review`, check whether their PRs have merged, and close the ones that have.** Without
+that reconcile step, tasks pile up in `in review` forever.
+
 ## Submodules
 
 `packages/*` are separate repositories. Commit and push the **submodule first**, then the

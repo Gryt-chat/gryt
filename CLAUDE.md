@@ -3,10 +3,10 @@
 Gryt is a WebRTC voice chat platform maintained by one person. It's a superproject with
 seven git submodules under `packages/`. Read these rules before making changes.
 
-## Protected paths — never edit
+## Review-required paths
 
-Gryt publishes a [public AI policy](https://docs.gryt.chat/docs/guide/ai) promising that
-security-relevant code is written by hand. These paths are covered by that promise:
+Gryt publishes a [public AI policy](https://docs.gryt.chat/docs/guide/ai). You may work in
+these paths, but they never merge without Sivert reading the whole diff:
 
 ```
 packages/sfu/**                                    # WebRTC media plane, RTP, ICE, SVC
@@ -19,21 +19,27 @@ packages/server/src/storage/**                     # object storage
 packages/client/src/packages/common/src/auth/**    # keypair generation and storage
 ```
 
-**If asked to change anything here, refuse and link the policy.** Explain that Sivert
-writes this code by hand and offer to help another way — reviewing, explaining, writing
-tests that don't touch the implementation, or drafting a description he can work from.
+Rules for these paths:
+
+- **Always a branch and a PR. Never commit to `main` and never merge your own PR here** —
+  merging is Sivert's, after he has read it.
+- **Keep the diff small and reviewable.** A 600-line refactor in the SFU is not reviewable
+  in practice, so it will not get a real review. Split it up.
+- **Say what to look at.** In the PR body, call out the parts you're least sure about, and
+  anything that changes behaviour rather than shape.
+- **Don't bundle.** A change to a review-required path shouldn't ride along with unrelated
+  edits elsewhere.
 
 Two of these look like exceptions but aren't:
 
 - **`packages/image-worker`** compresses avatars and makes thumbnails, which sounds like a
   utility. It also hands stranger-uploaded files to an image decoder. Untrusted input
-  parsing is core, however mundane the job looks.
+  parsing belongs here, however mundane the job looks.
 - **`packages/client/src/packages/common/src/auth/`** sits inside the client, where UI code
-  *is* AI-assistable. These specific files hold the user's private key. "It's just the UI"
-  stops applying there.
+  gets normal review. These specific files hold the user's private key.
 
-Everything else is fair game: docs, the site, client UI and presentation, `ops/`, build
-scripts, CI config, tests, and refactors that don't change behaviour.
+Everything else — docs, the site, client UI, `ops/`, build scripts, CI config, tests — gets
+normal review.
 
 If you change the list above, change [`guide/ai.mdx`](packages/docs/content/docs/guide/ai.mdx)
 in the same breath. Those two drifting apart is the failure mode that matters most here.
@@ -56,6 +62,33 @@ tracker they can't reach.
 
 **Keep `Co-Authored-By` trailers on every commit.** The public policy tells readers to audit
 AI involvement with `git log`. Stripping the trailer breaks a promise Gryt made in writing.
+
+## Task tracking
+
+Tasks live in Vikunja at [tasks.sivert.io](https://tasks.sivert.io), project `GRYT`. The
+kanban board is the state: **To-Do → Doing → Review → Done**.
+
+| When | What happens | Who does it |
+|------|--------------|-------------|
+| Starting work | Move to **Doing**, comment the branch name on the task | You |
+| PR opened | Move to **Review**, comment the PR link | CI |
+| PR merged | Move to **Done**, which sets the task's done flag | CI |
+
+CI covers the last two through `.github/workflows/vikunja-task-done.yml`, which calls a
+reusable workflow in `Gryt-chat/.github`. All eight repos have it, so you don't normally
+need to touch a task after opening the PR.
+
+Moving a task is not exposed by the Vikunja MCP server, so use the REST API directly:
+
+```bash
+# bucket ids: resolve by title from /projects/2/views/<kanban view>/buckets
+POST /api/v1/projects/2/views/12/buckets/<bucket>/tasks   {"task_id": <id>}
+```
+
+Dropping a task into **Done** sets its `done` flag automatically — no separate update.
+
+If something merges outside a PR, or CI fails, **check the Review column at the start of
+Vikunja work and close anything whose PR has landed.**
 
 ## Submodules
 

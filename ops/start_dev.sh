@@ -26,12 +26,29 @@ S3_ENV="S3_ENDPOINT=http://127.0.0.1:9000 S3_REGION=us-east-1 S3_ACCESS_KEY_ID=$
 
 S3_DISABLE_ENV="DISABLE_S3=true"
 
+# The server hands SFU_PUBLIC_HOST straight to the client, which dials it — so
+# a placeholder here isn't inert, it guarantees a failed voice connect. Default
+# to this machine's LAN address so another machine can reach the SFU too;
+# SFU_WS_HOST stays loopback because that hop is server-to-SFU on this box.
+detect_lan_ip() {
+  if command -v ipconfig >/dev/null 2>&1; then
+    ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true
+  else
+    hostname -I 2>/dev/null | awk '{print $1}' || true
+  fi
+}
+LAN_IP="${LAN_IP:-$(detect_lan_ip || true)}"
+
 SFU_WS_HOST="${SFU_WS_HOST:-ws://127.0.0.1:5005}"
-SFU_PUBLIC_HOST="${SFU_PUBLIC_HOST:-wss://sfu.example.com}"
+SFU_PUBLIC_HOST="${SFU_PUBLIC_HOST:-ws://${LAN_IP:-127.0.0.1}:5005}"
 STUN_SERVERS="${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}"
 # 3666 is the Vite dev server port (packages/client/vite.config.ts); the server
 # matches Origin exactly, so it must be listed verbatim.
 CORS_ORIGIN="${CORS_ORIGIN:-http://127.0.0.1:15738,http://localhost:3666,http://127.0.0.1:3666,https://app.gryt.chat}"
+# Loopback by default so a dev server isn't exposed on whatever network you
+# happen to be on. Set HOST=0.0.0.0 in ops/.env to test LAN discovery, where
+# another machine has to reach ws1/ws2 over the wire.
+HOST="${HOST:-127.0.0.1}"
 GRYT_AUTH_MODE="${GRYT_AUTH_MODE:-required}"
 GRYT_OIDC_ISSUER="${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}"
 GRYT_OIDC_AUDIENCE="${GRYT_OIDC_AUDIENCE:-gryt-web}"
@@ -117,7 +134,7 @@ echo ""
 WS_S3_ENV="$S3_DISABLE_ENV"
 [[ "$DEV_WITH_S3" == "1" ]] && WS_S3_ENV="$S3_ENV"
 
-COMMON_ENV="CORS_ORIGIN=${CORS_ORIGIN} GRYT_AUTH_MODE=${GRYT_AUTH_MODE} GRYT_OIDC_ISSUER=${GRYT_OIDC_ISSUER} GRYT_OIDC_AUDIENCE=${GRYT_OIDC_AUDIENCE} JWT_SECRET=${JWT_SECRET} SERVER_PASSWORD=${SERVER_PASSWORD} SFU_WS_HOST=${SFU_WS_HOST} SFU_PUBLIC_HOST=${SFU_PUBLIC_HOST} STUN_SERVERS=${STUN_SERVERS} ${WS_S3_ENV}"
+COMMON_ENV="HOST=${HOST} CORS_ORIGIN=${CORS_ORIGIN} GRYT_AUTH_MODE=${GRYT_AUTH_MODE} GRYT_OIDC_ISSUER=${GRYT_OIDC_ISSUER} GRYT_OIDC_AUDIENCE=${GRYT_OIDC_AUDIENCE} JWT_SECRET=${JWT_SECRET} SERVER_PASSWORD=${SERVER_PASSWORD} SFU_WS_HOST=${SFU_WS_HOST} SFU_PUBLIC_HOST=${SFU_PUBLIC_HOST} STUN_SERVERS=${STUN_SERVERS} ${WS_S3_ENV}"
 
 # ── Create tmux session with separate windows ────────────────────────
 echo "Creating tmux session '$SESSION' with 5 windows..."

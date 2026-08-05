@@ -35,7 +35,10 @@ permissions:
   packages: write
 
 concurrency:
-  group: release-client-${{ github.ref }}
+  # Shared with release-server.yml on purpose. Both workflows commit to the same
+  # branch, so a per-workflow group only serialised releases of the same kind and
+  # let a client release and a server release race for the push.
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -413,21 +416,76 @@ jobs:
 
       - name: Commit release metadata and tag
         shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BASE_VERSION: ${{ steps.version.outputs.base_version }}
+          CHANNEL: ${{ steps.channel.outputs.channel }}
+          BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
 
-          VERSION="${{ steps.version.outputs.version }}"
-          CHANNEL="${{ steps.channel.outputs.channel }}"
+          # This branch can move under us between checkout and here — a merged PR,
+          # or a server release that got past the concurrency group. Rebasing our
+          # commit is not enough: release.json is four lines and the server writes
+          # "server" while we write "version", so the two hunks overlap and a
+          # replay conflicts even though the edits are independent.
+          #
+          # So re-apply what we own onto whatever the branch holds now, and retry.
+          # A reset reverts the tracked manifest, so keep a copy; the packages/client
+          # working tree is untouched by the reset, so re-staging it re-records the
+          # same commit. The release.json edit matches "Update monorepo release.json"
+          # above; keep them in step.
+          MANIFEST_BACKUP="${RUNNER_TEMP}/release-manifest.json"
+          cp .release/manifest.json "$MANIFEST_BACKUP"
 
-          git add release.json .release/manifest.json packages/client
+          apply_release_metadata() {
+            mkdir -p .release
+            cp "$MANIFEST_BACKUP" .release/manifest.json
 
-          if git diff --cached --quiet; then
-            echo "No release metadata changes to commit."
-          else
+            node -e '
+              const fs = require("fs");
+              const version = process.argv[1];
+              const path = "release.json";
+              const data = JSON.parse(fs.readFileSync(path, "utf8"));
+
+              data.product = data.product || "gryt";
+              data.version = version;
+
+              fs.writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+            ' "$BASE_VERSION"
+          }
+
+          outcome=""
+          for attempt in 1 2 3 4 5; do
+            apply_release_metadata
+            git add release.json .release/manifest.json packages/client
+
+            if git diff --cached --quiet; then
+              echo "No release metadata changes to commit."
+              outcome="nothing-to-commit"
+              break
+            fi
+
             git commit -m "release: v$VERSION ($CHANNEL) [skip ci]"
-            git push origin HEAD:${{ github.ref_name }}
+
+            if git push origin "HEAD:${BRANCH}"; then
+              outcome="pushed"
+              break
+            fi
+
+            echo "Push rejected (attempt ${attempt}/5) — reapplying onto the current ${BRANCH}."
+            git fetch origin "${BRANCH}"
+            git reset --hard "origin/${BRANCH}"
+            sleep $(( attempt * 5 ))
+          done
+
+          if [[ -z "$outcome" ]]; then
+            echo "Could not push the release commit after 5 attempts." >&2
+            exit 1
           fi
 
+          # Tagged after the push succeeds, so the tag can never name a commit that
+          # is not on the branch.
           git tag "v$VERSION"
           git push origin "v$VERSION"
 

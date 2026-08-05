@@ -450,12 +450,18 @@ jobs:
             echo "release_type=prerelease" >> "$GITHUB_OUTPUT"
           fi
 
+      # Created as a draft so nothing sees it until every platform has uploaded.
+      # The builds finish minutes apart — macOS trails Windows by about seven,
+      # because it signs and notarises first — and a client that checks in that
+      # gap gets a 404 on its own channel file while another platform is already
+      # updating happily. The publish-release job below flips it live.
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: Gryt v${{ steps.version.outputs.version }}
           prerelease: ${{ steps.channel.outputs.channel == 'beta' }}
+          draft: true
           files: .release/manifest.json
           body: |
             Gryt v${{ steps.version.outputs.version }}
@@ -868,10 +874,21 @@ jobs:
 
           echo "${{ secrets.APPLE_API_KEY_P8_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
 
+          # The publish overrides matter even though this uploads separately with
+          # `gh release upload`. electron-builder bakes them into app-update.yml
+          # inside the packaged app, which is where the updater reads its repo
+          # from. Without them this inherited publish.repo from
+          # packages/client/electron-builder.yml, which named the client repo
+          # rather than this one, and every shipped macOS build asked an empty
+          # repository for updates. The other platforms always passed these,
+          # which is why only macOS was broken.
           npx electron-builder \
             --mac \
             --publish never \
-            -c.extraMetadata.version="$VERSION"
+            -c.extraMetadata.version="$VERSION" \
+            -c.publish.provider=github \
+            -c.publish.owner="$OWNER" \
+            -c.publish.repo="$REPO"
 
           rm -f "$RUNNER_TEMP/AuthKey.p8"
 
@@ -906,15 +923,77 @@ jobs:
 
           gh release upload "$TAG" "${ASSETS[@]}" --repo "$OWNER/$REPO" --clobber
 
+  # Runs only after every matrix leg succeeds. `needs` on a matrix job means a
+  # single failed platform skips this, which leaves the release as an
+  # unpublished draft rather than a half-built release nobody can install —
+  # v1.3.1-beta.2 and beta.3 both shipped without Windows assets that way.
+  publish-release:
+    name: Publish release
+    needs: [prepare-release, build-electron]
+    runs-on: ubuntu-latest
+
+    env:
+      OWNER: Gryt-chat
+      REPO: gryt
+      VERSION: ${{ needs.prepare-release.outputs.version }}
+      CHANNEL: ${{ needs.prepare-release.outputs.channel }}
+
+    steps:
+      - name: Verify every platform uploaded
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          TAG="v$VERSION"
+          ASSETS="$(gh release view "$TAG" --repo "$OWNER/$REPO" --json assets --jq '.assets[].name')"
+
+          echo "Assets on $TAG:"
+          printf '%s\n' "$ASSETS" | sed 's/^/  /'
+
+          # One installer per platform plus the three channel files. A client
+          # whose channel file is missing gets a 404 and reports the release as
+          # broken, so the channel files matter as much as the installers.
+          MISSING=0
+          for PATTERN in \
+            'win-x64\.exe$' \
+            'linux-x86_64\.AppImage$' \
+            'mac-arm64\.zip$' \
+            '^latest\.yml$' \
+            '^latest-linux\.yml$' \
+            '^latest-mac\.yml$'
+          do
+            if ! printf '%s\n' "$ASSETS" | grep -qE "$PATTERN"; then
+              echo "::error::No asset matching $PATTERN"
+              MISSING=1
+            fi
+          done
+
+          if [[ "$MISSING" -ne 0 ]]; then
+            echo "Leaving $TAG as a draft."
+            exit 1
+          fi
+
+          echo "All expected assets present."
+
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          gh release edit "v$VERSION" --repo "$OWNER/$REPO" --draft=false
+          echo "Published v$VERSION."
+
+      # Moved here from the Linux build leg. Announcing from there fired while
+      # macOS was still signing, so #releases advertised a build that Mac users
+      # could not yet install.
       - name: Notify Discord
-        if: runner.os == 'Linux'
         shell: bash
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
-          VERSION: ${{ env.VERSION }}
-          CHANNEL: ${{ env.CHANNEL }}
-          OWNER: ${{ env.OWNER }}
-          REPO: ${{ env.REPO }}
         run: |
           set -euo pipefail
 

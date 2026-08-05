@@ -619,6 +619,21 @@ jobs:
           set -euo pipefail
           npx eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0
 
+      # Must precede the embedded server build. That step runs
+      # `npm rebuild better-sqlite3 --build-from-source`, which needs a C++
+      # toolchain, and this action is what sets VCINSTALLDIR. node-gyp checks
+      # that variable before falling back to enumerating installs with
+      # PowerShell — a fallback that now fails outright, because the runner
+      # image ships Visual Studio 18 and node-gyp 11.5.0 reports it as
+      # `unknown version "undefined"`.
+      #
+      # The ordering was wrong before too. It only worked because the older
+      # runner image had a Visual Studio that the PowerShell fallback could
+      # identify without help.
+      - name: Set up MSVC Build Tools Windows
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Build embedded server and SFU
         working-directory: packages/client
         shell: bash
@@ -673,10 +688,6 @@ jobs:
         run: |
           set -euo pipefail
           bash native/audio-capture/build.sh
-
-      - name: Set up MSVC Build Tools Windows
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Build native Windows binaries
         if: runner.os == 'Windows'

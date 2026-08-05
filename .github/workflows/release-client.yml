@@ -238,6 +238,28 @@ jobs:
               ;;
           esac
 
+          # Refuse to publish behind what has already shipped. release.json used
+          # to be per-branch: main's copy tracked stable releases while beta's
+          # tracked the beta line. Moving the channel to a dispatch input merged
+          # those two lines, and the first release from main computed
+          # 1.3.0-beta.2 while v1.3.1-beta.1 already existed.
+          #
+          # Only base versions are compared, so beta.N increments within the same
+          # base are still fine — it is the x.y.z going backwards that is wrong.
+          HIGHEST_BASE="$(git tag --list 'v*' | sed 's/^v//; s/-.*$//' | sort -V | tail -n 1 || true)"
+
+          if [[ -n "$HIGHEST_BASE" && "$BASE_VERSION" != "$HIGHEST_BASE" ]]; then
+            OLDEST="$(printf '%s\n%s\n' "$HIGHEST_BASE" "$BASE_VERSION" | sort -V | head -n 1)"
+
+            if [[ "$OLDEST" == "$BASE_VERSION" ]]; then
+              echo "release.json is behind the tags."
+              echo "  release.json base version: $BASE_VERSION"
+              echo "  highest released base:     $HIGHEST_BASE"
+              echo "Bump release.json to at least $HIGHEST_BASE before releasing."
+              exit 1
+            fi
+          fi
+
           if [[ "$CHANNEL" == "beta" ]]; then
             LATEST_BETA_NUMBER="$(
               git tag --list "v${BASE_VERSION}-beta.*" \

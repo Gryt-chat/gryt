@@ -245,6 +245,24 @@ jobs:
               ;;
           esac
 
+          # Refuse to publish behind what has already shipped. See the same guard
+          # in release-client.yml for why: release.json used to be per-branch, and
+          # merging the beta line into main can leave it trailing the tags.
+          # Base versions only, so beta.N increments stay fine.
+          HIGHEST_BASE="$(git -C packages/server tag --list 'v*' | sed 's/^v//; s/-.*$//' | sort -V | tail -n 1 || true)"
+
+          if [[ -n "$HIGHEST_BASE" && "$BASE_VERSION" != "$HIGHEST_BASE" ]]; then
+            OLDEST="$(printf '%s\n%s\n' "$HIGHEST_BASE" "$BASE_VERSION" | sort -V | head -n 1)"
+
+            if [[ "$OLDEST" == "$BASE_VERSION" ]]; then
+              echo "release.json server version is behind the server tags."
+              echo "  release.json base version: $BASE_VERSION"
+              echo "  highest released base:     $HIGHEST_BASE"
+              echo "Bump release.json to at least $HIGHEST_BASE before releasing."
+              exit 1
+            fi
+          fi
+
           if [[ "$CHANNEL" == "beta" ]]; then
             LATEST_BETA_NUMBER="$(
               git -C packages/server tag --list "v${BASE_VERSION}-beta.*" \

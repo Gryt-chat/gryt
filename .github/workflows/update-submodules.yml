@@ -1,17 +1,13 @@
 name: Update Submodules
 
+# Updates submodule gitlinks on main. This used to take a target_branch input
+# defaulting to beta, which is where the "chore: update all submodules on beta"
+# commits came from. With the beta branch gone there is only one target left, so
+# the input would be a choice of one.
+
 on:
   workflow_dispatch:
     inputs:
-      target_branch:
-        description: "Branch to update"
-        required: true
-        default: "beta"
-        type: choice
-        options:
-          - beta
-          - main
-
       submodules:
         description: "Submodules to update"
         required: true
@@ -36,7 +32,7 @@ jobs:
       - name: Checkout monorepo
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.target_branch || 'beta' }}
+          ref: main
           fetch-depth: 0
           submodules: recursive
 
@@ -61,19 +57,12 @@ jobs:
           set -euo pipefail
 
           SELECTED="${{ github.event.inputs.submodules || 'all' }}"
-          TARGET_BRANCH="${{ github.event.inputs.target_branch || 'beta' }}"
-
-          if [[ "$TARGET_BRANCH" == "main" ]]; then
-            DEFAULT_SUBMODULE_BRANCH="main"
-          else
-            DEFAULT_SUBMODULE_BRANCH="beta"
-          fi
+          TARGET_BRANCH="main"
+          DEFAULT_SUBMODULE_BRANCH="main"
 
           update_submodule() {
             local path="$1"
-            local preferred_branch="$2"
-            local fallback_branch="main"
-            local branch=""
+            local branch="$2"
 
             if [[ ! -d "$path" ]]; then
               echo "Skipping missing submodule: $path"
@@ -83,12 +72,6 @@ jobs:
             echo "Updating $path"
 
             git -C "$path" fetch origin --tags
-
-            if git -C "$path" ls-remote --exit-code --heads origin "$preferred_branch" >/dev/null 2>&1; then
-              branch="$preferred_branch"
-            else
-              branch="$fallback_branch"
-            fi
 
             echo "Using branch $branch for $path"
 
@@ -124,7 +107,7 @@ jobs:
             exit 0
           fi
 
-          TARGET_BRANCH="${{ github.event.inputs.target_branch || 'beta' }}"
+          TARGET_BRANCH="main"
           SELECTED="${{ github.event.inputs.submodules || 'all' }}"
 
           git commit -m "chore: update $SELECTED submodules on $TARGET_BRANCH"

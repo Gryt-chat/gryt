@@ -46,8 +46,15 @@ in the same breath. Those two drifting apart is the failure mode that matters mo
 
 ## Git
 
-**Never push to `main` or `beta`.** Both are long-lived — `beta` backs the `latest-beta`
-container images. Always work on a branch and open a PR.
+**Never push to `main`.** It's the only long-lived branch. Always work on a branch and open
+a PR.
+
+There used to be a `beta` branch too. It's gone. Beta is a release *channel* now, picked
+from a dropdown when you dispatch `Release Client` or `Release Server`, and it still
+produces `1.2.3-beta.N` versions and `latest-beta` container images. The branch never
+isolated anything — the client submodule was force-moved to `client:main` on every release
+regardless — so all it did in practice was pin stale `server` and `sfu` gitlinks against a
+current client.
 
 Branch naming is `claude/<id>-<slug>`, matching the existing `copilot/*` branches:
 

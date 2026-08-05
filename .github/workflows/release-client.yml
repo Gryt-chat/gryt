@@ -3,6 +3,15 @@ name: Release Client
 on:
   workflow_dispatch:
     inputs:
+      channel:
+        description: "Release channel"
+        required: true
+        default: "beta"
+        type: choice
+        options:
+          - beta
+          - latest
+
       bump:
         description: "Client/product version change"
         required: true
@@ -95,18 +104,28 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
 
-      - name: Determine channel from branch
+      - name: Determine channel
         id: channel
         shell: bash
         run: |
           set -euo pipefail
 
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            CHANNEL="latest"
-          elif [[ "${{ github.ref_name }}" == "beta" ]]; then
-            CHANNEL="beta"
-          else
-            echo "Client releases must be run from the beta or main branch."
+          # The channel is picked at dispatch rather than read off the branch.
+          # Deriving it from github.ref_name implied that a beta release built
+          # from a beta branch, which was never true: the client submodule is
+          # force-moved to client:main a few steps above, so beta and stable
+          # always built identical client code. Only the labelling differed,
+          # and the beta branch's stale server and SFU gitlinks made the
+          # embedded binaries silently disagree with the client.
+          CHANNEL="${{ github.event.inputs.channel }}"
+
+          if [[ "$CHANNEL" != "latest" && "$CHANNEL" != "beta" ]]; then
+            echo "Unsupported channel: $CHANNEL"
+            exit 1
+          fi
+
+          if [[ "${{ github.ref_name }}" != "main" ]]; then
+            echo "Client releases run from main."
             echo "Current branch: ${{ github.ref_name }}"
             exit 1
           fi

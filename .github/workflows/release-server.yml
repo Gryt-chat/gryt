@@ -3,6 +3,15 @@ name: Release Server
 on:
   workflow_dispatch:
     inputs:
+      channel:
+        description: "Release channel"
+        required: true
+        default: "beta"
+        type: choice
+        options:
+          - beta
+          - latest
+
       bump:
         description: "Server version change"
         required: true
@@ -105,18 +114,24 @@ jobs:
           cache: true
           cache-dependency-path: packages/sfu/go.sum
 
-      - name: Determine channel from branch
+      - name: Determine channel
         id: channel
         shell: bash
         run: |
           set -euo pipefail
 
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            CHANNEL="latest"
-          elif [[ "${{ github.ref_name }}" == "beta" ]]; then
-            CHANNEL="beta"
-          else
-            echo "Server releases must be run from the beta or main branch."
+          # Picked at dispatch rather than read off the branch, matching
+          # release-client.yml. See that workflow for why the branch was never
+          # a meaningful signal here.
+          CHANNEL="${{ github.event.inputs.channel }}"
+
+          if [[ "$CHANNEL" != "latest" && "$CHANNEL" != "beta" ]]; then
+            echo "Unsupported channel: $CHANNEL"
+            exit 1
+          fi
+
+          if [[ "${{ github.ref_name }}" != "main" ]]; then
+            echo "Server releases run from main."
             echo "Current branch: ${{ github.ref_name }}"
             exit 1
           fi

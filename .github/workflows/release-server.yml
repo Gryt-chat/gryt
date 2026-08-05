@@ -53,7 +53,10 @@ permissions:
   packages: write
 
 concurrency:
-  group: release-server-${{ github.ref }}
+  # Shared with release-client.yml on purpose. Both workflows commit to the same
+  # branch, so a per-workflow group only serialised releases of the same kind and
+  # let a client release and a server release race for the push.
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -552,20 +555,59 @@ jobs:
 
       - name: Commit monorepo release state
         shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BASE_VERSION: ${{ steps.version.outputs.base_version }}
+          CHANNEL: ${{ steps.channel.outputs.channel }}
+          BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
 
-          VERSION="${{ steps.version.outputs.version }}"
-          CHANNEL="${{ steps.channel.outputs.channel }}"
+          # This branch can move under us between checkout and here — a merged PR,
+          # or a client release that got past the concurrency group. Rebasing our
+          # commit is not enough: release.json is four lines and the client writes
+          # "version" while we write "server", so the two hunks overlap and a
+          # replay conflicts even though the edits are independent.
+          #
+          # So re-apply our own key to whatever the branch holds now, and retry.
+          # Same edit as "Update monorepo release.json" above; keep them in step.
+          apply_server_version() {
+            node -e '
+              const fs = require("fs");
+              const version = process.argv[1];
+              const path = "release.json";
+              const data = JSON.parse(fs.readFileSync(path, "utf8"));
 
-          git add release.json
+              data.product = data.product || "gryt";
+              data.server = version;
 
-          if git diff --cached --quiet; then
-            echo "No release.json changes to commit."
-          else
+              fs.writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+            ' "$BASE_VERSION"
+          }
+
+          for attempt in 1 2 3 4 5; do
+            apply_server_version
+            git add release.json
+
+            if git diff --cached --quiet; then
+              echo "No release.json changes to commit."
+              exit 0
+            fi
+
             git commit -m "release: server v${VERSION} (${CHANNEL}) [skip ci]"
-            git push origin HEAD:${{ github.ref_name }}
-          fi
+
+            if git push origin "HEAD:${BRANCH}"; then
+              exit 0
+            fi
+
+            echo "Push rejected (attempt ${attempt}/5) — reapplying onto the current ${BRANCH}."
+            git fetch origin "${BRANCH}"
+            git reset --hard "origin/${BRANCH}"
+            sleep $(( attempt * 5 ))
+          done
+
+          echo "Could not push the release commit after 5 attempts." >&2
+          exit 1
 
       - name: Tag server repo
         shell: bash

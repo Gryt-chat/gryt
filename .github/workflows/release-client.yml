@@ -478,7 +478,17 @@ jobs:
         os:
           - ubuntu-latest
           - macos-latest
-          - windows-latest
+          # Pinned, do not move back to windows-latest without checking first.
+          # windows-latest now ships Visual Studio 18, and node-gyp 11.5.0 cannot
+          # parse its version — it reports `unknown version "undefined"` and
+          # refuses the toolchain even when handed it directly via VCINSTALLDIR.
+          # That breaks the better-sqlite3 native build in the embedded server,
+          # which is the only thing here needing a C++ toolchain.
+          #
+          # Verified with windows-build-probe.yml: identical code and step order
+          # fails on windows-latest and passes on windows-2022. Unpin once
+          # node-gyp understands VS 18. See GRYT-26.
+          - windows-2022
 
     runs-on: ${{ matrix.os }}
 

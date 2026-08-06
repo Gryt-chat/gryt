@@ -1,0 +1,33 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "client",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-lc",
+        "cd packages/client && yarn dev --host"
+      ],
+      "port": 3666,
+      "autoPort": false
+    },
+    {
+      "name": "site",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-lc",
+        "cd packages/site && yarn dev"
+      ],
+      "port": 5173
+    },
+    {
+      "name": "docs",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-lc",
+        "cd packages/docs && yarn dev"
+      ],
+      "port": 3000
+    }
+  ]
+}

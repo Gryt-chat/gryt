@@ -6,6 +6,12 @@ name: Update Submodules
 # the input would be a choice of one.
 
 on:
+  # Every 15 minutes, so a merge in a submodule reaches the superproject without
+  # anyone remembering to move the pointer. GitHub delays scheduled runs under
+  # load, so treat this as "shortly" rather than "on the quarter hour".
+  schedule:
+    - cron: "*/15 * * * *"
+
   workflow_dispatch:
     inputs:
       submodules:
@@ -22,6 +28,13 @@ on:
 
 permissions:
   contents: write
+
+concurrency:
+  # Shared with release-client.yml and release-server.yml on purpose. All three
+  # commit to the same branch, and this one now runs unattended — without the
+  # shared group it would be a third writer racing the releases for the push.
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   update-submodules:
@@ -110,5 +123,38 @@ jobs:
           TARGET_BRANCH="main"
           SELECTED="${{ github.event.inputs.submodules || 'all' }}"
 
-          git commit -m "chore: update $SELECTED submodules on $TARGET_BRANCH"
-          git push origin "HEAD:$TARGET_BRANCH"
+          # [skip ci] because a pointer move is not a code change and should not
+          # kick off the other workflows.
+          git commit -m "chore: update $SELECTED submodules on $TARGET_BRANCH [skip ci]"
+
+          # main can move under us — a merged PR, or a release commit that got
+          # past the concurrency group. Nothing here is worth rebasing: on a
+          # rejection, take the branch as it now stands and re-point the
+          # submodules at their current tips, which is the whole job anyway.
+          for attempt in 1 2 3 4 5; do
+            if git push origin "HEAD:$TARGET_BRANCH"; then
+              exit 0
+            fi
+
+            echo "Push rejected (attempt ${attempt}/5) — redoing on the current ${TARGET_BRANCH}."
+            git fetch origin "$TARGET_BRANCH"
+            git reset --hard "origin/$TARGET_BRANCH"
+
+            for path in packages/client packages/server packages/sfu packages/image-worker; do
+              [[ -d "$path" ]] || continue
+              git -C "$path" fetch origin main
+              git -C "$path" checkout -B main origin/main
+              git add "$path"
+            done
+
+            if git diff --cached --quiet; then
+              echo "Nothing left to update after refresh."
+              exit 0
+            fi
+
+            git commit -m "chore: update $SELECTED submodules on $TARGET_BRANCH [skip ci]"
+            sleep $(( attempt * 5 ))
+          done
+
+          echo "Could not push the submodule update after 5 attempts." >&2
+          exit 1

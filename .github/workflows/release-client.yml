@@ -70,8 +70,29 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Clone from the URL rather than resolving the recorded gitlink. A
+          # pointer at a commit that is not on the remote kills the job before
+          # it reaches the code that would repair it — the same failure that
+          # forced #48 to be done by hand. All three are moved to their own main
+          # below, so the recorded value is discarded anyway.
+          for path in packages/client packages/server packages/sfu; do
+            if [[ -e "$path/.git" ]]; then
+              continue
+            fi
+            name=$(git config -f .gitmodules --get-regexp '\.path$' \
+              | awk -v p="$path" '$2 == p { print $1 }' \
+              | sed 's/^submodule\.//; s/\.path$//')
+            url=$(git config -f .gitmodules --get "submodule.${name}.url")
+            if [[ -z "$url" ]]; then
+              echo "No URL in .gitmodules for $path — skipping."
+              continue
+            fi
+            echo "Cloning $path from $url"
+            rm -rf "$path"
+            git clone --quiet "$url" "$path"
+          done
+
           git submodule sync -- packages/client packages/server packages/sfu
-          git submodule update --init --force -- packages/client packages/server packages/sfu
 
       - name: Configure client repository authentication
         shell: bash
@@ -87,13 +108,26 @@ jobs:
 
           git -C packages/client remote set-url origin "https://x-access-token:${RELEASE_PAT}@github.com/Gryt-chat/client.git"
 
-      - name: Move client submodule to client main
+      - name: Move release submodules to their main
         shell: bash
         run: |
           set -euo pipefail
 
-          git -C packages/client fetch origin main
-          git -C packages/client checkout -B main origin/main
+          # Release from what is on each submodule's main, not from the
+          # superproject's gitlink.
+          #
+          # The client was already handled this way. server and sfu were not,
+          # so they came from the gitlink — which update-submodules.yml moves,
+          # and which shares this workflow's concurrency group. Only one run per
+          # group can be pending, so merging several PRs in quick succession
+          # leaves the queued sweeps cancelling each other and the pointers
+          # several commits behind. That is exactly how a release ends up
+          # shipping embedded binaries that disagree with the client.
+          for path in packages/client packages/server packages/sfu; do
+            git -C "$path" fetch origin main
+            git -C "$path" checkout -B main origin/main
+            echo "$path -> $(git -C "$path" rev-parse --short HEAD)"
+          done
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -458,7 +492,7 @@ jobs:
           outcome=""
           for attempt in 1 2 3 4 5; do
             apply_release_metadata
-            git add release.json .release/manifest.json packages/client
+            git add release.json .release/manifest.json packages/client packages/server packages/sfu
 
             if git diff --cached --quiet; then
               echo "No release metadata changes to commit."

@@ -81,8 +81,29 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Clone from the .gitmodules URL rather than resolving the recorded
+          # gitlink. A pointer at a commit that is not on the remote kills the
+          # job before it reaches anything that could repair it — the failure
+          # that forced #48 to be done by hand. Every one of these is moved to
+          # its own main below, so the recorded value is discarded anyway.
+          for path in packages/server packages/sfu packages/image-worker; do
+            if [[ -e "$path/.git" ]]; then
+              continue
+            fi
+            name=$(git config -f .gitmodules --get-regexp '\.path$' \
+              | awk -v p="$path" '$2 == p { print $1 }' \
+              | sed 's/^submodule\.//; s/\.path$//')
+            url=$(git config -f .gitmodules --get "submodule.${name}.url")
+            if [[ -z "$url" ]]; then
+              echo "No URL in .gitmodules for $path — skipping."
+              continue
+            fi
+            echo "Cloning $path from $url"
+            rm -rf "$path"
+            git clone --quiet "$url" "$path"
+          done
+
           git submodule sync -- packages/server packages/sfu packages/image-worker
-          git submodule update --init --force -- packages/server packages/sfu packages/image-worker
 
       - name: Configure cross-repo authentication
         shell: bash
@@ -97,6 +118,28 @@ jobs:
           fi
 
           git -C packages/server remote set-url origin "https://x-access-token:${RELEASE_PAT}@github.com/Gryt-chat/server.git"
+
+      - name: Move release submodules to their main
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Release from what is on each submodule's main, not from the
+          # superproject's gitlink.
+          #
+          # The gitlink is moved by update-submodules.yml, which shares this
+          # workflow's concurrency group. GitHub allows one pending run per
+          # group, so merging several PRs in quick succession leaves the queued
+          # sweeps cancelling each other and the pointers several commits
+          # behind. Releasing off a stale pointer ships a server and SFU that
+          # silently disagree with the client.
+          #
+          # release-client.yml already did this for packages/client.
+          for path in packages/server packages/sfu packages/image-worker; do
+            git -C "$path" fetch origin main
+            git -C "$path" checkout -B main origin/main
+            echo "$path -> $(git -C "$path" rev-parse --short HEAD)"
+          done
 
       - name: Set up Git user
         shell: bash
@@ -587,10 +630,16 @@ jobs:
 
           for attempt in 1 2 3 4 5; do
             apply_server_version
-            git add release.json
+            # Gitlinks go in alongside release.json so a release also brings
+            # the superproject's pointers up to date rather than leaving it to
+            # a sweep that may be cancelled. The `git reset --hard` below
+            # rewinds the superproject only — the submodule checkouts stay on
+            # their main, so re-staging after a rejected push picks up the same
+            # commits.
+            git add release.json packages/server packages/sfu packages/image-worker
 
             if git diff --cached --quiet; then
-              echo "No release.json changes to commit."
+              echo "Nothing to commit — release.json and gitlinks are current."
               exit 0
             fi
 

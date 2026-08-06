@@ -6,11 +6,17 @@ name: Update Submodules
 # the input would be a choice of one.
 
 on:
-  # Every 15 minutes, so a merge in a submodule reaches the superproject without
-  # anyone remembering to move the pointer. GitHub delays scheduled runs under
-  # load, so treat this as "shortly" rather than "on the quarter hour".
+  # How this normally runs: each submodule repo pings us when something lands on
+  # its main, and the pointer moves within seconds.
+  repository_dispatch:
+    types: [submodule-updated]
+
+  # Backstop only. GitHub throttles scheduled runs on quiet repositories — this
+  # was set to every 15 minutes and delivered one run in two hours — so the
+  # schedule cannot be the primary trigger. Hourly is enough to catch a dispatch
+  # that never arrived.
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "17 * * * *"
 
   workflow_dispatch:
     inputs:
@@ -25,6 +31,9 @@ on:
           - server
           - sfu
           - image-worker
+          - docs
+          - site
+          - auth
 
 permissions:
   contents: write
@@ -61,8 +70,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          git submodule sync -- packages/client packages/server packages/sfu packages/image-worker
-          git submodule update --init --force -- packages/client packages/server packages/sfu packages/image-worker
+          SUBMODULES="packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth"
+
+          git submodule sync -- $SUBMODULES
+          git submodule update --init --force -- $SUBMODULES
 
       - name: Update selected submodules
         shell: bash
@@ -110,6 +121,21 @@ jobs:
             update_submodule "packages/image-worker" "$DEFAULT_SUBMODULE_BRANCH"
           fi
 
+          # docs, site and auth were missing here, so their pointers only ever
+          # moved when someone did it by hand. That is why docs and site had to
+          # be bumped manually during the llms.txt work.
+          if [[ "$SELECTED" == "all" || "$SELECTED" == "docs" ]]; then
+            update_submodule "packages/docs" "$DEFAULT_SUBMODULE_BRANCH"
+          fi
+
+          if [[ "$SELECTED" == "all" || "$SELECTED" == "site" ]]; then
+            update_submodule "packages/site" "$DEFAULT_SUBMODULE_BRANCH"
+          fi
+
+          if [[ "$SELECTED" == "all" || "$SELECTED" == "auth" ]]; then
+            update_submodule "packages/auth" "$DEFAULT_SUBMODULE_BRANCH"
+          fi
+
       - name: Commit changes
         shell: bash
         run: |
@@ -140,7 +166,7 @@ jobs:
             git fetch origin "$TARGET_BRANCH"
             git reset --hard "origin/$TARGET_BRANCH"
 
-            for path in packages/client packages/server packages/sfu packages/image-worker; do
+            for path in packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth; do
               [[ -d "$path" ]] || continue
               git -C "$path" fetch origin main
               git -C "$path" checkout -B main origin/main

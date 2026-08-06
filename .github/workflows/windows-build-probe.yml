@@ -1,0 +1,180 @@
+name: Windows build probe
+
+# Reproduces the embedded-server build on a Windows runner in isolation, so the
+# better-sqlite3 native build can be iterated on without cutting a release each
+# time. Everything after that step — lint, typecheck, electron packaging, docker,
+# signing — is skipped, which takes a ~25 minute release run down to a few minutes.
+#
+# Deliberately NOT in the Discord CI notification watch list. This workflow is
+# expected to fail while it is being used for its purpose, and those failures
+# should not reach #ci.
+#
+# Restored from 77f64e9^ for GRYT-26. Delete it again once the Windows build is
+# unpinned — GRYT-25 did exactly that in #37.
+#
+# Push-triggered rather than workflow_dispatch: a dispatchable workflow has to
+# exist on the default branch, and the whole point is to test this before
+# anything lands on main.
+
+on:
+  push:
+    branches:
+      - claude/GRYT-26-unpin-windows-runner
+
+jobs:
+  probe:
+    name: ${{ matrix.runner }} / npm ${{ matrix.npm }}
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The baseline. Expected to fail: this is the current windows-latest
+          # with whatever npm Node 22 ships, which is the combination GRYT-25
+          # pinned away from. If it passes, the runner image moved and no npm
+          # change is needed at all.
+          - runner: windows-latest
+            npm: bundled
+
+          # The candidate. npm 12 is the first release line to bundle node-gyp
+          # 13, which is where nodejs/node-gyp#3338 "fix windows vs2026 version"
+          # landed. VS 2026 is Visual Studio 18.
+          - runner: windows-latest
+            npm: "12"
+
+          # Control. This is what the release currently pins to, so it should
+          # pass. If it fails, something other than the runner image is broken
+          # and the whole comparison is worthless.
+          - runner: windows-2022
+            npm: bundled
+
+    steps:
+      - name: Checkout monorepo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      - name: Checkout required submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git submodule sync -- packages/client packages/server packages/sfu
+          git submodule update --init --force -- packages/client packages/server packages/sfu
+
+      - name: Report toolchain the runner actually has
+        shell: pwsh
+        run: |
+          Write-Host "Runner image: ${{ matrix.runner }}"
+          $vs = "C:\Program Files\Microsoft Visual Studio"
+          if (Test-Path $vs) {
+            Write-Host "Visual Studio installs found:"
+            Get-ChildItem $vs -Directory | ForEach-Object { Write-Host "  $($_.Name)" }
+          } else {
+            Write-Host "No Visual Studio directory at $vs"
+          }
+          Write-Host "VCINSTALLDIR = $env:VCINSTALLDIR"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "yarn"
+          cache-dependency-path: packages/client/yarn.lock
+
+      - name: Upgrade npm
+        if: matrix.npm != 'bundled'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g "npm@${{ matrix.npm }}"
+
+      - name: Report npm and its bundled node-gyp
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "node:  $(node --version)"
+          echo "npm:   $(npm --version)"
+
+          # node-gyp is bundled inside the npm CLI, not resolved from any
+          # lockfile in this repo. build-embedded-server.mjs shells out to
+          # `npm install` and `npm rebuild`, so this is the copy that does the
+          # native build — the node-gyp in packages/client/yarn.lock belongs to
+          # @electron/rebuild and is never reached on this path.
+          NPM_ROOT="$(npm root -g)"
+          node -e '
+            const { join } = require("path");
+            const root = process.argv[1];
+            try {
+              console.log("node-gyp: " + require(join(root, "npm", "node_modules", "node-gyp", "package.json")).version);
+            } catch (err) {
+              console.log("node-gyp: could not resolve under " + root + " (" + err.message + ")");
+            }
+          ' "$NPM_ROOT"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+          cache-dependency-path: packages/sfu/go.sum
+
+      - name: Install client dependencies
+        working-directory: packages/client
+        shell: bash
+        run: |
+          set -euo pipefail
+          yarn install --frozen-lockfile --ignore-engines
+
+      - name: Install server dependencies
+        working-directory: packages/server
+        shell: bash
+        run: |
+          set -euo pipefail
+          yarn install --frozen-lockfile --ignore-engines
+
+      - name: Install SFU dependencies
+        working-directory: packages/sfu
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f go.mod ]]; then
+            go mod download
+          fi
+
+      - name: Set up MSVC Build Tools
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Confirm MSVC environment
+        shell: pwsh
+        run: |
+          Write-Host "VCINSTALLDIR = $env:VCINSTALLDIR"
+          if ($env:VCINSTALLDIR) {
+            Write-Host "node-gyp will take the VS Command Prompt path."
+          } else {
+            Write-Host "node-gyp will fall back to enumerating installs with PowerShell."
+          }
+
+      - name: Build embedded server and SFU
+        working-directory: packages/client
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build:embedded-server
+
+      - name: Verify embedded server dependencies
+        working-directory: packages/client
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! -d build/embedded-server/server/node_modules/better-sqlite3/build/Release ]]; then
+            echo "better-sqlite3 native build output is missing."
+            exit 1
+          fi
+
+          echo "better-sqlite3 built successfully."
+          ls build/embedded-server/server/node_modules/better-sqlite3/build/Release

@@ -28,6 +28,26 @@
         "cd packages/docs && yarn dev"
       ],
       "port": 3000
+    },
+    {
+      "name": "sfu",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-lc",
+        "export PATH=\"/usr/local/go/bin:$PATH\"; cd packages/sfu && ./start.sh"
+      ],
+      "port": 5005,
+      "autoPort": false
+    },
+    {
+      "name": "server",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-lc",
+        "cd packages/server && env PORT=5001 SERVER_NAME=ws1 SERVER_INSTANCE_ID=ws1 DATA_DIR=./data/ws1 DISABLE_S3=true JWT_SECRET=dev-secret-do-not-use-in-production CORS_ORIGIN=http://127.0.0.1:15738,http://localhost:3666,http://127.0.0.1:3666 SFU_WS_HOST=ws://127.0.0.1:5005 STUN_SERVERS=stun:stun.l.google.com:19302 yarn dev"
+      ],
+      "port": 5001,
+      "autoPort": false
     }
   ]
 }

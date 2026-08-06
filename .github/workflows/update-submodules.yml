@@ -56,7 +56,13 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          submodules: recursive
+          # Deliberately not `submodules: recursive`. That clones each submodule
+          # at the recorded gitlink, so a pointer at a commit which is not on the
+          # remote — an unpushed local commit, a force-pushed branch — kills the
+          # checkout before this job reaches the code that would repair it. That
+          # happened on 2026-08-06 and needed a manual fix. The job re-points
+          # every submodule anyway, so the recorded SHA is of no use here.
+          submodules: false
 
       - name: Set up Git user
         shell: bash
@@ -72,8 +78,31 @@ jobs:
 
           SUBMODULES="packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth"
 
+          # Clone straight from the URL rather than `git submodule update`,
+          # which insists on the recorded gitlink and so fails on a broken one.
+          # Nothing here reads that SHA — each submodule is moved to its own
+          # origin/main a moment later.
+          for path in $SUBMODULES; do
+            if [[ -e "$path/.git" ]]; then
+              continue
+            fi
+
+            name=$(git config -f .gitmodules --get-regexp '\.path$' \
+              | awk -v p="$path" '$2 == p { print $1 }' \
+              | sed 's/^submodule\.//; s/\.path$//')
+            url=$(git config -f .gitmodules --get "submodule.${name}.url")
+
+            if [[ -z "$url" ]]; then
+              echo "No URL in .gitmodules for $path — skipping."
+              continue
+            fi
+
+            echo "Cloning $path from $url"
+            rm -rf "$path"
+            git clone --quiet "$url" "$path"
+          done
+
           git submodule sync -- $SUBMODULES
-          git submodule update --init --force -- $SUBMODULES
 
       - name: Update selected submodules
         shell: bash

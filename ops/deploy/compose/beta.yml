@@ -7,7 +7,13 @@ services:
     container_name: gryt-beta-minio
     command: ["server", "/data", "--console-address", ":9001"]
     ports:
-      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      # 9002, not 9000: beta and prod share one Docker host, and `server` runs
+      # with host networking and `minio` pointed at 127.0.0.1 (see below). A beta
+      # brought up without MINIO_PORT set would fail to publish 9000 — prod has
+      # it — and beta's server would then resolve minio:9000 to *prod's* object
+      # storage. That is a cross-environment data path, not just a port clash,
+      # so the default has to differ rather than relying on the env file.
+      - "127.0.0.1:${MINIO_PORT:-9002}:9000"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
@@ -116,7 +122,13 @@ services:
       GRYT_AUTH_API: ${GRYT_AUTH_API:-https://auth.gryt.chat}
       GRYT_IDENTITY_JWKS_URL: ${GRYT_IDENTITY_JWKS_URL:-https://id.gryt.chat/.well-known/jwks.json}
       DATA_DIR: /data
-      S3_ENDPOINT: http://minio:${MINIO_PORT:-9000}
+      # ${MINIO_PORT} here is deliberate and is NOT the same as the plain
+      # `minio:9000` the image-worker uses. This service is `network_mode: host`
+      # with `minio` mapped to 127.0.0.1, so it reaches MinIO through the port
+      # published on the host. The image-worker is on the compose bridge network,
+      # where `minio` is the container and the port is always 9000. Both are
+      # right; making them match would break one of them.
+      S3_ENDPOINT: http://minio:${MINIO_PORT:-9002}
       S3_REGION: auto
       S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
       S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}

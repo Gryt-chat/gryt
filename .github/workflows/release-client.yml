@@ -116,13 +116,13 @@ jobs:
           # Release from what is on each submodule's main, not from the
           # superproject's gitlink.
           #
-          # The client was already handled this way. server and sfu were not,
-          # so they came from the gitlink — which update-submodules.yml moves,
-          # and which shares this workflow's concurrency group. Only one run per
-          # group can be pending, so merging several PRs in quick succession
-          # leaves the queued sweeps cancelling each other and the pointers
-          # several commits behind. That is exactly how a release ends up
-          # shipping embedded binaries that disagree with the client.
+          # The client was already handled this way. server and sfu were not, so
+          # they came from the gitlink — which only moves when
+          # update-submodules.yml runs. That sweep no longer shares this
+          # workflow's concurrency group, so it is far less likely to be delayed
+          # now, but a release should not depend on it having run at all: a
+          # dispatch that never arrived, or a sweep still in flight, would
+          # otherwise ship embedded binaries that disagree with the client.
           for path in packages/client packages/server packages/sfu; do
             git -C "$path" fetch origin main
             git -C "$path" checkout -B main origin/main

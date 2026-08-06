@@ -127,12 +127,11 @@ jobs:
           # Release from what is on each submodule's main, not from the
           # superproject's gitlink.
           #
-          # The gitlink is moved by update-submodules.yml, which shares this
-          # workflow's concurrency group. GitHub allows one pending run per
-          # group, so merging several PRs in quick succession leaves the queued
-          # sweeps cancelling each other and the pointers several commits
-          # behind. Releasing off a stale pointer ships a server and SFU that
-          # silently disagree with the client.
+          # The gitlink only moves when update-submodules.yml runs. That sweep no
+          # longer shares this workflow's concurrency group, so it is far less
+          # likely to be delayed now, but a release should not depend on it
+          # having run at all — releasing off a stale pointer ships a server and
+          # SFU that silently disagree with the client.
           #
           # release-client.yml already did this for packages/client.
           for path in packages/server packages/sfu packages/image-worker; do

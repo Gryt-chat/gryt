@@ -39,11 +39,22 @@ permissions:
   contents: write
 
 concurrency:
-  # Shared with release-client.yml and release-server.yml on purpose. All three
-  # commit to the same branch, and this one now runs unattended — without the
-  # shared group it would be a third writer racing the releases for the push.
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
+  # This used to share the `release-${{ github.ref }}` group with both release
+  # workflows, on the grounds that a third unattended writer to main would race
+  # them for the push. It does race them — but the push below already handles
+  # that itself, retrying five times and re-pointing the submodules against
+  # whatever main has become. The shared group was guarding something that no
+  # longer needs guarding, and it cost more than it gave: GitHub keeps only one
+  # pending run per group, so a burst of merges left queued sweeps cancelling
+  # each other, the hourly backstop included. Three gitlinks sat stale on
+  # 2026-08-06 because of it.
+  group: submodule-sweep-${{ github.ref }}
+
+  # Safe to cancel, because the sweep is idempotent — it points every submodule
+  # at its current main, so the newest run alone produces the same result as
+  # running all of them in order. During a burst this collapses to one run
+  # instead of a queue where only the last survives anyway.
+  cancel-in-progress: true
 
 jobs:
   update-submodules:

@@ -73,9 +73,14 @@ jobs:
           # Clone from the URL rather than resolving the recorded gitlink. A
           # pointer at a commit that is not on the remote kills the job before
           # it reaches the code that would repair it — the same failure that
-          # forced #48 to be done by hand. All three are moved to their own main
+          # forced #48 to be done by hand. All four are moved to their own main
           # below, so the recorded value is discarded anyway.
-          for path in packages/client packages/server packages/sfu; do
+          #
+          # This list and the one in "Move release submodules to their main"
+          # have to hold the same paths. A path in the second but not the first
+          # is never cloned, so the fetch there runs against a directory that is
+          # not a repository and takes the job down.
+          for path in packages/client packages/server packages/sfu packages/image-worker; do
             if [[ -e "$path/.git" ]]; then
               continue
             fi
@@ -92,7 +97,7 @@ jobs:
             git clone --quiet "$url" "$path"
           done
 
-          git submodule sync -- packages/client packages/server packages/sfu
+          git submodule sync -- packages/client packages/server packages/sfu packages/image-worker
 
       - name: Configure client repository authentication
         shell: bash
@@ -116,14 +121,14 @@ jobs:
           # Release from what is on each submodule's main, not from the
           # superproject's gitlink.
           #
-          # The client was already handled this way. server and sfu were not, so
+          # The client was already handled this way. The others were not, so
           # they came from the gitlink — which only moves when
           # update-submodules.yml runs. That sweep no longer shares this
           # workflow's concurrency group, so it is far less likely to be delayed
           # now, but a release should not depend on it having run at all: a
           # dispatch that never arrived, or a sweep still in flight, would
           # otherwise ship embedded binaries that disagree with the client.
-          for path in packages/client packages/server packages/sfu; do
+          for path in packages/client packages/server packages/sfu packages/image-worker; do
             git -C "$path" fetch origin main
             git -C "$path" checkout -B main origin/main
             echo "$path -> $(git -C "$path" rev-parse --short HEAD)"
@@ -403,6 +408,7 @@ jobs:
           CLIENT_SHA="$(git -C packages/client rev-parse HEAD)"
           SERVER_SHA="$(git -C packages/server rev-parse HEAD)"
           SFU_SHA="$(git -C packages/sfu rev-parse HEAD)"
+          IMAGE_WORKER_SHA="$(git -C packages/image-worker rev-parse HEAD)"
 
           node -e '
             const fs = require("fs");
@@ -415,6 +421,7 @@ jobs:
               clientSha,
               serverSha,
               sfuSha,
+              imageWorkerSha,
             ] = process.argv.slice(1);
 
             const manifest = {
@@ -439,12 +446,17 @@ jobs:
                   repo: "Gryt-chat/sfu",
                   path: "packages/sfu",
                   commit: sfuSha
+                },
+                imageWorker: {
+                  repo: "Gryt-chat/image-worker",
+                  path: "packages/image-worker",
+                  commit: imageWorkerSha
                 }
               }
             };
 
             fs.writeFileSync(".release/manifest.json", `${JSON.stringify(manifest, null, 2)}\n`);
-          ' "$VERSION" "$BASE_VERSION" "$CHANNEL" "$CLIENT_SHA" "$SERVER_SHA" "$SFU_SHA"
+          ' "$VERSION" "$BASE_VERSION" "$CHANNEL" "$CLIENT_SHA" "$SERVER_SHA" "$SFU_SHA" "$IMAGE_WORKER_SHA"
 
           cat .release/manifest.json
 
@@ -492,7 +504,14 @@ jobs:
           outcome=""
           for attempt in 1 2 3 4 5; do
             apply_release_metadata
-            git add release.json .release/manifest.json packages/client packages/server packages/sfu
+            # Every submodule moved above, so the tag records what was built.
+            # build-electron checks out the tag and initialises submodules from
+            # its gitlinks: a path left out here is built from whatever main
+            # happened to point at, while manifest.json names the commit the
+            # release actually chose. That disagreement is the bug #51 fixed for
+            # server and sfu, and it applies to the worker for the same reason.
+            git add release.json .release/manifest.json \
+              packages/client packages/server packages/sfu packages/image-worker
 
             if git diff --cached --quiet; then
               echo "No release metadata changes to commit."
@@ -562,7 +581,8 @@ jobs:
 
             This release was built from the monorepo with pinned submodule commits.
 
-            See `manifest.json` for the exact client, server, and SFU commits.
+            See `manifest.json` for the exact client, server, SFU and image
+            worker commits.
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
@@ -611,8 +631,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          git submodule sync -- packages/client packages/server packages/sfu
-          git submodule update --init --force -- packages/client packages/server packages/sfu
+          git submodule sync -- packages/client packages/server packages/sfu packages/image-worker
+          git submodule update --init --force -- packages/client packages/server packages/sfu packages/image-worker
 
       - name: Checkout AUR submodule
         if: runner.os == 'Linux'
@@ -712,6 +732,18 @@ jobs:
           if [[ -f go.mod ]]; then
             go mod download
           fi
+
+      # build-embedded-server.mjs runs `npm run build` in this directory, and
+      # the worker's build script is a bare `tsc`. Without this the compiler
+      # isn't on disk and the embedded server build fails on a fresh checkout.
+      # The install of the worker's *runtime* dependencies is a separate thing
+      # the build script does, into its own output directory.
+      - name: Install image worker dependencies
+        working-directory: packages/image-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          yarn install --frozen-lockfile --ignore-engines
 
       - name: Type-check client
         working-directory: packages/client

@@ -37,16 +37,22 @@ jobs:
           - runner: windows-latest
             npm: bundled
 
-          # The candidate. nodejs/node-gyp#3338 "fix windows vs2026 version"
-          # landed in node-gyp 13.0.1 and was not backported — 12.4.0 predates
-          # it. npm bundles node-gyp, and the whole 11.x line tops out at
-          # ^12.4.0 (11.6.2 is on ^11.4.2, 11.19.0 the newest on ^12.4.0), so
-          # npm 12 is the first line that carries the fix. VS 2026 is VS 18.
+          # The candidate: keep npm where it is, and point it at a node-gyp new
+          # enough to know what VS 18 is.
           #
-          # npm 12.0.2 needs node ^22.22.2 || ^24.15.0 || >=26.0.0 and the
-          # runner has 22.23.1, so this does not drag a Node bump with it.
+          # Upgrading npm was the obvious move and it does not work. npm 12.0.2
+          # declares node-gyp ^13.0.0 but *bundles* a pinned 13.0.0, which is
+          # one patch short of the fix — nodejs/node-gyp#3338 landed in 13.0.1.
+          # It also breaks build-embedded-server.mjs outright: npm 12 rejects
+          # --build-from-source with EUNKNOWNCONFIG, ignores the npm_config_*
+          # Electron settings the script relies on, and blocks install scripts
+          # by default so better-sqlite3 never builds at all.
+          #
+          # npm_config_node_gyp is the supported override and leaves npm's own
+          # behaviour alone.
           - runner: windows-latest
-            npm: "12"
+            npm: bundled
+            nodeGyp: "13.0.1"
 
           # Control. This is what the release currently pins to, so it should
           # pass. If it fails, something other than the runner image is broken
@@ -95,6 +101,26 @@ jobs:
         run: |
           set -euo pipefail
           npm install -g "npm@${{ matrix.npm }}"
+
+      - name: Override node-gyp
+        if: matrix.nodeGyp != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          npm install -g "node-gyp@${{ matrix.nodeGyp }}"
+
+          # npm reads npm_config_node_gyp to decide which node-gyp to shell out
+          # to, so this replaces the bundled copy without touching npm itself.
+          GYP="$(npm root -g)/node-gyp/bin/node-gyp.js"
+          if [[ ! -f "$GYP" ]]; then
+            echo "node-gyp not where expected: $GYP"
+            ls "$(npm root -g)"
+            exit 1
+          fi
+
+          echo "npm_config_node_gyp=$GYP" >> "$GITHUB_ENV"
+          echo "Overrode node-gyp -> $GYP"
 
       - name: Report npm and its bundled node-gyp
         shell: bash

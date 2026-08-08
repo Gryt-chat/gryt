@@ -104,6 +104,21 @@ Dropping a task into **Done** sets its `done` flag automatically — no separate
 If something merges outside a PR, or CI fails, **check the Review column at the start of
 Vikunja work and close anything whose PR has landed.**
 
+### Anything you defer gets a task
+
+If you write "separate decision", "out of scope", "your call" or "follow-up" in a PR
+body, **open a task for it in the same breath and link it.** A merged PR is where notes
+go to die: it drops off the open list, nobody reads it again, and the thing you carefully
+identified is gone.
+
+That is not hypothetical. The decision about whether to purge the SVG uploads already on
+disk — left over from a stored-XSS fix — lived only in the body of a merged PR and an
+untracked local file for a week. It surfaced again by accident, during an unrelated audit.
+
+The bar is low: a title and a paragraph saying what was found, what was decided, and what
+is still open. If it isn't worth a task, it probably wasn't worth a paragraph in the PR
+either.
+
 ## Submodules
 
 `packages/*` are separate repositories. Commit and push the **submodule first**, then the

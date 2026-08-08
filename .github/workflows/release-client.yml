@@ -600,12 +600,21 @@ jobs:
           # windows-latest now ships Visual Studio 18, and node-gyp 11.5.0 cannot
           # parse its version — it reports `unknown version "undefined"` and
           # refuses the toolchain even when handed it directly via VCINSTALLDIR.
-          # That breaks the better-sqlite3 native build in the embedded server,
-          # which is the only thing here needing a C++ toolchain.
+          # That broke the better-sqlite3 build in the embedded server, verified
+          # with windows-build-probe.yml: identical code and step order failed on
+          # windows-latest and passed on windows-2022. See GRYT-26.
           #
-          # Verified with windows-build-probe.yml: identical code and step order
-          # fails on windows-latest and passes on windows-2022. Unpin once
-          # node-gyp understands VS 18. See GRYT-26.
+          # That reason no longer applies. The server and the image worker are on
+          # node:sqlite, so node-gyp is out of this workflow entirely and nothing
+          # in the embedded server build compiles C++ any more.
+          #
+          # The pin stays regardless, because it was never tested against what
+          # still needs a compiler here: native/build.bat, which builds the audio
+          # and screen capture helpers. That uses MSVC directly rather than
+          # through node-gyp, so the version-parsing bug probably does not apply
+          # — but probably is not tried, and a Windows build that only breaks
+          # during a release is an expensive way to find out. Re-run the probe
+          # against build.bat before unpinning.
           - windows-2022
 
     runs-on: ${{ matrix.os }}

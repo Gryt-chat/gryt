@@ -27,6 +27,16 @@ services:
       - "${NT_SERVER_PORT:-5011}:5000"
     environment:
       PORT: "5000"
+      # Bridge networking, so the server has to listen on all interfaces or the
+      # published port reaches nothing. The server binds 127.0.0.1 unless told
+      # otherwise, and inside a bridge-networked container that is the
+      # container's own loopback.
+      #
+      # prod.yml and prod.local.yml have always set this. beta never did, and it
+      # went unnoticed because the running image predated the default — it broke
+      # the first time beta was upgraded. The neighbouring `server` in beta.yml
+      # does not need it, because network_mode: host makes 127.0.0.1 the host's.
+      HOST: "0.0.0.0"
       NODE_ENV: production
       SERVER_NAME: ${NT_SERVER_NAME:-NT (Beta)}
       SERVER_DESCRIPTION: ${NT_SERVER_DESCRIPTION:-A Gryt voice chat server (beta)}

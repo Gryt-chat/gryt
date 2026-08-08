@@ -113,6 +113,10 @@ services:
       HOST: "0.0.0.0"
       NODE_ENV: production
       SERVER_NAME: ${SERVER_NAME:-Gryt (Beta)}
+      # Where the image worker answers, so the server can ask it what version
+      # it is. Loopback because the server has host networking and the worker
+      # publishes there. Unset would simply mean no worker version is shown.
+      IMAGE_WORKER_URL: http://127.0.0.1:${IMAGE_WORKER_HEALTH_PORT:-8083}
       SERVER_DESCRIPTION: ${SERVER_DESCRIPTION:-A Gryt voice chat server (beta)}
       SERVER_PASSWORD: ${SERVER_PASSWORD:-}
       MDNS_INTERFACE: ${MDNS_INTERFACE:-}
@@ -171,6 +175,17 @@ services:
   image-worker:
     image: ghcr.io/gryt-chat/image-worker:${IMAGE_WORKER_VERSION:-latest-beta}
     container_name: gryt-beta-image-worker
+    # The server runs with host networking, so it cannot reach this container
+    # by service name — it has to come in through a published port. Bound to
+    # loopback: this is a health endpoint for the server beside it, not
+    # something the network needs.
+    #
+    # The default differs per stack on purpose. prod, prod-NT, beta and beta-NT
+    # all run a worker on one Docker host, and two of them defaulting to the
+    # same port means whichever comes up second fails to publish — or worse,
+    # a server reports the version of a different stack's worker.
+    ports:
+      - "127.0.0.1:${IMAGE_WORKER_HEALTH_PORT:-8083}:8080"
     environment:
       DATA_DIR: /data
       S3_ENDPOINT: http://minio:9000

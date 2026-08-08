@@ -600,12 +600,20 @@ jobs:
           # windows-latest now ships Visual Studio 18, and node-gyp 11.5.0 cannot
           # parse its version — it reports `unknown version "undefined"` and
           # refuses the toolchain even when handed it directly via VCINSTALLDIR.
-          # That breaks the better-sqlite3 native build in the embedded server,
-          # which is the only thing here needing a C++ toolchain.
+          # That broke the better-sqlite3 build in the embedded server, verified
+          # with windows-build-probe.yml: identical code and step order failed on
+          # windows-latest and passed on windows-2022. See GRYT-26.
           #
-          # Verified with windows-build-probe.yml: identical code and step order
-          # fails on windows-latest and passes on windows-2022. Unpin once
-          # node-gyp understands VS 18. See GRYT-26.
+          # That reason is gone. The server and the image worker are on
+          # node:sqlite now, so node-gyp is out of this workflow entirely.
+          #
+          # The pin stays anyway, because it was never re-tested for what still
+          # needs a compiler here: native/build.bat, which builds the audio and
+          # screen capture helpers. It uses MSVC directly rather than through
+          # node-gyp, so the version-parsing bug should not apply — but "should
+          # not" is not the same as tried, and a Windows build that breaks on a
+          # release is expensive. Re-run the probe against build.bat before
+          # unpinning.
           - windows-2022
 
     runs-on: ${{ matrix.os }}
@@ -759,17 +767,20 @@ jobs:
           set -euo pipefail
           npx eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0
 
-      # Must precede the embedded server build. That step runs
-      # `npm rebuild better-sqlite3 --build-from-source`, which needs a C++
-      # toolchain, and this action is what sets VCINSTALLDIR. node-gyp checks
-      # that variable before falling back to enumerating installs with
-      # PowerShell — a fallback that now fails outright, because the runner
-      # image ships Visual Studio 18 and node-gyp 11.5.0 reports it as
-      # `unknown version "undefined"`.
+      # Still required, but no longer for the reason it was added. The embedded
+      # server used to run `npm rebuild better-sqlite3 --build-from-source`
+      # here, and node-gyp needed the VCINSTALLDIR this action sets. Both the
+      # server and the image worker are on node:sqlite now, so nothing in the
+      # embedded server build compiles C++ any more.
       #
-      # The ordering was wrong before too. It only worked because the older
-      # runner image had a Visual Studio that the PowerShell fallback could
-      # identify without help.
+      # What still needs a toolchain is "Build native Windows binaries" below —
+      # native/build.bat compiles the audio and screen capture helpers. Delete
+      # this step and that one breaks, so it stays.
+      #
+      # Whether the windows-2022 pin can be lifted is a separate question. It
+      # was pinned because node-gyp 11.5.0 could not parse Visual Studio 18, and
+      # node-gyp is no longer in this path — but native/build.bat has not been
+      # tried against VS 18. That is what GRYT-26's probe is for.
       - name: Set up MSVC Build Tools Windows
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
@@ -797,21 +808,29 @@ jobs:
             exit 1
           fi
 
-          if [[ ! -d build/embedded-server/server/node_modules/better-sqlite3 ]]; then
-            echo "Missing embedded better-sqlite3 dependency."
-            echo "The packaged app will crash with: Cannot find module 'better-sqlite3'"
+          # sharp is what this checks now. better-sqlite3 was the other one, and
+          # it is gone: the server and the image worker both moved to
+          # node:sqlite, which is part of the runtime and cannot be missing from
+          # a bundle. Leaving the old check here would fail every release.
+          #
+          # sharp is still worth asserting. It ships as a per-platform optional
+          # dependency that npm resolves by os/cpu, so a bundle built on the
+          # wrong host, or an install that quietly skipped optional deps, gets a
+          # server that starts and then throws the first time anyone uploads an
+          # image.
+          if [[ ! -d build/embedded-server/server/node_modules/sharp ]]; then
+            echo "Missing embedded sharp dependency."
+            echo "The packaged app will crash with: Cannot find module 'sharp'"
             exit 1
           fi
 
-          if [[ ! -d build/embedded-server/server/node_modules/better-sqlite3/build/Release ]]; then
-            echo "Missing better-sqlite3 native build output."
-            find build/embedded-server/server/node_modules/better-sqlite3 -maxdepth 4 -type f || true
+          if [[ ! -d build/embedded-server/worker/node_modules/sharp ]]; then
+            echo "Missing sharp in the image worker bundle."
+            echo "Image jobs would queue and never be processed."
             exit 1
           fi
 
           echo "Embedded server dependencies are present."
-          echo "better-sqlite3:"
-          find build/embedded-server/server/node_modules/better-sqlite3 -maxdepth 3 -type f | sed -n '1,50p'
 
       - name: Build native audio Linux
         if: runner.os == 'Linux'

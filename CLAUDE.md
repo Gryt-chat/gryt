@@ -104,6 +104,13 @@ Dropping a task into **Done** sets its `done` flag automatically — no separate
 If something merges outside a PR, or CI fails, **check the Review column at the start of
 Vikunja work and close anything whose PR has landed.**
 
+### Release notes
+
+How they are written is in [`patch-notes-style.md`](patch-notes-style.md): prose
+first, a recap list after, facts taken from `manifest.json` diffs rather than from
+memory. It lived only in an untracked local file until it nearly went the way of
+the SVG purge decision below.
+
 ### Anything you defer gets a task
 
 If you write "separate decision", "out of scope", "your call" or "follow-up" in a PR

@@ -19,6 +19,12 @@ packages/server/src/storage/**                     # object storage
 packages/client/src/packages/common/src/auth/**    # keypair generation and storage
 ```
 
+**Review-required means it gets reviewed. It does not mean hands off.** Fix the bug where
+the bug is. Half a fix, shipped because the other half was in a listed path, is worse than
+either doing all of it or leaving it alone — it looks finished and isn't, and Sivert is the
+one who finds out. If a change belongs in one of these paths, write it, explain it, and let
+the review do its job.
+
 Rules for these paths:
 
 - **Always a branch and a PR. Never commit to `main` and never merge your own PR here** —
@@ -27,8 +33,9 @@ Rules for these paths:
   in practice, so it will not get a real review. Split it up.
 - **Say what to look at.** In the PR body, call out the parts you're least sure about, and
   anything that changes behaviour rather than shape.
-- **Don't bundle.** A change to a review-required path shouldn't ride along with unrelated
-  edits elsewhere.
+- **Don't bundle *unrelated* edits.** A change here shouldn't carry along a docs typo or a
+  CI tweak. The other half of the same fix is not unrelated — that belongs with it, or in
+  its own PR opened at the same time and cross-linked. Don't drop it.
 
 Two of these look like exceptions but aren't:
 

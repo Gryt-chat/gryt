@@ -104,8 +104,9 @@ rarely earns that. A picture of the new state alone is fine.
 The mechanics, all of which are handled by the changelog page rather than by the
 note:
 
-- **Capped at 440px and centred.** A full app window at column width dominates the
-  paragraph that just explained it. Click for full size.
+- **Full column width, centred.** These are screenshots of a whole app window;
+  any smaller and the detail being described cannot be made out. Click for full
+  size.
 - **Never upscaled.** A clip is drawn at its own pixels or smaller. Blowing up a
   screen capture makes it look worse than the interface it is showing.
 - **Clips play themselves, silently, on a loop, with no controls** — use `<Clip>`,

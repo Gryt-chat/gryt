@@ -50,8 +50,40 @@ CORS_ORIGIN="${CORS_ORIGIN:-http://127.0.0.1:15738,http://localhost:3666,http://
 # another machine has to reach ws1/ws2 over the wire.
 HOST="${HOST:-127.0.0.1}"
 GRYT_AUTH_MODE="${GRYT_AUTH_MODE:-required}"
-GRYT_OIDC_ISSUER="${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}"
 GRYT_OIDC_AUDIENCE="${GRYT_OIDC_AUDIENCE:-gryt-web}"
+
+# ── Local auth ───────────────────────────────────────────────────────
+#
+# Dev used to authenticate against production: real Keycloak, real identity
+# CA, real accounts. That made every dev session depend on prod being up, and
+# left no way to make a throwaway account without making a real one.
+#
+# Keycloak and its Postgres run in containers because they have to. The
+# identity CA runs on the host, and that is deliberate rather than
+# inconsistent: it has to reach Keycloak at the same URL string that appears in
+# the token's `iss` claim, and "localhost:18080" means different things on
+# either side of a container boundary. In Docker that forces the issuer to be
+# the machine's LAN address, which then breaks every time you change network.
+# On the host it is plain localhost and the problem does not exist.
+#
+# Set DEV_WITH_AUTH=0 in ops/.env to go back to production auth.
+DEV_WITH_AUTH="${DEV_WITH_AUTH:-1}"
+KEYCLOAK_PORT="${KEYCLOAK_PORT:-18080}"
+KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
+KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
+IDENTITY_PORT="${IDENTITY_PORT:-18081}"
+LOCAL_OIDC_ISSUER="http://localhost:${KEYCLOAK_PORT}/realms/gryt"
+LOCAL_IDENTITY_URL="http://localhost:${IDENTITY_PORT}"
+
+if [[ "$DEV_WITH_AUTH" == "1" ]]; then
+  GRYT_OIDC_ISSUER="${GRYT_OIDC_ISSUER:-$LOCAL_OIDC_ISSUER}"
+  # The servers verify identity certificates against this, and the local CA
+  # signs with its own key, so it has to be trusted explicitly.
+  GRYT_TRUSTED_CERT_ISSUERS="${GRYT_TRUSTED_CERT_ISSUERS:-$LOCAL_IDENTITY_URL}"
+else
+  GRYT_OIDC_ISSUER="${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}"
+  GRYT_TRUSTED_CERT_ISSUERS="${GRYT_TRUSTED_CERT_ISSUERS:-https://id.gryt.chat}"
+fi
 JWT_SECRET="${JWT_SECRET:-dev-secret-do-not-use-in-production}"
 SERVER_PASSWORD="${SERVER_PASSWORD-changeme}"
 
@@ -123,10 +155,67 @@ if [[ "$DEV_WITH_S3" == "1" ]]; then
   echo ""
 fi
 
+# ── Local auth (Keycloak + Postgres) ─────────────────────────────────
+if [[ "$DEV_WITH_AUTH" == "1" ]]; then
+  if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
+    # Warn and carry on rather than refuse. Wanting to work on the client is
+    # not a reason to be blocked on a container runtime.
+    echo "Docker is not available — falling back to production auth." >&2
+    echo "Set DEV_WITH_AUTH=0 in ops/.env to silence this." >&2
+    DEV_WITH_AUTH=0
+    GRYT_OIDC_ISSUER="https://auth.gryt.chat/realms/gryt"
+    GRYT_TRUSTED_CERT_ISSUERS="https://id.gryt.chat"
+  else
+    echo "Starting local auth (Keycloak + Postgres)..."
+    # The compose file defaults to the production hostname, which Keycloak
+    # enforces — it has to be told it is being reached on localhost or every
+    # request 404s. GRYT_IMPORT_REALM=1 so a fresh database gets the gryt
+    # realm; on subsequent starts the import is a no-op.
+    export GRYT_KEYCLOAK_PORT="$KEYCLOAK_PORT"
+    export GRYT_KEYCLOAK_HOSTNAME_URL="http://localhost:${KEYCLOAK_PORT}"
+    export GRYT_KEYCLOAK_HOSTNAME_ADMIN_URL="http://localhost:${KEYCLOAK_PORT}"
+    export GRYT_IMPORT_REALM=1
+    export GRYT_KEYCLOAK_ADMIN_USERNAME="$KEYCLOAK_ADMIN_USER"
+    export GRYT_KEYCLOAK_ADMIN_PASSWORD="$KEYCLOAK_ADMIN_PASSWORD"
+
+    docker compose -f packages/auth/docker-compose.keycloak.yml \
+      up -d postgres keycloak \
+      >/dev/null 2>&1 || docker compose -f packages/auth/docker-compose.keycloak.yml up -d postgres keycloak
+
+    wait_for_http "http://localhost:${KEYCLOAK_PORT}/realms/gryt/.well-known/openid-configuration" "Keycloak realm" 120 || {
+      echo "Keycloak did not come up with the gryt realm." >&2
+      echo "Check: docker logs gryt-auth-keycloak-import" >&2
+    }
+
+    # Make sure there is an admin to log in as.
+    #
+    # KC_BOOTSTRAP_ADMIN_* only creates one when the database is empty, and the
+    # realm import runs first and initialises the master realm — so on a fresh
+    # volume the database is no longer empty by the time the server starts, the
+    # bootstrap is skipped, and you get a Keycloak with no way into the console.
+    # Creating it explicitly is idempotent enough: it fails harmlessly when the
+    # user already exists.
+    #
+    # The management port has to be moved because the running server already
+    # holds 9000 inside that container.
+    if ! curl -fsS -X POST "http://localhost:${KEYCLOAK_PORT}/realms/master/protocol/openid-connect/token" \
+        -d "client_id=admin-cli" -d "username=${KEYCLOAK_ADMIN_USER}" \
+        -d "password=${KEYCLOAK_ADMIN_PASSWORD}" -d "grant_type=password" >/dev/null 2>&1; then
+      echo "Creating Keycloak admin user '${KEYCLOAK_ADMIN_USER}'..."
+      docker exec -e KC_PASS="${KEYCLOAK_ADMIN_PASSWORD}" -e KC_HTTP_MANAGEMENT_PORT=9099 \
+        gryt-auth-keycloak /opt/keycloak/bin/kc.sh bootstrap-admin user \
+        --username "${KEYCLOAK_ADMIN_USER}" --password:env KC_PASS >/dev/null 2>&1 \
+        || echo "  (could not create it — check: docker logs gryt-auth-keycloak)" >&2
+    fi
+    echo ""
+  fi
+fi
+
 # ── Install JS dependencies ──────────────────────────────────────────
 echo "Installing JS dependencies..."
 (cd packages/client && yarn install --silent) &
 (cd packages/server && yarn install --silent) &
+[[ "$DEV_WITH_AUTH" == "1" ]] && (cd packages/auth/identity && yarn install --silent) &
 wait
 echo ""
 
@@ -134,12 +223,32 @@ echo ""
 WS_S3_ENV="$S3_DISABLE_ENV"
 [[ "$DEV_WITH_S3" == "1" ]] && WS_S3_ENV="$S3_ENV"
 
-COMMON_ENV="HOST=${HOST} CORS_ORIGIN=${CORS_ORIGIN} GRYT_AUTH_MODE=${GRYT_AUTH_MODE} GRYT_OIDC_ISSUER=${GRYT_OIDC_ISSUER} GRYT_OIDC_AUDIENCE=${GRYT_OIDC_AUDIENCE} JWT_SECRET=${JWT_SECRET} SERVER_PASSWORD=${SERVER_PASSWORD} SFU_WS_HOST=${SFU_WS_HOST} SFU_PUBLIC_HOST=${SFU_PUBLIC_HOST} STUN_SERVERS=${STUN_SERVERS} ${WS_S3_ENV}"
+COMMON_ENV="HOST=${HOST} CORS_ORIGIN=${CORS_ORIGIN} GRYT_AUTH_MODE=${GRYT_AUTH_MODE} GRYT_OIDC_ISSUER=${GRYT_OIDC_ISSUER} GRYT_OIDC_AUDIENCE=${GRYT_OIDC_AUDIENCE} GRYT_TRUSTED_CERT_ISSUERS=${GRYT_TRUSTED_CERT_ISSUERS} JWT_SECRET=${JWT_SECRET} SERVER_PASSWORD=${SERVER_PASSWORD} SFU_WS_HOST=${SFU_WS_HOST} SFU_PUBLIC_HOST=${SFU_PUBLIC_HOST} STUN_SERVERS=${STUN_SERVERS} ${WS_S3_ENV}"
+
+# The client reads these at build time through config.ts. Without them the
+# browser would still send people to production Keycloak to sign in, while the
+# servers only trusted the local CA — a mismatch that fails at join with a
+# rejected certificate rather than anywhere useful.
+CLIENT_ENV=""
+if [[ "$DEV_WITH_AUTH" == "1" ]]; then
+  CLIENT_ENV="VITE_GRYT_OIDC_ISSUER=${GRYT_OIDC_ISSUER} VITE_GRYT_IDENTITY_URL=${LOCAL_IDENTITY_URL}"
+fi
 
 # ── Create tmux session with separate windows ────────────────────────
-echo "Creating tmux session '$SESSION' with 5 windows..."
-echo "  [0] sfu   [1] client   [2] ws1   [3] ws2   [4] shell"
-echo "  Ctrl+B then 0-4 to switch, Ctrl+B w for window list."
+if [[ "$DEV_WITH_AUTH" == "1" ]]; then
+  echo "Creating tmux session '$SESSION' with 6 windows..."
+  echo "  [0] sfu   [1] client   [2] ws1   [3] ws2   [4] identity   [5] shell"
+  echo "  Ctrl+B then 0-5 to switch, Ctrl+B w for window list."
+  echo ""
+  echo "  Auth:     http://localhost:${KEYCLOAK_PORT}  (${KEYCLOAK_ADMIN_USER} / ${KEYCLOAK_ADMIN_PASSWORD})"
+  echo "  Identity: ${LOCAL_IDENTITY_URL}"
+else
+  echo "Creating tmux session '$SESSION' with 5 windows..."
+  echo "  [0] sfu   [1] client   [2] ws1   [3] ws2   [4] shell"
+  echo "  Ctrl+B then 0-4 to switch, Ctrl+B w for window list."
+  echo ""
+  echo "  Auth: production (DEV_WITH_AUTH=0)"
+fi
 echo ""
 
 # Window 0: SFU
@@ -148,7 +257,7 @@ tmux new-session -d -s "$SESSION" -n sfu \
 
 # Window 1: Client (Vite)
 tmux new-window -t "$SESSION" -n client \
-  "bash -lc 'cd packages/client && echo \"── Client ──\" && yarn dev --host; exec bash'"
+  "bash -lc 'cd packages/client && echo \"── Client ──\" && env ${CLIENT_ENV} yarn dev --host; exec bash'"
 
 # Window 2: Server 1 (ws1) on :5001
 # Each instance needs its own DATA_DIR — servers are fully independent, and two
@@ -160,7 +269,13 @@ tmux new-window -t "$SESSION" -n ws1 \
 tmux new-window -t "$SESSION" -n ws2 \
   "bash -lc 'cd packages/server && echo \"── ws2 :5002 ──\" && env PORT=5002 SERVER_NAME=ws2 SERVER_INSTANCE_ID=ws2 DATA_DIR=./data/ws2 ${COMMON_ENV} yarn dev; exec bash'"
 
-# Window 4: spare shell for ad-hoc commands
+# Window 4: identity CA (host, not Docker — see the note by DEV_WITH_AUTH)
+if [[ "$DEV_WITH_AUTH" == "1" ]]; then
+  tmux new-window -t "$SESSION" -n identity \
+    "bash -lc 'cd packages/auth/identity && echo \"── Identity CA :${IDENTITY_PORT} ──\" && env PORT=${IDENTITY_PORT} GRYT_OIDC_ISSUER=${GRYT_OIDC_ISSUER} GRYT_IDENTITY_ORIGIN=${LOCAL_IDENTITY_URL} GRYT_IDENTITY_DATA_DIR=./data yarn dev; exec bash'"
+fi
+
+# Window 5: spare shell for ad-hoc commands
 tmux new-window -t "$SESSION" -n shell
 
 # Start on the client window

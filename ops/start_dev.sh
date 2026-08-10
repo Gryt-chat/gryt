@@ -72,6 +72,8 @@ KEYCLOAK_PORT="${KEYCLOAK_PORT:-18080}"
 KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
 KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
 IDENTITY_PORT="${IDENTITY_PORT:-18081}"
+MAILPIT_UI_PORT="${MAILPIT_UI_PORT:-18025}"
+MAILPIT_SMTP_PORT="${MAILPIT_SMTP_PORT:-11025}"
 LOCAL_OIDC_ISSUER="http://localhost:${KEYCLOAK_PORT}/realms/gryt"
 LOCAL_IDENTITY_URL="http://localhost:${IDENTITY_PORT}"
 
@@ -175,12 +177,23 @@ if [[ "$DEV_WITH_AUTH" == "1" ]]; then
     export GRYT_KEYCLOAK_HOSTNAME_URL="http://localhost:${KEYCLOAK_PORT}"
     export GRYT_KEYCLOAK_HOSTNAME_ADMIN_URL="http://localhost:${KEYCLOAK_PORT}"
     export GRYT_IMPORT_REALM=1
+    # Point the realm's SMTP at Mailpit, so verification and password-reset
+    # mail is catchable instead of undeliverable. Keycloak reaches it by
+    # service name on the compose network, not through the published port.
+    export GRYT_MAILPIT_UI_PORT="$MAILPIT_UI_PORT"
+    export GRYT_MAILPIT_SMTP_PORT="$MAILPIT_SMTP_PORT"
+    export GRYT_SMTP_HOST="mailpit"
+    export GRYT_SMTP_PORT="1025"
+    export GRYT_SMTP_FROM="dev@gryt.local"
+    export GRYT_SMTP_FROM_NAME="Gryt (dev)"
+    export GRYT_SMTP_USER="dev"
+    export GRYT_SMTP_PASS="dev"
     export GRYT_KEYCLOAK_ADMIN_USERNAME="$KEYCLOAK_ADMIN_USER"
     export GRYT_KEYCLOAK_ADMIN_PASSWORD="$KEYCLOAK_ADMIN_PASSWORD"
 
     docker compose -f packages/auth/docker-compose.keycloak.yml \
-      up -d postgres keycloak \
-      >/dev/null 2>&1 || docker compose -f packages/auth/docker-compose.keycloak.yml up -d postgres keycloak
+      up -d postgres keycloak mailpit \
+      >/dev/null 2>&1 || docker compose -f packages/auth/docker-compose.keycloak.yml up -d postgres keycloak mailpit
 
     wait_for_http "http://localhost:${KEYCLOAK_PORT}/realms/gryt/.well-known/openid-configuration" "Keycloak realm" 120 || {
       echo "Keycloak did not come up with the gryt realm." >&2
@@ -242,6 +255,7 @@ if [[ "$DEV_WITH_AUTH" == "1" ]]; then
   echo ""
   echo "  Auth:     http://localhost:${KEYCLOAK_PORT}  (${KEYCLOAK_ADMIN_USER} / ${KEYCLOAK_ADMIN_PASSWORD})"
   echo "  Identity: ${LOCAL_IDENTITY_URL}"
+  echo "  Mail:     http://localhost:${MAILPIT_UI_PORT}  (every email the realm sends)"
 else
   echo "Creating tmux session '$SESSION' with 5 windows..."
   echo "  [0] sfu   [1] client   [2] ws1   [3] ws2   [4] shell"

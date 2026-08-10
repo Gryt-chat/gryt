@@ -34,6 +34,7 @@ on:
           - docs
           - site
           - auth
+          - ui
 
 permissions:
   contents: write
@@ -87,7 +88,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          SUBMODULES="packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth"
+          SUBMODULES="packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth packages/ui"
 
           # Clone straight from the URL rather than `git submodule update`,
           # which insists on the recorded gitlink and so fails on a broken one.
@@ -176,6 +177,10 @@ jobs:
             update_submodule "packages/auth" "$DEFAULT_SUBMODULE_BRANCH"
           fi
 
+          if [[ "$SELECTED" == "all" || "$SELECTED" == "ui" ]]; then
+            update_submodule "packages/ui" "$DEFAULT_SUBMODULE_BRANCH"
+          fi
+
       - name: Commit changes
         shell: bash
         run: |
@@ -206,7 +211,7 @@ jobs:
             git fetch origin "$TARGET_BRANCH"
             git reset --hard "origin/$TARGET_BRANCH"
 
-            for path in packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth; do
+            for path in packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth packages/ui; do
               [[ -d "$path" ]] || continue
               git -C "$path" fetch origin main
               git -C "$path" checkout -B main origin/main

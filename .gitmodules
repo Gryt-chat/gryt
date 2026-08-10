@@ -26,3 +26,7 @@
 	path = packages/image-worker
 	url = https://github.com/Gryt-chat/image-worker.git
 	branch = main
+[submodule "ui"]
+	path = packages/ui
+	url = https://github.com/Gryt-chat/ui.git
+	branch = main

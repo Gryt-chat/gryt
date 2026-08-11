@@ -4,6 +4,7 @@ This folder contains **internal** infrastructure used to run:
 
 - `gryt.chat` (marketing site)
 - `docs.gryt.chat` (documentation)
+- `ui.gryt.chat` (the `@gryt/ui` component library docs)
 - `feedback.gryt.chat` (Fider feature requests board)
 
 It’s **not** intended for self-hosters. Self-hosting docs live under `ops/deploy/*` (Docker Compose) and `ops/helm/*` (Kubernetes).
@@ -23,6 +24,7 @@ You must use unique host ports. Configure them in `ops/internal/.env`:
 
 - `INTERNAL_SITE_HTTP_PORT` (default `9472`)
 - `INTERNAL_DOCS_HTTP_PORT` (default `9471`)
+- `INTERNAL_UI_HTTP_PORT` (default `9475`)
 - `FIDER_HTTP_PORT` (default `9473`)
 
 ## Fider auth: use Gryt Auth (Keycloak OIDC)
@@ -62,9 +64,10 @@ Use Fider’s **Test** button before enabling the provider.
 
 - `gryt.chat` → `http://127.0.0.1:<INTERNAL_SITE_HTTP_PORT>`
 - `docs.gryt.chat` → `http://127.0.0.1:<INTERNAL_DOCS_HTTP_PORT>`
+- `ui.gryt.chat` → `http://127.0.0.1:<INTERNAL_UI_HTTP_PORT>`
 - `feedback.gryt.chat` → `http://127.0.0.1:<FIDER_HTTP_PORT>`
 
-All three should be **proxied** and routed through the same Cloudflare Tunnel.
+All four should be **proxied** and routed through the same Cloudflare Tunnel.
 
 ## Downloads folder
 

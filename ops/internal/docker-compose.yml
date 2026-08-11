@@ -18,6 +18,17 @@ services:
       - ./downloads:/usr/share/nginx/html/downloads:ro
     restart: unless-stopped
 
+  # Component library docs (ui.gryt.chat). Built from packages/ui, which is a
+  # bun workspace — the context is the workspace root because apps/docs
+  # resolves @gryt/ui from source rather than from npm.
+  ui:
+    build:
+      context: ../../packages/ui
+    platform: linux/amd64
+    ports:
+      - "${INTERNAL_UI_HTTP_PORT:-9475}:80"
+    restart: unless-stopped
+
   # Feature requests / user feedback (Fider)
   fider-db:
     image: postgres:17

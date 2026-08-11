@@ -1,7 +1,7 @@
 # Working rules for Gryt
 
 Gryt is a WebRTC voice chat platform maintained by one person. It's a superproject with
-seven git submodules under `packages/`. Read these rules before making changes.
+eight git submodules under `packages/`. Read these rules before making changes.
 
 ## Review-required paths
 
@@ -89,8 +89,10 @@ kanban board is the state: **To-Do → Doing → Review → Done**.
 | PR merged | Move to **Done**, which sets the task's done flag | CI |
 
 CI covers the last two through `.github/workflows/vikunja-task-done.yml`, which calls a
-reusable workflow in `Gryt-chat/.github`. All eight repos have it, so you don't normally
-need to touch a task after opening the PR.
+reusable workflow in `Gryt-chat/.github`. Eight of the nine repos have it, so you don't
+normally need to touch a task after opening the PR. `ui` is the exception — it was added
+as a submodule later and still needs the workflow (GRYT-143), so move its tasks by hand
+until that lands.
 
 Moving a task is not exposed by the Vikunja MCP server, so use the REST API directly:
 

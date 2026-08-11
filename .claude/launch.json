@@ -30,6 +30,15 @@
       "port": 3000
     },
     {
+      "name": "ui-docs",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-lc",
+        "cd packages/ui/apps/docs && bunx vite dev --port 3010"
+      ],
+      "port": 3010
+    },
+    {
       "name": "sfu",
       "runtimeExecutable": "bash",
       "runtimeArgs": [

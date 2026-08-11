@@ -46,8 +46,9 @@ services:
       GRYT_AUTH_MODE: ${GRYT_AUTH_MODE:-required}
       GRYT_OIDC_ISSUER: ${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}
       GRYT_OIDC_AUDIENCE: ${GRYT_OIDC_AUDIENCE:-gryt-web}
-      GRYT_AUTH_API: ${GRYT_AUTH_API:-https://auth.gryt.chat}
-      GRYT_IDENTITY_JWKS_URL: ${GRYT_IDENTITY_JWKS_URL:-https://id.gryt.chat/.well-known/jwks.json}
+      # Which identities this server admits. Add "local" to let people
+      # join without a Gryt account — see docs.gryt.chat, Server → Identity.
+      GRYT_IDENTITY_TIERS: ${GRYT_IDENTITY_TIERS:-account}
       DATA_DIR: /data
       S3_ENDPOINT: http://minio:9000
       S3_REGION: auto

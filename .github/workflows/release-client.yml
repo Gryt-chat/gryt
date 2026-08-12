@@ -948,13 +948,37 @@ jobs:
             ARGS+=(-t "$TAG")
           done
 
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            --cache-from type=registry,ref=${IMAGE}:buildcache \
-            --cache-to type=registry,ref=${IMAGE}:buildcache,mode=max \
-            "${ARGS[@]}" \
-            --push \
-            .
+          # A push that reaches GHCR and is refused is usually the secondary
+          # rate limit rather than anything about this build. That is what took
+          # v1.5.0-beta.1 down: the version tag had already gone up and
+          # latest-beta came back 403, so the image was half published.
+          #
+          # Retried rather than failed, because giving up costs the whole
+          # release and not just the tag — this job failing skips Publish
+          # release, and the release then sits as a draft nobody can install.
+          # Layer cache makes a second attempt cheap.
+          pushed=""
+          for attempt in 1 2 3 4 5; do
+            if docker buildx build \
+              --platform linux/amd64,linux/arm64 \
+              --cache-from type=registry,ref=${IMAGE}:buildcache \
+              --cache-to type=registry,ref=${IMAGE}:buildcache,mode=max \
+              "${ARGS[@]}" \
+              --push \
+              .
+            then
+              pushed="yes"
+              break
+            fi
+
+            echo "Docker build/push failed (attempt ${attempt}/5) — retrying."
+            sleep $(( attempt * 20 ))
+          done
+
+          if [[ -z "$pushed" ]]; then
+            echo "Could not build and push the image after 5 attempts." >&2
+            exit 1
+          fi
 
       - name: Install Snapcraft
         if: runner.os == 'Linux'
@@ -987,14 +1011,38 @@ jobs:
             exit 1
           fi
 
-          npx electron-builder \
-            $TARGETS \
-            --publish always \
-            -c.extraMetadata.version="$VERSION" \
-            -c.publish.provider=github \
-            -c.publish.owner="$OWNER" \
-            -c.publish.repo="$REPO" \
-            -c.publish.releaseType="$RELEASE_TYPE"
+          # electron-builder fetches the Electron binary on first use, and
+          # app-builder asks for it through DownloadNoRetry — so a connection
+          # that drops mid-download fails the build outright with no second
+          # attempt. That is what took v1.5.2-beta.1 down on Windows:
+          # `Get "…/electron-v40.6.1-win32-x64.zip": EOF`.
+          #
+          # Three attempts rather than five. A genuine packaging failure repeats
+          # the whole build each time, and the download failures seen so far all
+          # land in the first minute.
+          published=""
+          for attempt in 1 2 3; do
+            if npx electron-builder \
+              $TARGETS \
+              --publish always \
+              -c.extraMetadata.version="$VERSION" \
+              -c.publish.provider=github \
+              -c.publish.owner="$OWNER" \
+              -c.publish.repo="$REPO" \
+              -c.publish.releaseType="$RELEASE_TYPE"
+            then
+              published="yes"
+              break
+            fi
+
+            echo "electron-builder failed (attempt ${attempt}/3) — retrying."
+            sleep $(( attempt * 20 ))
+          done
+
+          if [[ -z "$published" ]]; then
+            echo "Could not package and publish after 3 attempts." >&2
+            exit 1
+          fi
 
       - name: Package macOS app
         if: runner.os == 'macOS'

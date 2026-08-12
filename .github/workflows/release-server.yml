@@ -468,12 +468,31 @@ jobs:
             ARGS+=(-t "$TAG_VALUE")
           done
 
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            --build-arg VERSION="$VERSION" \
-            "${ARGS[@]}" \
-            --push \
-            .
+          # Same retry as the client workflow, for the same reason: a refused
+          # push is usually GitHub's secondary rate limit, and this job failing
+          # costs the whole release rather than the one tag that was refused.
+          # See v1.5.0-beta.1, where the client image went up half published.
+          pushed=""
+          for attempt in 1 2 3 4 5; do
+            if docker buildx build \
+              --platform linux/amd64,linux/arm64 \
+              --build-arg VERSION="$VERSION" \
+              "${ARGS[@]}" \
+              --push \
+              .
+            then
+              pushed="yes"
+              break
+            fi
+
+            echo "Docker build/push failed (attempt ${attempt}/5) — retrying."
+            sleep $(( attempt * 20 ))
+          done
+
+          if [[ -z "$pushed" ]]; then
+            echo "Could not build and push the image after 5 attempts." >&2
+            exit 1
+          fi
 
       - name: Build Windows self-hosted server bundle
         if: github.event.inputs.build_windows == 'true'

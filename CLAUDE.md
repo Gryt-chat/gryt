@@ -56,6 +56,32 @@ in the same breath. Those two drifting apart is the failure mode that matters mo
 **Never push to `main`.** It's the only long-lived branch. Always work on a branch and open
 a PR.
 
+**Always work in your own worktree. Never `git checkout` in the shared checkout.**
+Make one per task, before the branch:
+
+```bash
+# superproject
+git worktree add .claude/worktrees/GRYT-123 -b claude/GRYT-123-slug origin/main
+# a submodule
+git -C packages/client worktree add ../../.claude/worktrees/GRYT-123-client \
+  -b claude/GRYT-123-slug origin/main
+```
+
+More than one agent runs against this repo at a time, and a working tree has exactly
+one HEAD. Share it and the second `git checkout -b` moves the first one's branch out
+from under it, silently and with no error. What that looks like from inside: commits
+land on a branch named for somebody else's task, `git push` sends a branch nobody
+touched, `gh pr create` answers "No commits between main and ...", and there are
+uncommitted files in the tree that belong to a third piece of work.
+
+That is not hypothetical either. On 2026-08-12 the GRYT-186 commit ended up on
+`claude/GRYT-156-custom-identity-service`, and the only reason nothing was lost is
+that the commit was recoverable by hash. Untangling it cost more than the worktree
+would have.
+
+Remove it once the PR merges — `git worktree remove <path>` — and prune the stale
+entries with `git worktree prune`.
+
 There used to be a `beta` branch too. It's gone. Beta is a release *channel* now, picked
 from a dropdown when you dispatch `Release Client` or `Release Server`, and it still
 produces `1.2.3-beta.N` versions and `latest-beta` container images. The branch never

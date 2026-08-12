@@ -191,7 +191,10 @@ unrelated projects on **one Docker daemon**. There are no off-box backups.
 
 - Never `docker system prune`, never `compose down -v`, never remove volumes or images
 - Target services by name — `up -d --no-deps docs site`, never a bare `up -d`
-- Never touch the `auth` compose project (Keycloak + Postgres)
+- Never touch the running `auth` compose project (Keycloak + Postgres) **on this box**.
+  That is about the deployment, not the source: editing `packages/auth`, including its
+  compose file, is ordinary work. It goes through review like everything else in a
+  review-required path, and deploying it is Sivert's call — but write it.
 - Check `df -h` before builds; a full disk takes down the auth database
 - `docs.gryt.chat` and `gryt.chat` build from submodule source via
   `ops/internal/docker-compose.yml` — `git pull` in the submodule before rebuilding

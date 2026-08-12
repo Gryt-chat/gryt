@@ -194,34 +194,55 @@ if [[ "$DEV_WITH_AUTH" == "1" ]]; then
     export GRYT_KEYCLOAK_ADMIN_USERNAME="$KEYCLOAK_ADMIN_USER"
     export GRYT_KEYCLOAK_ADMIN_PASSWORD="$KEYCLOAK_ADMIN_PASSWORD"
 
+    # The login theme is a Keycloakify jar, and compose mounts it as a file.
+    # If it is not there Docker creates a directory at that path, and Keycloak
+    # does not merely lose its theme — it fails to boot, with an EOFException
+    # out of QuarkusEntryPoint and a container that never goes healthy. So a
+    # clone that has never built the theme cannot start the auth stack at all.
+    #
+    # auth/up.sh guards this, but we call compose directly rather than going
+    # through it, so the guard has to be here too.
+    THEME_JAR="packages/auth/login-theme/dist_keycloak/keycloak-theme-for-kc-all-other-versions.jar"
+    if [[ ! -f "$THEME_JAR" ]]; then
+      echo "Building the Keycloak login theme (first run — needs Docker, takes a minute)..."
+      if ! packages/auth/login-theme/build.sh >/dev/null 2>&1; then
+        echo "Login theme build failed. Keycloak will not start without it." >&2
+        echo "Run it directly to see why: packages/auth/login-theme/build.sh" >&2
+      fi
+      # A failed build can leave behind the directory Docker would otherwise
+      # create here, and that directory is what stops Keycloak booting.
+      if [[ -d "$THEME_JAR" ]]; then
+        rmdir "$THEME_JAR" 2>/dev/null || true
+      fi
+    fi
+
+    # keycloak-user-profile is named explicitly because nothing depends on it,
+    # so `up` would not start it. It applies the realm's user profile, without
+    # which registration asks for a first and last name that Gryt never wanted
+    # and refuses the account until they are filled (GRYT-180). GRYT_IMPORT_REALM
+    # is 1 above, so on a fresh volume the realm — and the profile with it — is
+    # imported fresh every time, and this has to follow.
+    KC_SERVICES=(postgres keycloak mailpit keycloak-user-profile)
     docker compose -f packages/auth/docker-compose.keycloak.yml \
-      up -d postgres keycloak mailpit \
-      >/dev/null 2>&1 || docker compose -f packages/auth/docker-compose.keycloak.yml up -d postgres keycloak mailpit
+      up -d "${KC_SERVICES[@]}" \
+      >/dev/null 2>&1 || docker compose -f packages/auth/docker-compose.keycloak.yml up -d "${KC_SERVICES[@]}"
 
     wait_for_http "http://localhost:${KEYCLOAK_PORT}/realms/gryt/.well-known/openid-configuration" "Keycloak realm" 120 || {
       echo "Keycloak did not come up with the gryt realm." >&2
       echo "Check: docker logs gryt-auth-keycloak-import" >&2
     }
 
-    # Make sure there is an admin to log in as.
-    #
-    # KC_BOOTSTRAP_ADMIN_* only creates one when the database is empty, and the
-    # realm import runs first and initialises the master realm — so on a fresh
-    # volume the database is no longer empty by the time the server starts, the
-    # bootstrap is skipped, and you get a Keycloak with no way into the console.
-    # Creating it explicitly is idempotent enough: it fails harmlessly when the
-    # user already exists.
-    #
-    # The management port has to be moved because the running server already
-    # holds 9000 inside that container.
+    # The admin used to be created here, because KC_BOOTSTRAP_ADMIN_* only
+    # creates one when `start` finds no master realm and the realm import makes
+    # master first — so a fresh volume came up with nobody able to log in. The
+    # auth stack now does it itself, in a keycloak-bootstrap-admin one-shot that
+    # `keycloak` waits on, so every deployment gets it and not just this script
+    # (GRYT-180). Warn rather than repeat it, so a failure is still visible.
     if ! curl -fsS -X POST "http://localhost:${KEYCLOAK_PORT}/realms/master/protocol/openid-connect/token" \
         -d "client_id=admin-cli" -d "username=${KEYCLOAK_ADMIN_USER}" \
         -d "password=${KEYCLOAK_ADMIN_PASSWORD}" -d "grant_type=password" >/dev/null 2>&1; then
-      echo "Creating Keycloak admin user '${KEYCLOAK_ADMIN_USER}'..."
-      docker exec -e KC_PASS="${KEYCLOAK_ADMIN_PASSWORD}" -e KC_HTTP_MANAGEMENT_PORT=9099 \
-        gryt-auth-keycloak /opt/keycloak/bin/kc.sh bootstrap-admin user \
-        --username "${KEYCLOAK_ADMIN_USER}" --password:env KC_PASS >/dev/null 2>&1 \
-        || echo "  (could not create it — check: docker logs gryt-auth-keycloak)" >&2
+      echo "No Keycloak admin '${KEYCLOAK_ADMIN_USER}' — the console will not let you in." >&2
+      echo "Check: docker logs gryt-auth-keycloak-bootstrap-admin" >&2
     fi
     echo ""
   fi

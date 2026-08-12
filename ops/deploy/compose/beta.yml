@@ -133,6 +133,23 @@ services:
       # Which identities this server admits. Add "local" to let people
       # join without a Gryt account — see docs.gryt.chat, Server → Identity.
       GRYT_IDENTITY_TIERS: ${GRYT_IDENTITY_TIERS:-account}
+      # Which certificate authority an identity may have been signed by. The
+      # server defaults to this same value; it is here so it can be pointed
+      # somewhere else without a code change.
+      GRYT_TRUSTED_CERT_ISSUERS: ${GRYT_TRUSTED_CERT_ISSUERS:-https://id.gryt.chat}
+      # How many people one invite may admit per hour.
+      GRYT_INVITE_MAX_JOINS_PER_HOUR: ${GRYT_INVITE_MAX_JOINS_PER_HOUR:-60}
+      # How many proxies in front of this server may be believed when they say
+      # who a client is. One, because this deployment sits behind the
+      # Cloudflare tunnel: the edge appends the visitor's address to the right
+      # of x-forwarded-for and nothing else in the path touches the header, so
+      # counting one from the right lands on the real client and anything a
+      # client put in that header stays to the left, where it is ignored.
+      #
+      # Leaving this unset is not neutral. The server falls back to the
+      # connection's own address, which is the tunnel's, so every client shares
+      # one rate-limit bucket and the per-IP invite lockout goes server-wide.
+      GRYT_TRUSTED_PROXY_HOPS: ${GRYT_TRUSTED_PROXY_HOPS:-1}
       DATA_DIR: /data
       # ${MINIO_PORT} here is deliberate and is NOT the same as the plain
       # `minio:9000` the image-worker uses. This service is `network_mode: host`

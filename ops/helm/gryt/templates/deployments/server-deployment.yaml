@@ -56,6 +56,11 @@ spec:
             configMapKeyRef:
               name: {{ include "gryt.fullname" . }}-config
               key: SERVER_NAME
+        - name: GRYT_TRUSTED_PROXY_HOPS
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "gryt.fullname" . }}-config
+              key: GRYT_TRUSTED_PROXY_HOPS
         - name: GRYT_AUTH_API
           valueFrom:
             configMapKeyRef:

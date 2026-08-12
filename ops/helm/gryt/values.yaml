@@ -105,6 +105,20 @@ server:
     PORT: "5000"
     NODE_ENV: "production"
     SERVER_NAME: "Gryt Production Server"
+    # How many proxies in front of the server may be believed when they say who
+    # a client is. The server counts from the right of x-forwarded-for, because
+    # that is the end infrastructure writes; the left end is whatever the client
+    # claimed.
+    #
+    # One matches this chart's default, which enables an nginx ingress — that
+    # controller appends the client address, and nothing else in the path
+    # touches the header.
+    #
+    # Set this to "0" if you turned the ingress off and publish the Service
+    # directly. At 0 the header is ignored entirely and the connection's own
+    # address is used. Leaving it at 1 with no proxy in front is the one
+    # genuinely unsafe combination: the client's own header would be believed.
+    GRYT_TRUSTED_PROXY_HOPS: "1"
   
   # Secrets (will be base64 encoded)
   secrets:

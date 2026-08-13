@@ -994,14 +994,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          # -c.snap.publish=github below is what keeps the snap out of the
-          # store from here. electron-builder adds the Snap Store publisher on
-          # its own when it finds SNAPCRAFT_STORE_CREDENTIALS, and that upload
-          # blocks on the store's review queue — twenty-five minutes on v1.5.8,
-          # with publish-release waiting behind it, so a Windows download was
-          # held up by a Linux store scan. The .snap is attached to the release
-          # like everything else now, and the store push is its own job at the
-          # end.
+          # The -c.snap.publish.* overrides below are what keeps the snap out
+          # of the store from here. electron-builder adds the Snap Store
+          # publisher on its own when it finds SNAPCRAFT_STORE_CREDENTIALS, and
+          # that upload blocks on the store's review queue — twenty-five
+          # minutes on v1.5.8, with publish-release waiting behind it, so a
+          # Windows download was held up by a Linux store scan. The .snap is
+          # attached to the release like everything else now, and the store
+          # push is its own job at the end.
+          #
+          # Spelled out per key rather than as `-c.snap.publish=github`. The
+          # shorthand replaces the publish config for this target instead of
+          # extending it, so owner and repo went missing and electron-builder
+          # fell back to inferring them from package.json — it tried to create
+          # the release in Gryt-chat/client, where this token cannot write, and
+          # got a 403 that no retry was ever going to clear. That is what left
+          # v1.5.9 a draft with no .snap on it.
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             TARGETS="--linux AppImage deb snap"
           elif [[ "$RUNNER_OS" == "Windows" ]]; then
@@ -1030,7 +1038,10 @@ jobs:
               -c.publish.owner="$OWNER" \
               -c.publish.repo="$REPO" \
               -c.publish.releaseType="$RELEASE_TYPE" \
-              -c.snap.publish=github
+              -c.snap.publish.provider=github \
+              -c.snap.publish.owner="$OWNER" \
+              -c.snap.publish.repo="$REPO" \
+              -c.snap.publish.releaseType="$RELEASE_TYPE"
             then
               published="yes"
               break

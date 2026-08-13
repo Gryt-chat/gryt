@@ -219,6 +219,127 @@ services:
       retries: 3
       start_period: 10s
 
+  ## ── A second server (optional) ────────────────────────────────────────────
+  ## One compose file can run as many Gryt servers as you like. They share the
+  ## SFU and MinIO above; what each one needs of its own is a data volume, a
+  ## port, a name, and a worker.
+  ##
+  ## Uncomment this block and the two volumes at the bottom to add one. Full
+  ## explanation at docs.gryt.chat → Deployment → Docker Compose.
+  ##
+  ## Four things must differ from the server above, and the first two are the
+  ## ones that bite:
+  ##
+  ##   DATA_DIR volume  two servers sharing one gryt.db corrupt each other
+  ##   SERVER_NAME      the SFU identifies a server as NAME_PORT_INSTANCE and
+  ##                    keys voice rooms on it, so a duplicate means the second
+  ##                    server's voice never starts
+  ##   PORT             host networking, so this is a real port on the host
+  ##   health port      the worker's, published on loopback for its own server
+  ##
+  ## The SFU, MinIO and the bucket are deliberately shared. Object keys are
+  ## UUIDs, so two servers in one bucket cannot collide.
+  ##
+  ## Note: only one host-networked server can advertise itself on the LAN. The
+  ## avahi service file has a fixed name and the second server overwrites the
+  ## first. Both work normally by address; only mDNS discovery is affected.
+  ##
+  # server-2:
+  #   image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest}
+  #   container_name: gryt-prod-server-2
+  #   network_mode: host
+  #   extra_hosts:
+  #     - "sfu:127.0.0.1"
+  #     - "minio:127.0.0.1"
+  #   environment:
+  #     PORT: ${SERVER2_PORT:-5010}
+  #     HOST: "0.0.0.0"
+  #     NODE_ENV: production
+  #     SERVER_NAME: ${SERVER2_NAME:-My Second Gryt Server}
+  #     SERVER_DESCRIPTION: ${SERVER2_DESCRIPTION:-Another Gryt voice chat server}
+  #     SERVER_PASSWORD: ${SERVER2_PASSWORD:-}
+  #     IMAGE_WORKER_URL: http://127.0.0.1:${IMAGE_WORKER2_HEALTH_PORT:-8082}
+  #     CORS_ORIGIN: ${CORS_ORIGIN:-http://127.0.0.1:15738,https://app.gryt.chat}
+  #     # Its own secret. Tokens are bound to the host that issued them, so
+  #     # sharing one is not exploitable — but there is no reason to.
+  #     JWT_SECRET: ${JWT_SECRET_2:?Set JWT_SECRET_2 in .env}
+  #     # The same SFU as the first server, on purpose.
+  #     SFU_WS_HOST: ws://sfu:${SFU_PORT:-5005}
+  #     SFU_PUBLIC_HOST: ${SFU_PUBLIC_HOST:-ws://localhost:5005}
+  #     STUN_SERVERS: ${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
+  #     GRYT_AUTH_MODE: ${GRYT_AUTH_MODE:-required}
+  #     GRYT_OIDC_ISSUER: ${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}
+  #     GRYT_OIDC_AUDIENCE: ${GRYT_OIDC_AUDIENCE:-gryt-web}
+  #     GRYT_IDENTITY_TIERS: ${GRYT_IDENTITY_TIERS:-account}
+  #     GRYT_TRUSTED_CERT_ISSUERS: ${GRYT_TRUSTED_CERT_ISSUERS:-https://id.gryt.chat}
+  #     GRYT_INVITE_MAX_JOINS_PER_HOUR: ${GRYT_INVITE_MAX_JOINS_PER_HOUR:-60}
+  #     GRYT_TRUSTED_PROXY_HOPS: ${GRYT_TRUSTED_PROXY_HOPS:-1}
+  #     DATA_DIR: /data
+  #     S3_ENDPOINT: http://minio:${MINIO_PORT:-9000}
+  #     S3_REGION: auto
+  #     S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+  #     S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+  #     # The same bucket. Every key is a UUID, so nothing collides.
+  #     S3_BUCKET: ${S3_BUCKET:-gryt}
+  #     S3_FORCE_PATH_STYLE: "true"
+  #   volumes:
+  #     - gryt-prod-server-2-data:/data
+  #   depends_on:
+  #     sfu:
+  #       condition: service_healthy
+  #     minio-init:
+  #       condition: service_completed_successfully
+  #     server-2-data-init:
+  #       condition: service_completed_successfully
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "node", "-e", "fetch(`http://localhost:$${process.env.PORT}/health`).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 40s
+  ##
+  # server-2-data-init:
+  #   image: alpine:3
+  #   container_name: gryt-prod-server-2-data-init
+  #   command: ["/bin/sh", "-c", "mkdir -p /data && chown -R 1001:1001 /data"]
+  #   volumes:
+  #     - gryt-prod-server-2-data:/data
+  #   networks:
+  #     - gryt-prod
+  #   restart: "no"
+  ##
+  ## A worker serves exactly one server, because it reads exactly one DATA_DIR.
+  ## Leaving it out is a supported choice: uploads still work, and what is lost
+  ## is thumbnails, recompression and the dominant colour behind voice tiles.
+  # image-worker-2:
+  #   image: ghcr.io/gryt-chat/image-worker:${IMAGE_WORKER_VERSION:-latest}
+  #   container_name: gryt-prod-image-worker-2
+  #   ports:
+  #     - "127.0.0.1:${IMAGE_WORKER2_HEALTH_PORT:-8082}:8080"
+  #   environment:
+  #     DATA_DIR: /data
+  #     S3_ENDPOINT: http://minio:9000
+  #     S3_REGION: auto
+  #     S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+  #     S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+  #     S3_BUCKET: ${S3_BUCKET:-gryt}
+  #     S3_FORCE_PATH_STYLE: "true"
+  #   volumes:
+  #     - gryt-prod-server-2-data:/data
+  #   depends_on:
+  #     server-2:
+  #       condition: service_healthy
+  #   networks:
+  #     - gryt-prod
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "node", "-e", "fetch('http://localhost:8080/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+  #     interval: 30s
+  #     timeout: 3s
+  #     retries: 3
+  #     start_period: 10s
+
   # ── Web Client (dev / local only) ─────────────────────────────────────────
   # The web client won't authenticate against auth.gryt.chat in production
   # unless your domain is registered as a redirect URI (only official Gryt
@@ -316,6 +437,8 @@ networks:
 
 volumes:
   gryt-prod-server-data:
+  ## Uncomment alongside the server-2 block above.
+  # gryt-prod-server-2-data:
   gryt-prod-minio-data:
   gryt-prod-prometheus-data:
   gryt-prod-grafana-data:

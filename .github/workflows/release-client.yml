@@ -980,20 +980,12 @@ jobs:
             exit 1
           fi
 
-      - name: Install Snapcraft
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo snap install snapcraft --classic
-
       - name: Package and publish Electron app
         if: runner.os != 'macOS'
         working-directory: packages/client
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
           OWNER: ${{ env.OWNER }}
           REPO: ${{ env.REPO }}
           CHANNEL: ${{ env.CHANNEL }}
@@ -1002,6 +994,14 @@ jobs:
         run: |
           set -euo pipefail
 
+          # -c.snap.publish=github below is what keeps the snap out of the
+          # store from here. electron-builder adds the Snap Store publisher on
+          # its own when it finds SNAPCRAFT_STORE_CREDENTIALS, and that upload
+          # blocks on the store's review queue — twenty-five minutes on v1.5.8,
+          # with publish-release waiting behind it, so a Windows download was
+          # held up by a Linux store scan. The .snap is attached to the release
+          # like everything else now, and the store push is its own job at the
+          # end.
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             TARGETS="--linux AppImage deb snap"
           elif [[ "$RUNNER_OS" == "Windows" ]]; then
@@ -1029,7 +1029,8 @@ jobs:
               -c.publish.provider=github \
               -c.publish.owner="$OWNER" \
               -c.publish.repo="$REPO" \
-              -c.publish.releaseType="$RELEASE_TYPE"
+              -c.publish.releaseType="$RELEASE_TYPE" \
+              -c.snap.publish=github
             then
               published="yes"
               break
@@ -1234,3 +1235,68 @@ jobs:
             -H "Content-Type: application/json" \
             -d "$PAYLOAD" \
             "$WEBHOOK_URL"
+
+  # After the release is out, not before it. The Snap Store scans an upload
+  # before it accepts it — twenty-five minutes on v1.5.8 — and while that ran
+  # inside the Linux build leg, publish-release sat behind it and the whole
+  # release stayed a draft. Nothing here is on the critical path: the .snap is
+  # already attached to the release, so this only decides whether the store gets
+  # the same file, and it can take as long as it likes.
+  publish-snap:
+    name: Publish snap to the Snap Store
+    needs: [prepare-release, publish-release]
+    runs-on: ubuntu-latest
+    # Long enough for a slow review queue, short enough that a wedged upload
+    # does not sit there for six hours.
+    timeout-minutes: 90
+
+    env:
+      OWNER: Gryt-chat
+      REPO: gryt
+      VERSION: ${{ needs.prepare-release.outputs.version }}
+      CHANNEL: ${{ needs.prepare-release.outputs.channel }}
+
+    steps:
+      - name: Install Snapcraft
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo snap install snapcraft --classic
+
+      - name: Download the snap from the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          gh release download "v$VERSION" \
+            --repo "$OWNER/$REPO" \
+            --pattern '*.snap' \
+            --dir .
+
+          ls -la ./*.snap
+
+      - name: Upload to the Snap Store
+        shell: bash
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${SNAPCRAFT_STORE_CREDENTIALS:-}" ]]; then
+            echo "SNAPCRAFT_STORE_CREDENTIALS is not set, skipping the store."
+            exit 0
+          fi
+
+          # latest is this workflow's word for stable; the store's own word for
+          # it is stable, and beta is beta in both.
+          if [[ "$CHANNEL" == "beta" ]]; then
+            TRACK="beta"
+          else
+            TRACK="stable"
+          fi
+
+          SNAP="$(ls ./*.snap | head -n 1)"
+          echo "Uploading $SNAP to $TRACK."
+          snapcraft upload --release="$TRACK" "$SNAP"

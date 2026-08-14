@@ -1257,6 +1257,18 @@ jobs:
     name: Publish snap to the Snap Store
     needs: [prepare-release, publish-release]
     runs-on: ubuntu-latest
+    # Stable only. Every upload waits on the store's automated review — 25
+    # minutes on v1.5.8, 77 on v1.6.2-beta.1 — and betas ship often, so the
+    # store review queue ended up shadowing the whole beta cadence. Linux
+    # testers already get betas as the AppImage and .deb attached to the GitHub
+    # release, so the snap beta channel was a second path to the same build at
+    # the cost of an hour per release.
+    #
+    # `latest/beta` is closed in the store to match. Leaving it open but unfed
+    # would have served whatever was last pushed there forever, and somebody on
+    # `snap refresh --beta` would sit on a fossil without knowing. Closed, it
+    # falls through to `latest/stable`.
+    if: needs.prepare-release.outputs.channel != 'beta'
     # Long enough for a slow review queue, short enough that a wedged upload
     # does not sit there for six hours.
     timeout-minutes: 90
@@ -1265,7 +1277,6 @@ jobs:
       OWNER: Gryt-chat
       REPO: gryt
       VERSION: ${{ needs.prepare-release.outputs.version }}
-      CHANNEL: ${{ needs.prepare-release.outputs.channel }}
 
     steps:
       - name: Install Snapcraft
@@ -1300,14 +1311,9 @@ jobs:
             exit 0
           fi
 
-          # latest is this workflow's word for stable; the store's own word for
-          # it is stable, and beta is beta in both.
-          if [[ "$CHANNEL" == "beta" ]]; then
-            TRACK="beta"
-          else
-            TRACK="stable"
-          fi
-
+          # Always stable: the job does not run on beta at all, see the `if` on
+          # the job above. This used to pick a track from the channel, which
+          # read as though beta were still an option long after it was not.
           SNAP="$(ls ./*.snap | head -n 1)"
-          echo "Uploading $SNAP to $TRACK."
-          snapcraft upload --release="$TRACK" "$SNAP"
+          echo "Uploading $SNAP to stable."
+          snapcraft upload --release=stable "$SNAP"

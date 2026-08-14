@@ -30,3 +30,7 @@
 	path = packages/ui
 	url = https://github.com/Gryt-chat/ui.git
 	branch = main
+[submodule "cli"]
+	path = packages/cli
+	url = https://github.com/Gryt-chat/cli.git
+	branch = main

@@ -1248,30 +1248,42 @@ jobs:
             "$WEBHOOK_URL"
 
   # After the release is out, not before it. The Snap Store scans an upload
-  # before it accepts it — twenty-five minutes on v1.5.8 — and while that ran
-  # inside the Linux build leg, publish-release sat behind it and the whole
-  # release stayed a draft. Nothing here is on the critical path: the .snap is
-  # already attached to the release, so this only decides whether the store gets
-  # the same file, and it can take as long as it likes.
+  # before it accepts it, and that review has repeatedly taken tens of minutes.
+  # Nothing here is on the critical release path: the .snap is already attached
+  # to the GitHub release, so this job only decides whether the Store gets the
+  # same artifact.
+  #
+  # The Store has taken 25 minutes, 77 minutes, and sometimes longer to process
+  # Gryt uploads. `snapcraft upload --release` waits for that processing rather
+  # than returning immediately, so a long-running job here does not necessarily
+  # mean the upload is hung.
   publish-snap:
     name: Publish snap to the Snap Store
     needs: [prepare-release, publish-release]
     runs-on: ubuntu-latest
-    # Stable only. Every upload waits on the store's automated review — 25
-    # minutes on v1.5.8, 77 on v1.6.2-beta.1 — and betas ship often, so the
-    # store review queue ended up shadowing the whole beta cadence. Linux
-    # testers already get betas as the AppImage and .deb attached to the GitHub
-    # release, so the snap beta channel was a second path to the same build at
-    # the cost of an hour per release.
+
+    # Stable only. Every upload waits on the store's automated review, and
+    # betas ship often. Linux beta testers already have the AppImage, .deb and
+    # .snap attached to the GitHub release, so putting every beta through the
+    # Store review queue buys very little.
     #
-    # `latest/beta` is closed in the store to match. Leaving it open but unfed
-    # would have served whatever was last pushed there forever, and somebody on
-    # `snap refresh --beta` would sit on a fossil without knowing. Closed, it
-    # falls through to `latest/stable`.
+    # `latest/beta` is closed in the Store to match. Leaving it open but unfed
+    # would serve an increasingly stale beta indefinitely.
     if: needs.prepare-release.outputs.channel != 'beta'
-    # Long enough for a slow review queue, short enough that a wedged upload
-    # does not sit there for six hours.
-    timeout-minutes: 90
+
+    # The Snap Store is not part of the release's availability contract.
+    #
+    # GitHub, Windows, macOS, AppImage, deb and the downloadable snap have all
+    # already shipped by the time this job runs. A Canonical outage, review
+    # backlog or timeout must therefore not turn an otherwise successful Gryt
+    # release red.
+    continue-on-error: true
+
+    # Previous Gryt Store reviews have approached/exceeded the old 90-minute
+    # limit. Give Canonical enough room to finish a legitimately slow automated
+    # review, while still preventing a genuinely wedged process from occupying
+    # a runner indefinitely.
+    timeout-minutes: 180
 
     env:
       OWNER: Gryt-chat
@@ -1283,7 +1295,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           sudo snap install snapcraft --classic
+
+          echo "Snapcraft version:"
+          snapcraft --version
 
       - name: Download the snap from the release
         shell: bash
@@ -1297,7 +1313,8 @@ jobs:
             --pattern '*.snap' \
             --dir .
 
-          ls -la ./*.snap
+          echo "Downloaded snap:"
+          ls -lah ./*.snap
 
       - name: Upload to the Snap Store
         shell: bash
@@ -1307,13 +1324,33 @@ jobs:
           set -euo pipefail
 
           if [[ -z "${SNAPCRAFT_STORE_CREDENTIALS:-}" ]]; then
-            echo "SNAPCRAFT_STORE_CREDENTIALS is not set, skipping the store."
+            echo "SNAPCRAFT_STORE_CREDENTIALS is not set, skipping the Store."
             exit 0
           fi
 
-          # Always stable: the job does not run on beta at all, see the `if` on
-          # the job above. This used to pick a track from the channel, which
-          # read as though beta were still an option long after it was not.
-          SNAP="$(ls ./*.snap | head -n 1)"
-          echo "Uploading $SNAP to stable."
-          snapcraft upload --release=stable "$SNAP"
+          # Always stable: this job does not run for beta releases.
+          SNAP="$(find . -maxdepth 1 -type f -name '*.snap' -print -quit)"
+
+          if [[ -z "$SNAP" ]]; then
+            echo "::error::No .snap file was downloaded from the GitHub release."
+            exit 1
+          fi
+
+          echo "Uploading $SNAP to latest/stable."
+          echo
+          echo "NOTE:"
+          echo "  Snapcraft waits for the Snap Store to process/review the upload."
+          echo "  Gryt uploads have previously spent tens of minutes in this step."
+          echo "  A quiet/long-running command here does not by itself mean it is stuck."
+          echo
+
+          # Verbose Store diagnostics are intentional. The previous command
+          # could sit silently for an hour and leave us with almost nothing to
+          # distinguish a slow Store review from an actual network/API failure.
+          snapcraft upload \
+            --release=stable \
+            --verbosity=debug \
+            "$SNAP"
+
+          echo
+          echo "Snap Store upload/release completed successfully."

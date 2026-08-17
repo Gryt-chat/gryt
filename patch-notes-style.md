@@ -123,8 +123,8 @@ Sections like Security and Under the hood get nothing.
 ## Sponsors
 
 The $50 one-time tier on GitHub Sponsors promises a name in the notes for the next
-release. Nothing enforces that, and a promise nobody remembers is worse than one
-never made — so it belongs in the checklist here rather than in somebody's head.
+release. Nothing enforces it, and nobody drafting a set of notes has any reason to
+go and look, so it belongs in this checklist rather than in somebody's memory.
 
 Before publishing a note, check
 [the sponsors list](https://github.com/sponsors/Gryt-chat) for one-time sponsorships
@@ -135,13 +135,13 @@ list, with nothing more than their names:
 Thanks to <name> and <name> for sponsoring this release.
 ```
 
-Use whatever name they sponsored under, or the one they asked for. No logos, no
-links, no thank-you paragraph — this is a credit, not an advertisement, and the
-tier says a name.
+Use whatever name they sponsored under, or the one they asked for. The tier says a
+name, so a name is what goes in. Logos and links have their own places, in the
+README and on gryt.chat/sponsors.
 
 Recurring sponsors are not credited per release. They are listed in the README and
-on the site, which is what those tiers promise, and repeating them in every note
-would turn the notes into a sponsor page.
+on gryt.chat/sponsors, which is what those tiers promise. Repeating them in every
+note would turn the notes into a sponsor page.
 
 Nothing to credit is the normal case. Say nothing at all rather than writing that
 there were no sponsors.

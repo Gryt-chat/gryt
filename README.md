@@ -75,10 +75,11 @@ Nothing security-relevant merges without being read line by line — the SFU, au
 
 ## Sponsors
 
-Gryt is one person's project, and the bills are real — a domain, a box, the Apple
-and Windows signing certificates that stop the installer warning people off. If you
-run Gryt or just want it to keep going, [GitHub Sponsors](https://github.com/sponsors/Gryt-chat)
-is where that happens.
+Sponsoring pays for a domain, the box the auth stack runs on, and the Apple and
+Windows signing certificates that stop the installer warning people off their own
+download. That is the whole list — there is nothing to buy inside Gryt, and no part
+of it is held back for people who pay.
+[GitHub Sponsors](https://github.com/sponsors/Gryt-chat) is where it goes.
 
 <!-- sponsors:start -->
 
@@ -90,9 +91,11 @@ Sponsoring at $25 a month puts your name or handle here. At $100 a month a logo 
 on [gryt.chat](https://gryt.chat), linked wherever you want. A one-off at $50 gets you
 a line in the notes for the next release.
 
+Everyone who has sponsored, including one-off payments and when each arrived, is at
+[gryt.chat/sponsors](https://gryt.chat/sponsors).
+
 To be listed, or to change how you are listed, say so on the sponsorship or open a
-pull request against this section — nothing is published automatically, and nothing
-about you is used beyond what you write here.
+pull request. Nothing is published automatically.
 
 ## Acknowledgments
 

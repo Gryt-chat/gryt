@@ -76,8 +76,11 @@ Nothing security-relevant merges without being read line by line — the SFU, au
 ## Sponsors
 
 <!-- sponsors:start -->
+<!-- Monthly sponsors only, which is what the $25 and $500 tiers promise. A
+     one-off payment is credited in the release notes and listed on
+     gryt.chat/sponsors, not here. -->
 
-**Sponsored once** — Carlo, March 2026.
+Nobody sponsoring monthly yet.
 
 <!-- sponsors:end -->
 

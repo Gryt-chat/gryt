@@ -72,3 +72,79 @@ All four should be **proxied** and routed through the same Cloudflare Tunnel.
 ## Downloads folder
 
 Static files placed in `ops/internal/downloads/` are served at `/downloads/*` on `gryt.chat`.
+
+## Keeping the hosted web clients current
+
+`app.gryt.chat` and `beta.gryt.chat` are not built from source like the sites above. They
+are the `ghcr.io/gryt-chat/client` image that `Release Client` pushes on every release,
+running as the `client` service of the `gryt-prod` and `gryt-beta` stacks in
+`ops/deploy/compose/`.
+
+Building and pushing that image was automated. Pulling it was not, so the web client only
+moved when somebody remembered. On 2026-08-17 `app.gryt.chat` was serving **1.5.6** against
+a desktop app on **1.6.15-beta.1** — ten releases, including the whole seed-derived guest
+identity feature set, which read from the outside as "that only works on desktop"
+(GRYT-291).
+
+[`refresh-web-client.sh`](refresh-web-client.sh) closes that. It pulls `latest` for prod and
+`latest-beta` for beta, and recreates the container only when the image id actually moved:
+
+```bash
+ops/internal/refresh-web-client.sh
+```
+
+It touches nothing but the `client` service — `--no-deps`, one service named, never a bare
+`up -d` — so the server, the SFU, the image worker and MinIO are never in its way. It
+refuses to run with less than 10GB free, since the auth database is on the same disk. It
+only refreshes a container that is already running, and will not bring a missing one up.
+
+Nothing in it is specific to one machine, and there are no paths to configure. Each stack's
+compose files, the order they were merged in and the env file they were read with all come
+off the running container's own labels. That is not a shortcut — the overlay list has to
+match what the stack came up with exactly, because compose merges left to right and a
+different list is a different config, which would make `up` recreate the container every
+ten minutes forever. Some of those overlays are untracked and exist only on the host, so
+no list committed here could be right.
+
+Three environment variables, none of them required:
+
+| | |
+|---|---|
+| `GRYT_STACKS` | stacks to refresh, space separated. Default `prod beta`; each `<s>` means the container `gryt-<s>-client` |
+| `GRYT_SERVICE` | the compose service, if it is not called `client` |
+| `GRYT_MIN_FREE_GB` | refuse to pull below this much free disk. Default `10` |
+
+A release-triggered deploy would be tighter, and is not what this is: the box sits behind
+the Cloudflare tunnel with no self-hosted runner, so a job in `Release Client` would need
+inbound SSH and secrets before it could do anything at all. A timer needs neither.
+
+### Installing the timer
+
+Symlink rather than copy, so `git pull` updates the script and nothing has to be installed
+twice. `ExecStart` needs a literal absolute path — systemd does not expand variables in the
+executable itself — so the symlink is what keeps the unit free of anybody's home directory.
+
+```bash
+sudo ln -sfn "$PWD/ops/internal/refresh-web-client.sh" /usr/local/bin/gryt-web-client-refresh
+sudo cp ops/internal/systemd/gryt-web-client-refresh.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now gryt-web-client-refresh.timer
+```
+
+It fires every ten minutes and runs as root, which is the usual arrangement for a system
+unit talking to the Docker socket. To run as somebody else, drop in an override with
+`User=` and `SupplementaryGroups=docker` rather than editing the shipped unit.
+
+Anything that differs per machine goes in `/etc/default/gryt-web-client-refresh` — see
+[`gryt-web-client-refresh.env.example`](systemd/gryt-web-client-refresh.env.example). On a
+normal checkout none of it is needed.
+
+Check on it with `systemctl list-timers gryt-web-client-refresh` and
+`journalctl -u gryt-web-client-refresh -n 50`.
+
+Superseded images are left dangling rather than removed — roughly 30MB a release. Cleaning
+them up stays something to do by hand, because the disk being freed is the one Keycloak
+lives on.
+
+The rest of the `gryt-prod` stack — server, SFU, image worker — is deliberately **not** in
+scope. Those carry data, and rolling them forward is a decision rather than a cron job.

@@ -1,0 +1,17 @@
+[Unit]
+Description=Check GHCR for a newer web client every ten minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=10min
+
+# Ten minutes is about how long it is acceptable for app.gryt.chat to lag a
+# release. The check itself is a manifest request against GHCR and costs
+# nothing when the digest has not moved.
+RandomizedDelaySec=2min
+
+# Catch up after the box has been off rather than waiting out a full interval.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

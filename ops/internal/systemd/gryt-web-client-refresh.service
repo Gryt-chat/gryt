@@ -1,0 +1,34 @@
+[Unit]
+Description=Pull the released web client image for the hosted Gryt web clients
+Documentation=https://github.com/Gryt-chat/gryt/blob/main/ops/internal/README.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+
+# A symlink into the checkout rather than a copy, so `git pull` updates the
+# script and nothing has to be installed again. systemd needs a literal
+# absolute path here — it does not expand variables in the executable itself —
+# which is why the path is fixed and everything that varies per box lives in
+# the environment file below.
+ExecStart=/usr/local/bin/gryt-web-client-refresh
+
+# Optional, and the only file that should know anything about this particular
+# machine. See gryt-web-client-refresh.env.example. Nothing in it is needed for
+# the deployment this was written for — the script reads each stack's compose
+# files and env file off the running container's labels.
+EnvironmentFile=-/etc/default/gryt-web-client-refresh
+
+# Runs as root, which is what a system unit talking to the Docker socket
+# usually does. To run as someone else instead, drop in an override rather than
+# editing this file:
+#
+#   systemctl edit gryt-web-client-refresh.service
+#   [Service]
+#   User=youruser
+#   SupplementaryGroups=docker
+
+# One run should never sit on the Docker socket for long. If GHCR is slow
+# enough to hit this, the next timer firing picks it up.
+TimeoutStartSec=600

@@ -359,7 +359,17 @@ services:
       GRYT_OIDC_ISSUER: ${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}
       GRYT_OIDC_REALM: ${GRYT_OIDC_REALM:-gryt}
       GRYT_OIDC_CLIENT_ID: ${GRYT_OIDC_CLIENT_ID:-gryt-web}
+      # The certificate authority the client asks to vouch for its key, and the
+      # counterpart to the server's GRYT_TRUSTED_CERT_ISSUERS above — point one
+      # somewhere else without the other and the join fails.
+      #
+      # Pointing at a different Keycloak and leaving this alone is GRYT-156:
+      # the token comes from your issuer and goes to Gryt's CA, which validates
+      # against its own and refuses it. The 401 says "no applicable key found in
+      # the JWKS", which is the symptom.
+      GRYT_IDENTITY_URL: ${GRYT_IDENTITY_URL:-https://id.gryt.chat}
       GRYT_AUTH_API: ${GRYT_AUTH_API:-https://auth.gryt.chat}
+      GRYT_AUTH_CALLBACK_URL: ${GRYT_AUTH_CALLBACK_URL:-https://gryt.chat/auth/callback}
     depends_on:
       server:
         condition: service_healthy

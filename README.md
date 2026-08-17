@@ -73,6 +73,27 @@ See the [contributing guide](https://docs.gryt.chat/docs/guide/contributing) for
 
 Nothing security-relevant merges without being read line by line — the SFU, authentication, identity, the image worker and the data layer only change through a reviewed pull request. See the [AI policy](https://docs.gryt.chat/docs/guide/ai) for the exact paths, how to verify it, and the disclosure rules for contributions.
 
+## Sponsors
+
+Gryt is one person's project, and the bills are real — a domain, a box, the Apple
+and Windows signing certificates that stop the installer warning people off. If you
+run Gryt or just want it to keep going, [GitHub Sponsors](https://github.com/sponsors/Gryt-chat)
+is where that happens.
+
+<!-- sponsors:start -->
+
+Nobody yet. This is where names go.
+
+<!-- sponsors:end -->
+
+Sponsoring at $25 a month puts your name or handle here. At $100 a month a logo goes
+on [gryt.chat](https://gryt.chat), linked wherever you want. A one-off at $50 gets you
+a line in the notes for the next release.
+
+To be listed, or to change how you are listed, say so on the sponsorship or open a
+pull request against this section — nothing is published automatically, and nothing
+about you is used beyond what you write here.
+
 ## Acknowledgments
 
 Gryt wouldn't exist without these projects and resources. I'm forever grateful to the people behind them for sharing their work with the world.

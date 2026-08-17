@@ -120,6 +120,32 @@ obvious, and no codec puts back detail that was never captured.
 
 Sections like Security and Under the hood get nothing.
 
+## Sponsors
+
+The $50 one-time tier on GitHub Sponsors promises a name in the notes for the next
+release. Nothing enforces that, and a promise nobody remembers is worse than one
+never made — so it belongs in the checklist here rather than in somebody's head.
+
+Before publishing a note, check
+[the sponsors list](https://github.com/sponsors/Gryt-chat) for one-time sponsorships
+since the last one went out. If there are any, credit them at the end, above the recap
+list, with nothing more than their names:
+
+```mdx
+Thanks to <name> and <name> for sponsoring this release.
+```
+
+Use whatever name they sponsored under, or the one they asked for. No logos, no
+links, no thank-you paragraph — this is a credit, not an advertisement, and the
+tier says a name.
+
+Recurring sponsors are not credited per release. They are listed in the README and
+on the site, which is what those tiers promise, and repeating them in every note
+would turn the notes into a sponsor page.
+
+Nothing to credit is the normal case. Say nothing at all rather than writing that
+there were no sponsors.
+
 ## Betas
 
 Not every beta deserves notes. If a release contains nothing above **Under the

@@ -139,8 +139,21 @@ Anything that differs per machine goes in `/etc/default/gryt-web-client-refresh`
 [`gryt-web-client-refresh.env.example`](systemd/gryt-web-client-refresh.env.example). On a
 normal checkout none of it is needed.
 
-Check on it with `systemctl list-timers gryt-web-client-refresh` and
-`journalctl -u gryt-web-client-refresh -n 50`.
+Check on it with `systemctl list-timers gryt-web-client-refresh`, and read what it
+did with:
+
+```bash
+sudo journalctl -u gryt-web-client-refresh -n 50
+```
+
+The `sudo` is not optional. The service runs as root, and `journalctl` without it
+shows only your own messages, so the plain command prints nothing at all and looks
+like the timer never ran. `id -nG` will tell you whether you are in `adm` or
+`systemd-journal`; on this box the answer is no.
+
+Immediately after `enable --now`, `list-timers` shows `NEXT` and `LEFT` as `-`.
+That is the first run still going, not a timer that failed to schedule: the next
+elapse appears once the service goes inactive, a few seconds later.
 
 Superseded images are left dangling rather than removed — roughly 30MB a release. Cleaning
 them up stays something to do by hand, because the disk being freed is the one Keycloak

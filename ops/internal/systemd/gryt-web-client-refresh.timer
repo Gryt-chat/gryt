@@ -2,6 +2,9 @@
 Description=Check GHCR for a newer web client every ten minutes
 
 [Timer]
+# Monotonic, so there is no Persistent= here. That setting only does anything
+# for OnCalendar= timers, and a line claiming to catch up missed runs while
+# doing nothing is worse than no line.
 OnBootSec=5min
 OnUnitActiveSec=10min
 
@@ -9,9 +12,6 @@ OnUnitActiveSec=10min
 # release. The check itself is a manifest request against GHCR and costs
 # nothing when the digest has not moved.
 RandomizedDelaySec=2min
-
-# Catch up after the box has been off rather than waiting out a full interval.
-Persistent=true
 
 [Install]
 WantedBy=timers.target

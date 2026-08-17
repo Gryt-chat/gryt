@@ -1,0 +1,14 @@
+[Unit]
+Description=Pull the released web client image for app.gryt.chat and beta.gryt.chat
+Documentation=https://github.com/Gryt-chat/gryt/blob/main/ops/internal/README.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=sivert
+ExecStart=/home/sivert/gryt/ops/internal/refresh-web-client.sh
+
+# One run should never sit on the docker socket for long. If GHCR is slow
+# enough to hit this, the next timer firing picks it up.
+TimeoutStartSec=600

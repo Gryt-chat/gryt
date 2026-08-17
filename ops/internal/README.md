@@ -72,3 +72,49 @@ All four should be **proxied** and routed through the same Cloudflare Tunnel.
 ## Downloads folder
 
 Static files placed in `ops/internal/downloads/` are served at `/downloads/*` on `gryt.chat`.
+
+## Keeping the hosted web clients current
+
+`app.gryt.chat` and `beta.gryt.chat` are not built from source like the sites above. They
+are the `ghcr.io/gryt-chat/client` image that `Release Client` pushes on every release,
+running as the `client` service of the `gryt-prod` and `gryt-beta` stacks in
+`ops/deploy/compose/`.
+
+Building and pushing that image was automated. Pulling it was not, so the web client only
+moved when somebody remembered. On 2026-08-17 `app.gryt.chat` was serving **1.5.6** against
+a desktop app on **1.6.15-beta.1** — ten releases, including the whole seed-derived guest
+identity feature set, which read from the outside as "that only works on desktop"
+(GRYT-291).
+
+[`refresh-web-client.sh`](refresh-web-client.sh) closes that. It pulls `latest` for prod and
+`latest-beta` for beta, and recreates the container only when the image id actually moved:
+
+```bash
+ops/internal/refresh-web-client.sh
+```
+
+It touches nothing but the `client` service — `--no-deps`, one service named, never a bare
+`up -d` — so the server, the SFU, the image worker and MinIO are never in its way. It
+refuses to run with less than 10GB free, since the auth database is on the same disk.
+
+A release-triggered deploy would be tighter, and is not what this is: `dev.lan` sits behind
+the Cloudflare tunnel with no self-hosted runner, so a job in `Release Client` would need
+inbound SSH and secrets before it could do anything at all. A timer needs neither.
+
+Installed as a systemd timer, firing every ten minutes:
+
+```bash
+sudo cp ops/internal/systemd/gryt-web-client-refresh.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now gryt-web-client-refresh.timer
+```
+
+Check on it with `systemctl list-timers gryt-web-client-refresh` and
+`journalctl -u gryt-web-client-refresh -n 50`.
+
+Superseded images are left dangling rather than removed — roughly 30MB a release. Cleaning
+them up stays something to do by hand, because the disk being freed is the one Keycloak
+lives on.
+
+The rest of the `gryt-prod` stack — server, SFU, image worker — is deliberately **not** in
+scope. Those carry data, and rolling them forward is a decision rather than a cron job.

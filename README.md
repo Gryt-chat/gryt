@@ -83,7 +83,9 @@ of it is held back for people who pay.
 
 <!-- sponsors:start -->
 
-Nobody yet. This is where names go.
+**Sponsored once** — Carlo, March 2026.
+
+Nobody is sponsoring monthly yet. That list goes here when there is one.
 
 <!-- sponsors:end -->
 
@@ -116,6 +118,13 @@ Gryt wouldn't exist without these projects and resources. I'm forever grateful t
 - [WebRTC Simulcast Playground](https://orphis.github.io/webrtc-sandbox/simulcast-playground.html) by Orphis — Invaluable for understanding simulcast, SVC scalability modes, and encoder behavior
 - [mediasoup documentation](https://mediasoup.org/documentation/) — Excellent SFU architecture reference that shaped how I think about track forwarding
 - [Microsoft Application Loopback Audio Capture sample](https://learn.microsoft.com/en-us/samples/microsoft/windows-classic-samples/applicationloopbackaudio-sample/) — The WASAPI example that showed how to capture per-process audio on Windows while excluding Gryt's own audio
+
+**People:**
+
+- **Carlo** — asked the question that became portable guest identity. It started
+  as a conversation about federation, and the smaller question inside it — whether
+  you can be the same person on two servers without an account — turned out to be
+  the answerable one. The design was worked out with him in the Gryt Discord
 
 **Projects that inspired the journey:**
 

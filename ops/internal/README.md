@@ -95,19 +95,49 @@ ops/internal/refresh-web-client.sh
 
 It touches nothing but the `client` service — `--no-deps`, one service named, never a bare
 `up -d` — so the server, the SFU, the image worker and MinIO are never in its way. It
-refuses to run with less than 10GB free, since the auth database is on the same disk.
+refuses to run with less than 10GB free, since the auth database is on the same disk. It
+only refreshes a container that is already running, and will not bring a missing one up.
 
-A release-triggered deploy would be tighter, and is not what this is: `dev.lan` sits behind
+Nothing in it is specific to one machine, and there are no paths to configure. Each stack's
+compose files, the order they were merged in and the env file they were read with all come
+off the running container's own labels. That is not a shortcut — the overlay list has to
+match what the stack came up with exactly, because compose merges left to right and a
+different list is a different config, which would make `up` recreate the container every
+ten minutes forever. Some of those overlays are untracked and exist only on the host, so
+no list committed here could be right.
+
+Three environment variables, none of them required:
+
+| | |
+|---|---|
+| `GRYT_STACKS` | stacks to refresh, space separated. Default `prod beta`; each `<s>` means the container `gryt-<s>-client` |
+| `GRYT_SERVICE` | the compose service, if it is not called `client` |
+| `GRYT_MIN_FREE_GB` | refuse to pull below this much free disk. Default `10` |
+
+A release-triggered deploy would be tighter, and is not what this is: the box sits behind
 the Cloudflare tunnel with no self-hosted runner, so a job in `Release Client` would need
 inbound SSH and secrets before it could do anything at all. A timer needs neither.
 
-Installed as a systemd timer, firing every ten minutes:
+### Installing the timer
+
+Symlink rather than copy, so `git pull` updates the script and nothing has to be installed
+twice. `ExecStart` needs a literal absolute path — systemd does not expand variables in the
+executable itself — so the symlink is what keeps the unit free of anybody's home directory.
 
 ```bash
+sudo ln -sfn "$PWD/ops/internal/refresh-web-client.sh" /usr/local/bin/gryt-web-client-refresh
 sudo cp ops/internal/systemd/gryt-web-client-refresh.{service,timer} /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now gryt-web-client-refresh.timer
 ```
+
+It fires every ten minutes and runs as root, which is the usual arrangement for a system
+unit talking to the Docker socket. To run as somebody else, drop in an override with
+`User=` and `SupplementaryGroups=docker` rather than editing the shipped unit.
+
+Anything that differs per machine goes in `/etc/default/gryt-web-client-refresh` — see
+[`gryt-web-client-refresh.env.example`](systemd/gryt-web-client-refresh.env.example). On a
+normal checkout none of it is needed.
 
 Check on it with `systemctl list-timers gryt-web-client-refresh` and
 `journalctl -u gryt-web-client-refresh -n 50`.

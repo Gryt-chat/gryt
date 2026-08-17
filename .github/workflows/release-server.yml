@@ -119,6 +119,80 @@ jobs:
 
           git -C packages/server remote set-url origin "https://x-access-token:${RELEASE_PAT}@github.com/Gryt-chat/server.git"
 
+      - name: Verify push access before anything is published
+        shell: bash
+        env:
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+          MONOREPO_TOKEN: ${{ github.token }}
+          MONOREPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # This run pushes an image to GHCR and commits release.json to the
+          # monorepo long before it first pushes to Gryt-chat/server, and that
+          # last push is the step that failed on 2026-08-17, during a GitHub
+          # incident with Git Operations degraded. What it left behind was
+          # 1.4.4 on GHCR with no tag, no release page and no self-hosted
+          # bundles — a version that exists as an image and nowhere else.
+          # GRYT-300.
+          #
+          # `ls-remote` would not have caught it. That talks to upload-pack, so
+          # it only proves the credential can read, and a token that has lost
+          # its write scope still answers it happily. Push is authorised
+          # against git-receive-pack, so ask that service for its ref
+          # advertisement instead — same request a real push starts with, and
+          # it changes nothing on the remote.
+          #
+          # This narrows the window rather than closing it. GitHub can still
+          # fall over between here and the tag push twenty minutes later. What
+          # it does remove is the run that was never going to finish — an
+          # expired credential, or a GitHub that is already unhealthy — and
+          # that run is now a no-op instead of a half-release.
+          probe() {
+            local repo="$1" token="$2" code attempt
+
+            for attempt in 1 2 3; do
+              code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
+                -u "x-access-token:${token}" \
+                "https://github.com/${repo}.git/info/refs?service=git-receive-pack" \
+                || echo 000)
+
+              case "$code" in
+                200)
+                  echo "  ${repo}: can push"
+                  return 0
+                  ;;
+                401 | 403)
+                  # A definite no. Retrying will not turn it into a yes.
+                  echo "  ${repo}: credential is not allowed to push (HTTP ${code})" >&2
+                  return 1
+                  ;;
+                *)
+                  echo "  ${repo}: no usable answer (HTTP ${code}), attempt ${attempt}/3" >&2
+                  sleep $(( attempt * 5 ))
+                  ;;
+              esac
+            done
+
+            echo "  ${repo}: could not confirm push access" >&2
+            return 1
+          }
+
+          failed=0
+          probe "Gryt-chat/server" "$RELEASE_PAT" || failed=1
+          probe "$MONOREPO" "$MONOREPO_TOKEN" || failed=1
+
+          if (( failed )); then
+            echo "" >&2
+            echo "Stopping before anything is published." >&2
+            echo "" >&2
+            echo "Check https://www.githubstatus.com first. If Git Operations are" >&2
+            echo "degraded then this is not the credential, and the fix is to wait" >&2
+            echo "and dispatch again. If GitHub is healthy, RELEASE_PAT has expired" >&2
+            echo "or lost write access to the repo named above." >&2
+            exit 1
+          fi
+
       - name: Move release submodules to their main
         shell: bash
         run: |
@@ -683,7 +757,39 @@ jobs:
 
           TAG="${{ steps.version.outputs.tag }}"
 
-          git -C packages/server tag "$TAG"
+          # A retried release arrives here with the tag already on the remote.
+          # That is not an edge case, it is what `bump=none` is for: after a run
+          # that failed somewhere later, `Determine server version` reads the
+          # version back out of release.json and redoes it. Everything else in
+          # that path is idempotent — the Docker push overwrites, the zips get
+          # rebuilt — and this step was the one that stopped, on "tag already
+          # exists", under `set -euo pipefail`. GRYT-300.
+          #
+          # So accept a tag that already names this commit and refuse one that
+          # names a different commit, rather than force-moving a tag people may
+          # already have fetched.
+          HEAD_SHA="$(git -C packages/server rev-parse HEAD)"
+          REMOTE_SHA="$(git -C packages/server ls-remote origin "refs/tags/${TAG}" | awk '{ print $1 }')"
+
+          if [[ -n "$REMOTE_SHA" ]]; then
+            if [[ "$REMOTE_SHA" == "$HEAD_SHA" ]]; then
+              echo "${TAG} is already on the remote at ${HEAD_SHA} — nothing to do."
+              exit 0
+            fi
+
+            echo "${TAG} already exists on the remote at ${REMOTE_SHA}," >&2
+            echo "but this release built ${HEAD_SHA}." >&2
+            echo "" >&2
+            echo "Refusing to move a published tag. Either delete the remote tag" >&2
+            echo "and dispatch again, or release a new version." >&2
+            exit 1
+          fi
+
+          # Nothing on the remote, so any local tag of that name is a leftover
+          # and safe to overwrite — `Fetch server tags` runs before the version
+          # is even chosen, so it can have brought in a tag that was later
+          # deleted from the remote by hand.
+          git -C packages/server tag -f "$TAG" "$HEAD_SHA"
           git -C packages/server push origin "$TAG"
 
       - name: Create GitHub Release in server repo

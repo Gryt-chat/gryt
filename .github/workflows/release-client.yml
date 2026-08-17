@@ -113,6 +113,77 @@ jobs:
 
           git -C packages/client remote set-url origin "https://x-access-token:${RELEASE_PAT}@github.com/Gryt-chat/client.git"
 
+      - name: Verify push access before anything is published
+        shell: bash
+        env:
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+          MONOREPO_TOKEN: ${{ github.token }}
+          MONOREPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # `Release Server` died on its last push during the GitHub incident on
+          # 2026-08-17 and left an image on GHCR for a version with no tag and
+          # no release page. This workflow uses the same credential at the same
+          # kind of step, and has more to lose: installers for three platforms
+          # and a push to the Snap Store. GRYT-300.
+          #
+          # `ls-remote` would not have caught it. That talks to upload-pack, so
+          # it only proves the credential can read, and a token that has lost
+          # its write scope still answers it happily. Push is authorised
+          # against git-receive-pack, so ask that service for its ref
+          # advertisement instead — same request a real push starts with, and
+          # it changes nothing on the remote.
+          #
+          # This narrows the window rather than closing it. GitHub can still
+          # fall over later in the run. What it does remove is the run that was
+          # never going to finish — an expired credential, or a GitHub that is
+          # already unhealthy — and that run is now a no-op.
+          probe() {
+            local repo="$1" token="$2" code attempt
+
+            for attempt in 1 2 3; do
+              code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
+                -u "x-access-token:${token}" \
+                "https://github.com/${repo}.git/info/refs?service=git-receive-pack" \
+                || echo 000)
+
+              case "$code" in
+                200)
+                  echo "  ${repo}: can push"
+                  return 0
+                  ;;
+                401 | 403)
+                  # A definite no. Retrying will not turn it into a yes.
+                  echo "  ${repo}: credential is not allowed to push (HTTP ${code})" >&2
+                  return 1
+                  ;;
+                *)
+                  echo "  ${repo}: no usable answer (HTTP ${code}), attempt ${attempt}/3" >&2
+                  sleep $(( attempt * 5 ))
+                  ;;
+              esac
+            done
+
+            echo "  ${repo}: could not confirm push access" >&2
+            return 1
+          }
+
+          failed=0
+          probe "Gryt-chat/client" "$RELEASE_PAT" || failed=1
+          probe "$MONOREPO" "$MONOREPO_TOKEN" || failed=1
+
+          if (( failed )); then
+            echo "" >&2
+            echo "Stopping before anything is published." >&2
+            echo "" >&2
+            echo "Check https://www.githubstatus.com first. If Git Operations are" >&2
+            echo "degraded then this is not the credential, and the fix is to wait" >&2
+            echo "and dispatch again. If GitHub is healthy, RELEASE_PAT has expired" >&2
+            echo "or lost write access to the repo named above." >&2
+            exit 1
+          fi
+
       - name: Move release submodules to their main
         shell: bash
         run: |
@@ -539,8 +610,30 @@ jobs:
 
           # Tagged after the push succeeds, so the tag can never name a commit that
           # is not on the branch.
-          git tag "v$VERSION"
-          git push origin "v$VERSION"
+          #
+          # Same idempotency as `Tag server repo`: a re-dispatch of a version
+          # that already got this far finds its own tag on the remote, and that
+          # used to fail the step on "tag already exists". Accept the tag when
+          # it already names this commit; refuse to move one that names another.
+          # GRYT-300.
+          HEAD_SHA="$(git rev-parse HEAD)"
+          REMOTE_SHA="$(git ls-remote origin "refs/tags/v${VERSION}" | awk '{ print $1 }')"
+
+          if [[ -n "$REMOTE_SHA" && "$REMOTE_SHA" != "$HEAD_SHA" ]]; then
+            echo "v${VERSION} already exists on the remote at ${REMOTE_SHA}," >&2
+            echo "but this release built ${HEAD_SHA}." >&2
+            echo "" >&2
+            echo "Refusing to move a published tag. Either delete the remote tag" >&2
+            echo "and dispatch again, or release a new version." >&2
+            exit 1
+          fi
+
+          if [[ -n "$REMOTE_SHA" ]]; then
+            echo "v${VERSION} is already on the remote at ${HEAD_SHA}."
+          else
+            git tag -f "v$VERSION" "$HEAD_SHA"
+            git push origin "v$VERSION"
+          fi
 
       - name: Determine checkout ref
         id: ref

@@ -75,29 +75,15 @@ Nothing security-relevant merges without being read line by line — the SFU, au
 
 ## Sponsors
 
-Sponsoring pays for a domain, the box the auth stack runs on, and the Apple and
-Windows signing certificates that stop the installer warning people off their own
-download. That is the whole list — there is nothing to buy inside Gryt, and no part
-of it is held back for people who pay.
-[GitHub Sponsors](https://github.com/sponsors/Gryt-chat) is where it goes.
-
 <!-- sponsors:start -->
 
 **Sponsored once** — Carlo, March 2026.
 
-Nobody is sponsoring monthly yet. That list goes here when there is one.
-
 <!-- sponsors:end -->
 
-Sponsoring at $25 a month puts your name or handle here. At $100 a month a logo goes
-on [gryt.chat](https://gryt.chat), linked wherever you want. A one-off at $50 gets you
-a line in the notes for the next release.
-
-Everyone who has sponsored, including one-off payments and when each arrived, is at
-[gryt.chat/sponsors](https://gryt.chat/sponsors).
-
-To be listed, or to change how you are listed, say so on the sponsorship or open a
-pull request. Nothing is published automatically.
+What sponsoring pays for, the tiers, and everyone who has sponsored:
+[gryt.chat/sponsors](https://gryt.chat/sponsors). To sponsor:
+[GitHub Sponsors](https://github.com/sponsors/Gryt-chat).
 
 ## Acknowledgments
 
@@ -118,13 +104,6 @@ Gryt wouldn't exist without these projects and resources. I'm forever grateful t
 - [WebRTC Simulcast Playground](https://orphis.github.io/webrtc-sandbox/simulcast-playground.html) by Orphis — Invaluable for understanding simulcast, SVC scalability modes, and encoder behavior
 - [mediasoup documentation](https://mediasoup.org/documentation/) — Excellent SFU architecture reference that shaped how I think about track forwarding
 - [Microsoft Application Loopback Audio Capture sample](https://learn.microsoft.com/en-us/samples/microsoft/windows-classic-samples/applicationloopbackaudio-sample/) — The WASAPI example that showed how to capture per-process audio on Windows while excluding Gryt's own audio
-
-**People:**
-
-- **Carlo** — asked the question that became portable guest identity. It started
-  as a conversation about federation, and the smaller question inside it — whether
-  you can be the same person on two servers without an account — turned out to be
-  the answerable one. The design was worked out with him in the Gryt Discord
 
 **Projects that inspired the journey:**
 

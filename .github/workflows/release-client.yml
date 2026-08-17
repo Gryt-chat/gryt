@@ -76,7 +76,7 @@ jobs:
           # forced #48 to be done by hand. All four are moved to their own main
           # below, so the recorded value is discarded anyway.
           #
-          # This list and the one in "Move release submodules to their main"
+          # This list and the one in "Move release submodules into place"
           # have to hold the same paths. A path in the second but not the first
           # is never cloned, so the fetch there runs against a directory that is
           # not a repository and takes the job down.
@@ -184,25 +184,55 @@ jobs:
             exit 1
           fi
 
-      - name: Move release submodules to their main
+      - name: Move release submodules into place
         shell: bash
         run: |
           set -euo pipefail
 
-          # Release from what is on each submodule's main, not from the
-          # superproject's gitlink.
+          # The client is released from its main, not from the superproject's
+          # gitlink, because the gitlink only moves when update-submodules.yml
+          # runs. A dispatch that never arrived, or a sweep still in flight,
+          # would otherwise ship a client that disagrees with the release.
+          git -C packages/client fetch origin main
+          git -C packages/client checkout -B main origin/main
+          echo "packages/client -> $(git -C packages/client rev-parse --short HEAD) (main)"
+
+          # The three embedded services come from their newest release tag
+          # instead. They used to come from main as well, and main is routinely
+          # a commit or two past the last release, which meant the embedded
+          # binaries were built from an untagged commit.
           #
-          # The client was already handled this way. The others were not, so
-          # they came from the gitlink — which only moves when
-          # update-submodules.yml runs. That sweep no longer shares this
-          # workflow's concurrency group, so it is far less likely to be delayed
-          # now, but a release should not depend on it having run at all: a
-          # dispatch that never arrived, or a sweep still in flight, would
-          # otherwise ship embedded binaries that disagree with the client.
-          for path in packages/client packages/server packages/sfu packages/image-worker; do
-            git -C "$path" fetch origin main
-            git -C "$path" checkout -B main origin/main
-            echo "$path -> $(git -C "$path" rev-parse --short HEAD)"
+          # build-embedded-server.mjs versions each artefact with `git describe`
+          # when HEAD is not exactly on a tag, so those builds reported
+          # "1.0.48-1-gafa06e4" rather than "1.0.49". versionCheck.ts then
+          # compares that against the newest GitHub release with a parser that
+          # does `(part || 0)`, and Number("48-1-gafa06e4") is NaN, which is
+          # falsy, so the patch component collapsed to 0 and the whole thing
+          # compared as 1.0.0. Every desktop-hosted server reported an update
+          # that installing could never clear, because the next build was
+          # untagged too. GRYT-306.
+          #
+          # Stable tags only, deliberately, on every channel. A beta client is a
+          # beta of the client; embedding a prerelease of the media plane in it
+          # is a separate decision, and versionCheck resolves `latest` from the
+          # newest non-prerelease release, so a prerelease here would put the
+          # nag straight back.
+          for path in packages/server packages/sfu packages/image-worker; do
+            git -C "$path" fetch origin main --tags --force
+
+            tag=$(git -C "$path" tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname \
+              | grep -Ex 'v[0-9]+\.[0-9]+\.[0-9]+' \
+              | head -1)
+
+            if [[ -z "$tag" ]]; then
+              echo "::error::No stable release tag in $path. Release it before releasing the client."
+              exit 1
+            fi
+
+            # Detached on purpose: this is a point in history, not a branch to
+            # carry on from.
+            git -C "$path" checkout --detach --quiet "$tag"
+            echo "$path -> $(git -C "$path" rev-parse --short HEAD) ($tag)"
           done
 
       - name: Set up Node.js

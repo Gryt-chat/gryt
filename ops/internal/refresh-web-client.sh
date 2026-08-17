@@ -42,7 +42,8 @@ refresh() {
   local stack="$1"
   local container="gryt-${stack}-${SERVICE}"
   local -a args=()
-  local config_files env_file working_dir f before after free_gb
+  local config_files env_file working_dir f free_gb
+  local image_before image_after id_before id_after
 
   # Read the stack's shape off the container rather than guessing at it.
   #
@@ -82,7 +83,13 @@ refresh() {
     return 1
   fi
 
-  before=$(docker inspect --format '{{.Image}}' "$container" 2>/dev/null || echo none)
+  # Both, because they answer different questions. The image id says whether a
+  # new release arrived; the container id says whether compose replaced the
+  # container at all, which it also does when the service definition changes
+  # underneath it. Watching only the image made a recreate report "already
+  # current" — true of the image and wrong about what had just happened.
+  image_before=$(docker inspect --format '{{.Image}}' "$container" 2>/dev/null || echo none)
+  id_before=$(docker inspect --format '{{.Id}}' "$container" 2>/dev/null || echo none)
 
   # `--progress quiet` on both calls, because this runs every ten minutes and
   # journald does not need three lines of "Pulling / Pulled / Running" each time
@@ -107,12 +114,15 @@ refresh() {
     return 1
   fi
 
-  after=$(docker inspect --format '{{.Image}}' "$container" 2>/dev/null || echo none)
+  image_after=$(docker inspect --format '{{.Image}}' "$container" 2>/dev/null || echo none)
+  id_after=$(docker inspect --format '{{.Id}}' "$container" 2>/dev/null || echo none)
 
-  if [[ "$before" == "$after" ]]; then
-    log "[$stack] already current (${after:0:19})"
+  if [[ "$image_before" != "$image_after" ]]; then
+    log "[$stack] new image ${image_before:0:19} -> ${image_after:0:19}"
+  elif [[ "$id_before" != "$id_after" ]]; then
+    log "[$stack] recreated on the same image (${image_after:0:19}) — the service definition changed"
   else
-    log "[$stack] ${before:0:19} -> ${after:0:19}"
+    log "[$stack] already current (${image_after:0:19})"
   fi
 }
 

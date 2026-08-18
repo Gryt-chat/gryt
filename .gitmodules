@@ -34,3 +34,7 @@
 	path = packages/cli
 	url = https://github.com/Gryt-chat/cli.git
 	branch = main
+[submodule "packages/voice"]
+	path = packages/voice
+	url = https://github.com/Gryt-chat/voice.git
+	branch = main

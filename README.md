@@ -53,6 +53,12 @@
 
 See the **[Quick Start guide](https://docs.gryt.chat/docs/guide/quick-start)** to self-host Gryt with Docker Compose — two files, one command, no cloning required.
 
+Or manage servers from a terminal with the **[Gryt CLI](https://docs.gryt.chat/docs/cli)**, which writes the compose file for you:
+
+```bash
+curl -fsSL https://get.gryt.chat | sh
+```
+
 ## Development
 
 ```bash

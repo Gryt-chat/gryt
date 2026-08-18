@@ -1,7 +1,7 @@
 <div align="center">
   <img src="https://raw.githubusercontent.com/Gryt-chat/client/main/public/logo.svg" width="80" alt="Gryt logo" />
   <h1>Gryt</h1>
-  <p><strong>Open-source WebRTC voice chat platform</strong></p>
+  <p><strong>Open-source WebRTC voice, video and text chat</strong></p>
   <p>
     <a href="https://github.com/Gryt-chat/gryt/releases/latest"><img src="https://img.shields.io/github/v/release/Gryt-chat/gryt?cacheSeconds=3600" alt="GitHub Release" /></a>
     <a href="https://github.com/Gryt-chat/gryt/stargazers"><img src="https://img.shields.io/github/stars/Gryt-chat/gryt" alt="GitHub Stars" /></a>
@@ -24,13 +24,13 @@
 <br />
 
 > [!CAUTION]
-> **Early Development Stage** — This project is experimental and under active development. Expect breaking changes.
+> **Early development.** Gryt is experimental and changes often. Expect breaking changes.
 
 ## Features
 
 - Voice chat over WebRTC with the Opus codec
 - Video chat from your camera
-- Screen sharing with audio capture
+- Camera video and screen sharing, both with audio
 - Text chat with Markdown, mentions, and file sharing
 - Self-hostable with Docker Compose
 - LAN server discovery via mDNS
@@ -45,12 +45,11 @@
 | Web | [app.gryt.chat](https://app.gryt.chat) |
 | Linux (AppImage / deb) | [GitHub Releases](https://github.com/Gryt-chat/gryt/releases/latest) |
 | Linux (Snap) | [Snap Store](https://snapcraft.io/gryt-chat) |
-
 | Linux (Arch) | [AUR: gryt-chat-bin](https://aur.archlinux.org/packages/gryt-chat-bin) |
 | Windows | [GitHub Releases](https://github.com/Gryt-chat/gryt/releases/latest) |
 | macOS | [GitHub Releases](https://github.com/Gryt-chat/gryt/releases/latest) |
 
-## Self-Hosting
+## Self-hosting
 
 See the **[Quick Start guide](https://docs.gryt.chat/docs/guide/quick-start)** to self-host Gryt with Docker Compose — two files, one command, no cloning required.
 
@@ -103,7 +102,7 @@ Gryt wouldn't exist without these projects and resources. I'm forever grateful t
 
 - [Pion WebRTC](https://github.com/pion/webrtc) — Pure Go WebRTC stack that the entire SFU is built on. Sean DuBois and the Pion community taught me more about WebRTC than anything else
 - [RNNoise](https://jmvalin.ca/demo/rnnoise/) via [@shiguredo/rnnoise-wasm](https://github.com/niccokunzmann/rnnoise-wasm) — Jean-Marc Valin's neural network noise suppression, compiled to WASM for the browser
-- [Radix UI](https://www.radix-ui.com/) — Accessible, unstyled component primitives that form the backbone of the UI
+- [Base UI](https://base-ui.com/) — Accessible, unstyled component primitives, which [`@gryt/ui`](https://github.com/Gryt-chat/ui) is built on and the client renders through
 - [Socket.IO](https://socket.io/) — Real-time signaling between client and server
 - [Electron](https://www.electronjs.org/) — Desktop app shell with native OS integration
 

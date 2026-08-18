@@ -112,7 +112,7 @@ kanban board is the state: **To-Do → Doing → Review → Done**.
 |------|--------------|-------------|
 | Starting work | Move to **Doing**, comment the branch name on the task | You |
 | PR opened | Move to **Review**, comment the PR link | CI |
-| PR merged | Move to **Done**, which sets the task's done flag | CI |
+| PR merged | Move to **Done** *and* set the task's done flag | CI |
 
 CI covers the last two through `.github/workflows/vikunja-task-done.yml`, which calls a
 reusable workflow in `Gryt-chat/.github`. Eight of the nine repos have it, so you don't
@@ -127,7 +127,17 @@ Moving a task is not exposed by the Vikunja MCP server, so use the REST API dire
 POST /api/v1/projects/2/views/12/buckets/<bucket>/tasks   {"task_id": <id>}
 ```
 
-Dropping a task into **Done** sets its `done` flag automatically — no separate update.
+Moving a card into **Done** does **not** set its `done` flag. That needs its own write:
+
+```bash
+POST /api/v1/tasks/<id>   {"done": true}
+```
+
+This file claimed the opposite until 2026-08-18, and the CI workflow was written to match,
+so every task CI closed sat in the Done column reporting `done: false`. Thirteen of them
+had built up. They read as finished on the board and as open to anything filtering on
+`done`, and nothing failed on the way — which is why it went unnoticed for so long. Fixed
+in the reusable workflow, but do the second write yourself when moving a task by hand.
 
 If something merges outside a PR, or CI fails, **check the Review column at the start of
 Vikunja work and close anything whose PR has landed.**

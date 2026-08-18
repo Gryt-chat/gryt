@@ -28,7 +28,8 @@
 
 ## Features
 
-- Crystal-clear voice chat powered by WebRTC with Opus codec
+- Voice chat over WebRTC with the Opus codec
+- Video chat from your camera
 - Screen sharing with audio capture
 - Text chat with Markdown, mentions, and file sharing
 - Self-hostable with Docker Compose

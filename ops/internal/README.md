@@ -161,3 +161,82 @@ lives on.
 
 The rest of the `gryt-prod` stack — server, SFU, image worker — is deliberately **not** in
 scope. Those carry data, and rolling them forward is a decision rather than a cron job.
+
+## Keeping the sites built from source current
+
+`docs.gryt.chat`, `gryt.chat` and `ui.gryt.chat` have the opposite problem. They are not
+images anybody pushed, they are the `build:` contexts above pointing at the `docs`, `site`
+and `ui` submodules, so merging a pull request changes nothing that is running until
+somebody rebuilds by hand. That is how the `@gryt/voice` documentation could merge and
+`docs.gryt.chat` still not have it (GRYT-360).
+
+[`refresh-sites.sh`](refresh-sites.sh) is the same idea as the web client refresh with a
+different question to ask. There is no registry to check a digest against, so it fetches
+each submodule and rebuilds the ones whose commit has moved:
+
+```bash
+ops/internal/refresh-sites.sh
+```
+
+A quiet ten minutes costs one `git fetch` per repository and nothing else. When something
+has moved it fast-forwards that submodule, runs `docker compose build` for that one
+service, and `up -d --no-deps` it.
+
+What it will not do:
+
+- It never runs a bare `up -d`. Fider and its Postgres are in the same compose file, and a
+  timer has no business recreating a database.
+- It leaves a submodule alone if it has tracked local modifications, rather than discarding
+  them. Untracked files are ignored, since these checkouts are full of `node_modules` and
+  build output and would otherwise read as permanently dirty.
+- It only refreshes a container that is already running, for the same reason the web client
+  script does: it does not know what a missing one was supposed to look like.
+- It refuses to build below 20GB free. Higher than the web client's 10, because these run
+  real builds rather than pulling a 30MB nginx image, and the disk is the one Keycloak
+  lives on.
+
+Neither the service list nor the source directories are written down in the script. The
+compose files, their order and the env file come off the running container's labels, and
+each service's build context comes out of the merged compose config, so moving a submodule
+is not also an edit here.
+
+The one thing it does keep on the machine is what it last built, one file per service under
+`/var/lib/gryt-sites-refresh`. There is no registry to ask, so the answer has to be written
+down somewhere. A missing file counts as unknown rather than as current, which means the
+first run after installing this rebuilds all three. That is the right answer anyway, since
+the running containers are of unknown vintage until something has built them.
+
+Five environment variables, none of them required:
+
+| | |
+|---|---|
+| `GRYT_SITES` | compose services to rebuild, space separated. Default `docs site ui` |
+| `GRYT_SITES_PROJECT` | the compose project they belong to. Default `internal`, so service `docs` is the container `internal-docs-1` |
+| `GRYT_SITES_BRANCH` | the branch to follow in each submodule. Default `main` |
+| `GRYT_SITES_STATE` | where the commit last built is remembered. Default `/var/lib/gryt-sites-refresh` |
+| `GRYT_MIN_FREE_GB` | refuse to build below this much free disk. Default `20` |
+
+It follows each submodule's own `origin/main` rather than the gitlink the superproject
+records. The gitlink lags behind `update-submodules.yml`, and none of these three sites has
+any reason to wait for a superproject bump. If you want them pinned to the gitlink instead,
+that is a different script rather than a flag.
+
+### Installing the timer
+
+```bash
+sudo ln -sfn "$PWD/ops/internal/refresh-sites.sh" /usr/local/bin/gryt-sites-refresh
+sudo cp ops/internal/systemd/gryt-sites-refresh.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now gryt-sites-refresh.timer
+```
+
+Same shape as the web client timer, including the symlink and the root-by-default. It fires
+every ten minutes with a randomised delay offset from that one, so a build and an image pull
+do not routinely land on the Docker daemon together. `TimeoutStartSec` is an hour rather
+than ten minutes, because three builds from a cold layer cache take a while.
+
+Read what it did with `sudo journalctl -u gryt-sites-refresh -n 50`. The `sudo` matters for
+the same reason it does above.
+
+The first run rebuilds all three and will take a few minutes. After that, most runs print
+three `already on <commit>` lines and stop.

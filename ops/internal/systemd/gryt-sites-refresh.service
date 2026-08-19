@@ -1,0 +1,35 @@
+[Unit]
+Description=Rebuild docs.gryt.chat, gryt.chat and ui.gryt.chat when their source moves
+Documentation=https://github.com/Gryt-chat/gryt/blob/main/ops/internal/README.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+
+# A symlink into the checkout rather than a copy, so `git pull` updates the
+# script and nothing has to be installed again. systemd needs a literal
+# absolute path here, so the symlink is what keeps the unit free of anybody's
+# home directory.
+ExecStart=/usr/local/bin/gryt-sites-refresh
+
+# Optional, and the only file that should know anything about this particular
+# machine. See gryt-sites-refresh.env.example. Nothing in it is needed for the
+# deployment this was written for.
+EnvironmentFile=-/etc/default/gryt-sites-refresh
+
+# Runs as root, which is what a system unit talking to the Docker socket
+# usually does. To run as someone else instead, drop in an override rather than
+# editing this file:
+#
+#   systemctl edit gryt-sites-refresh.service
+#   [Service]
+#   User=youruser
+#   SupplementaryGroups=docker
+#
+# Whoever it runs as also has to be able to write GRYT_SITES_STATE.
+
+# Long, because this builds rather than pulls. A Next.js build from a cold
+# layer cache is minutes, and three of them run in one go. If a build is still
+# going when the timer next fires, systemd leaves the running one alone.
+TimeoutStartSec=3600

@@ -200,6 +200,11 @@ compose files, their order and the env file come off the running container's lab
 each service's build context comes out of the merged compose config, so moving a submodule
 is not also an edit here.
 
+The unit runs as root, which is what it needs to reach the Docker socket, but the git calls
+drop to whoever owns each checkout. Git refuses to work inside a repository owned by
+somebody else, and running it as root anyway would leave root-owned objects in that person's
+repository the first time it fetched. Only git changes user; docker stays as root.
+
 The one thing it does keep on the machine is what it last built, one file per service under
 `/var/lib/gryt-sites-refresh`. There is no registry to ask, so the answer has to be written
 down somewhere. A missing file counts as unknown rather than as current, which means the

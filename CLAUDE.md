@@ -53,8 +53,29 @@ in the same breath. Those two drifting apart is the failure mode that matters mo
 
 ## Git
 
-**Never push to `main`.** It's the only long-lived branch. Always work on a branch and open
-a PR.
+**Never push to `main`.** Always work on a branch and open a PR.
+
+There is one other long-lived branch, `client:sdk`, and it is temporary. The voice SDK
+migration (GRYT-341) lands there instead of `client:main` so `main` stays releasable while
+the migration settles, which is expected to take weeks. Hotfixes go to `main` as normal and
+get released as normal.
+
+This works for the same reason the old `beta` branch did not. `release-client.yml` runs
+`git -C packages/client checkout -B main origin/main`, so a release always builds
+`client:main` whatever the gitlink says. `beta` was trying to isolate a release channel and
+that line defeated it. `sdk` is the opposite arrangement: work stays off `main`, releases
+build `main`, and the same line is what keeps releases clean.
+
+Two things it needs to survive:
+
+- **Merge `main` into `sdk` after every hotfix**, not at the end. A month of one-way drift
+  is how these branches die, and the migration touches `useSFU`, `controls.tsx` and
+  `App.tsx`, which is where a hotfix is most likely to land too.
+- **There is no way to release from it.** `release-client.yml` takes a channel and a
+  version and no ref for the client submodule, so testing `sdk` means a local build or a
+  temporary change to the workflow. Do not discover that when you want an installer.
+
+Delete it once the migration merges to `main`, and delete this section with it.
 
 **Always work in your own worktree. Never `git checkout` in the shared checkout.**
 Make one per task, before the branch:

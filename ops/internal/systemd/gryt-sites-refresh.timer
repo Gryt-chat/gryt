@@ -1,0 +1,17 @@
+[Unit]
+Description=Check the docs, site and ui submodules for new commits every ten minutes
+
+[Timer]
+# Monotonic, so there is no Persistent= here. That setting only does anything
+# for OnCalendar= timers, and a line claiming to catch up missed runs while
+# doing nothing is worse than no line.
+OnBootSec=10min
+OnUnitActiveSec=10min
+
+# Offset from gryt-web-client-refresh, which is also on a ten minute interval.
+# Nothing breaks if they overlap, but a build and an image pull competing for
+# the same Docker daemon and the same disk is worth avoiding for free.
+RandomizedDelaySec=3min
+
+[Install]
+WantedBy=timers.target

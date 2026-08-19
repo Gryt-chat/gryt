@@ -211,7 +211,17 @@ down somewhere. A missing file counts as unknown rather than as current, which m
 first run after installing this rebuilds all three. That is the right answer anyway, since
 the running containers are of unknown vintage until something has built them.
 
-Five environment variables, none of them required:
+It also remembers what failed. A build that fails on a given commit will fail on it again,
+and retrying every ten minutes forever costs real CPU for as long as the breakage lasts. So
+the gap between attempts doubles from one interval up to a day, and a commit inside its gap
+is skipped without building. A different commit starts the count over, and a successful
+deploy clears it, so a fix is picked up on the next firing with nothing to clear by hand.
+
+Skipping still exits non-zero. The site is on old source either way, and a unit that went
+green while that was true would hide exactly what this timer exists to stop. What the
+backoff saves is the build, not the red.
+
+Seven environment variables, none of them required:
 
 | | |
 |---|---|
@@ -220,6 +230,8 @@ Five environment variables, none of them required:
 | `GRYT_SITES_BRANCH` | the branch to follow in each submodule. Default `main` |
 | `GRYT_SITES_STATE` | where the commit last built is remembered. Default `/var/lib/gryt-sites-refresh` |
 | `GRYT_MIN_FREE_GB` | refuse to build below this much free disk. Default `20` |
+| `GRYT_RETRY_BASE_SECONDS` | first gap after a failed build, doubling from there. Default `600` |
+| `GRYT_RETRY_CAP_SECONDS` | longest that gap gets. Default `86400` |
 
 It follows each submodule's own `origin/main` rather than the gitlink the superproject
 records. The gitlink lags behind `update-submodules.yml`, and none of these three sites has

@@ -44,12 +44,41 @@ STATE_DIR="${GRYT_SITES_STATE:-/var/lib/gryt-sites-refresh}"
 # database sits on.
 MIN_FREE_GB="${GRYT_MIN_FREE_GB:-20}"
 
+# A build that fails on a given commit will fail on it again. Retrying is still
+# worth doing, because some failures are a registry timeout during install
+# rather than a broken Dockerfile, but retrying at the same rate forever is not:
+# a genuinely broken commit cost about 30 seconds of CPU every ten minutes for
+# as long as it stayed broken (GRYT-364).
+#
+# So the gap doubles from one timer interval, up to a cap. Eight failures gets
+# it to roughly a day, which is about when somebody should have noticed anyway.
+RETRY_BASE_SECONDS="${GRYT_RETRY_BASE_SECONDS:-600}"
+RETRY_CAP_SECONDS="${GRYT_RETRY_CAP_SECONDS:-86400}"
+
 # systemd's default PATH covers /usr/sbin, but this is also meant to be runnable
 # by hand from a shell where it is not on the path.
 RUNUSER=$(command -v runuser || echo /usr/sbin/runuser)
 [[ -x "$RUNUSER" ]] || RUNUSER=""
 
 log() { printf '%s  %s\n' "$(date -Is)" "$*"; }
+
+# How long to wait after this many consecutive failures. Doubling, capped.
+# Separate from everything else so it can be checked without a Docker daemon.
+retry_delay() {
+  local attempts="$1"
+  local delay="$RETRY_BASE_SECONDS"
+  local i
+
+  for (( i = 1; i < attempts; i++ )); do
+    delay=$(( delay * 2 ))
+    if (( delay >= RETRY_CAP_SECONDS )); then
+      printf '%s' "$RETRY_CAP_SECONDS"
+      return
+    fi
+  done
+
+  printf '%s' "$delay"
+}
 
 label() {
   docker inspect --format "{{index .Config.Labels \"com.docker.compose.$2\"}}" "$1" 2>/dev/null || true
@@ -118,6 +147,7 @@ refresh() {
   local -a args=()
   local config_files env_file working_dir f free_gb
   local context repo head target built state dirty
+  local failed_state failed_commit attempts first_failed next_try now
 
   # Same trick as refresh-web-client.sh: the overlay list and its order decide
   # what the merged config is, so anything other than what the stack actually
@@ -198,6 +228,23 @@ refresh() {
     return 0
   fi
 
+  # Nothing here is cheap from this point on, so the commit that failed last
+  # time gets checked before the disk, the checkout and the build.
+  failed_state="${STATE_DIR}/${service}.failed"
+  now=$(date +%s)
+  read -r failed_commit attempts first_failed next_try < <(
+    cat "$failed_state" 2>/dev/null || echo "none 0 0 0"
+  )
+
+  if [[ "$failed_commit" == "$target" ]] && (( now < next_try )); then
+    # Still non-zero, so the unit stays failed for as long as the site is stale.
+    # Skipping the build saves the CPU; pretending it succeeded would hide that
+    # a site is sitting on old source, which is the thing this timer exists to
+    # stop happening.
+    log "[$service] ${target:0:12} has failed to build ${attempts}x since $(date -Is -d "@${first_failed}"), next attempt $(date -Is -d "@${next_try}")"
+    return 1
+  fi
+
   free_gb=$(df -BG --output=avail "${working_dir:-/}" | tail -1 | tr -dc '0-9')
   if (( free_gb < MIN_FREE_GB )); then
     log "[$service] only ${free_gb}G free, want ${MIN_FREE_GB}G — refusing to build"
@@ -223,7 +270,20 @@ refresh() {
   fi
 
   if ! docker compose --progress quiet "${args[@]}" build "$service"; then
-    log "[$service] build failed — leaving the running container alone"
+    # A different commit than the one that failed before starts the count again,
+    # so a fix that does not work still gets its own full set of attempts.
+    if [[ "$failed_commit" != "$target" ]]; then
+      attempts=0
+      first_failed="$now"
+    fi
+    attempts=$(( attempts + 1 ))
+
+    mkdir -p "$STATE_DIR"
+    printf '%s %s %s %s\n' \
+      "$target" "$attempts" "$first_failed" "$(( now + $(retry_delay "$attempts") ))" \
+      > "$failed_state"
+
+    log "[$service] build failed (${attempts}x) — leaving the running container alone"
     return 1
   fi
 
@@ -238,6 +298,7 @@ refresh() {
   # did not happen, and the next run would agree with it.
   mkdir -p "$STATE_DIR"
   printf '%s\n' "$target" > "$state"
+  rm -f "$failed_state"
 
   log "[$service] deployed ${target:0:12}"
 }

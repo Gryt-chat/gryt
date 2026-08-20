@@ -37,6 +37,7 @@ on:
           - ui
           - cli
           - voice
+          - mobile
 
 permissions:
   contents: write
@@ -90,7 +91,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          SUBMODULES="packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth packages/ui packages/cli packages/voice"
+          SUBMODULES="packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth packages/ui packages/cli packages/voice packages/mobile"
 
           # Clone straight from the URL rather than `git submodule update`,
           # which insists on the recorded gitlink and so fails on a broken one.
@@ -189,6 +190,10 @@ jobs:
 
           if [[ "$SELECTED" == "all" || "$SELECTED" == "voice" ]]; then
             update_submodule "packages/voice" "$DEFAULT_SUBMODULE_BRANCH"
+          fi
+
+          if [[ "$SELECTED" == "all" || "$SELECTED" == "mobile" ]]; then
+            update_submodule "packages/mobile" "$DEFAULT_SUBMODULE_BRANCH"
           fi
 
       - name: Commit changes

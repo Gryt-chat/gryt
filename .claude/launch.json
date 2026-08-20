@@ -57,6 +57,16 @@
       ],
       "port": 5001,
       "autoPort": false
+    },
+    {
+      "name": "mobile",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-lc",
+        "cd packages/mobile && npx expo start --port 8081"
+      ],
+      "port": 8081,
+      "autoPort": false
     }
   ]
 }

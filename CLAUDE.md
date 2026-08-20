@@ -115,10 +115,10 @@ kanban board is the state: **To-Do → Doing → Review → Done**.
 | PR merged | Move to **Done** *and* set the task's done flag | CI |
 
 CI covers the last two through `.github/workflows/vikunja-task-done.yml`, which calls a
-reusable workflow in `Gryt-chat/.github`. Eight of the nine repos have it, so you don't
-normally need to touch a task after opening the PR. `ui` is the exception — it was added
-as a submodule later and still needs the workflow (GRYT-143), so move its tasks by hand
-until that lands.
+reusable workflow in `Gryt-chat/.github`. Every repo has it — the superproject and all ten
+submodules — so you don't normally need to touch a task after opening the PR. There is no
+longer an exception to work around: `ui` was the last one missing it and GRYT-143 landed
+that on 2026-08-11.
 
 Moving a task is not exposed by the Vikunja MCP server, so use the REST API directly:
 

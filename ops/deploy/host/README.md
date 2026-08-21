@@ -40,9 +40,9 @@ Users connect via the [Gryt desktop app](https://github.com/Gryt-chat/gryt/relea
 
 ### Firewall / networking (critical)
 
-Cloudflare Tunnel does **not** proxy WebRTC media (UDP). You must expose the SFU UDP range directly.
+Cloudflare Tunnel does **not** proxy WebRTC media (UDP). You must expose the SFU's UDP port directly.
 
-- **Open/forward UDP** `SFU_UDP_MIN..SFU_UDP_MAX` (default `10000-10019/udp`) to the host running the `sfu` container.
+- **Open/forward UDP** `ICE_UDP_MUX_PORT` (default `3478/udp`) to the host running the `sfu` container. Every participant's media shares that one port.
 - If the host is behind NAT or has multiple interfaces, set `ICE_ADVERTISE_IP` to its public IP.
 
 ### Health endpoints

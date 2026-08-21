@@ -8,14 +8,13 @@ services:
     container_name: gryt-sfu
     ports:
       - "${SFU_WS_PORT:-5006}:5005"
-      # Optional: publish a fixed UDP port range for WebRTC media (recommended in production)
-      # - "${SFU_UDP_MIN:-10000}-${SFU_UDP_MAX:-10019}:${SFU_UDP_MIN:-10000}-${SFU_UDP_MAX:-10019}/udp"
+      - "${ICE_UDP_MUX_PORT:-3478}:${ICE_UDP_MUX_PORT:-3478}/udp"
     environment:
       - PORT=5005
       - STUN_SERVERS=stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302
-      # Optional: pin ICE UDP ports + capacity and control what IP is advertised in ICE candidates
-      # - ICE_UDP_PORT_MIN=${SFU_UDP_MIN:-10000}
-      # - ICE_UDP_PORT_MAX=${SFU_UDP_MAX:-10019}
+      # All media flows over this one UDP port. It has to be published above.
+      - ICE_UDP_MUX_PORT=${ICE_UDP_MUX_PORT:-3478}
+      # Optional: control what IP is advertised in ICE candidates
       # - ICE_ADVERTISE_IP=${ICE_ADVERTISE_IP:-}
       # - DISABLE_STUN=${DISABLE_STUN:-false}
     volumes:
@@ -57,9 +56,7 @@ services:
       - S3_BUCKET=${S3_BUCKET:-gryt}
       - S3_FORCE_PATH_STYLE=true
       - JWT_SECRET=${JWT_SECRET:-dev-secret-do-not-use-in-production}
-      # Optional: voice seat limit (derived if SFU_UDP_* set)
-      # - SFU_UDP_PORT_MIN=${SFU_UDP_MIN:-10000}
-      # - SFU_UDP_PORT_MAX=${SFU_UDP_MAX:-10019}
+      # Optional: voice seat limit. Unset means no limit.
       # - VOICE_MAX_USERS=${VOICE_MAX_USERS:-}
     volumes:
       - ../../../packages/server/.env:/app/.env:ro
@@ -104,9 +101,7 @@ services:
       - S3_BUCKET=${S3_BUCKET:-gryt}
       - S3_FORCE_PATH_STYLE=true
       - JWT_SECRET=${JWT_SECRET:-dev-secret-do-not-use-in-production}
-      # Optional: voice seat limit (derived if SFU_UDP_* set)
-      # - SFU_UDP_PORT_MIN=${SFU_UDP_MIN:-10000}
-      # - SFU_UDP_PORT_MAX=${SFU_UDP_MAX:-10019}
+      # Optional: voice seat limit. Unset means no limit.
       # - VOICE_MAX_USERS=${VOICE_MAX_USERS:-}
     volumes:
       - ../../../packages/server/.env:/app/.env:ro

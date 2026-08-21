@@ -7,6 +7,22 @@ Requires=docker.service
 [Service]
 Type=oneshot
 
+# Bring the checkout itself up to date first, so ops/ changes reach this
+# machine at all. Nothing else pulls the superproject: the refresher below
+# fetches the submodules, and the web client refresher asks GHCR, which left
+# ops/ as the one directory where merging a pull request changed nothing here.
+#
+# A separate process on purpose. The refresher is symlinked out of the checkout
+# this pull rewrites, and bash reads a script as it runs it, so pulling from
+# inside the refresher could replace its own remaining lines underneath it.
+# Running the pull first and the refresher second means the refresher is a
+# fresh read of whatever the pull just left behind.
+#
+# The leading dash so a failed pull does not stop the rebuild. Being a few
+# commits behind is worse than not rebuilding at all, but not by enough to make
+# a network blip take the sites down.
+ExecStartPre=-/usr/local/bin/gryt-pull-superproject
+
 # A symlink into the checkout rather than a copy, so `git pull` updates the
 # script and nothing has to be installed again. systemd needs a literal
 # absolute path here, so the symlink is what keeps the unit free of anybody's

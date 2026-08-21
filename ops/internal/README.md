@@ -242,10 +242,20 @@ that is a different script rather than a flag.
 
 ```bash
 sudo ln -sfn "$PWD/ops/internal/refresh-sites.sh" /usr/local/bin/gryt-sites-refresh
+sudo ln -sfn "$PWD/ops/internal/pull-superproject.sh" /usr/local/bin/gryt-pull-superproject
 sudo cp ops/internal/systemd/gryt-sites-refresh.{service,timer} /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now gryt-sites-refresh.timer
 ```
+
+The second symlink is what keeps this checkout current. The unit runs it as an
+`ExecStartPre`, so every tick fast-forwards the superproject before rebuilding
+anything, and a change to `ops/` reaches the machine on its own.
+
+It only ever fast-forwards, and never recurses into the submodules — those
+belong to the refresher below, which moves them to commits the gitlinks here do
+not name. A checkout with local commits or tracked changes outside `packages/`
+is left alone and says so.
 
 Same shape as the web client timer, including the symlink and the root-by-default. It fires
 every ten minutes with a randomised delay offset from that one, so a build and an image pull

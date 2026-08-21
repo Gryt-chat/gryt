@@ -1452,3 +1452,86 @@ jobs:
 
           echo "::error::snapcraft upload failed with exit code $rc."
           exit $rc
+  # Take back what a failed release left lying around.
+  #
+  # A run that dies after "Prepare release" has already pushed the tag and
+  # created the draft, so a failure in any build leaves both behind. v1.6.21
+  # failed in Windows packaging and stranded a tag, a draft, the Linux
+  # installers and half the macOS upload. GRYT-466.
+  #
+  # Draft only, and that is the whole safety argument: a draft has been seen by
+  # nobody. `publish-release` flips it live as the last thing it does, so
+  # anything still in draft when this job runs never reached a client, never
+  # answered an update check, and is not in anybody's download history. A
+  # release that did go live is left strictly alone, whatever else failed.
+  #
+  # What deliberately survives: the release.json and package.json bumps, and the
+  # "release: vX.Y.Z" commits carrying them. Reverting commits on two mains is a
+  # much bigger hammer than this problem deserves, and leaving them costs
+  # nothing — release.json sitting at a version with no tag is exactly what a
+  # re-dispatch with bump=none wants to find.
+  cleanup-failed-release:
+    name: Clean up a failed release
+    needs: [prepare-release, build-electron, publish-release]
+
+    # Not `failure()`: publish-snap is continue-on-error and publish-release may
+    # be skipped rather than failed when a build dies, so the condition is
+    # written out. It runs when the version is known and something after it went
+    # wrong.
+    if: >-
+      always() &&
+      needs.prepare-release.result == 'success' &&
+      (needs.build-electron.result != 'success' ||
+      needs.publish-release.result != 'success')
+
+    runs-on: ubuntu-latest
+
+    env:
+      OWNER: Gryt-chat
+      REPO: gryt
+      VERSION: ${{ needs.prepare-release.outputs.version }}
+
+    steps:
+      - name: Delete the tag and release, if it never left draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          TAG="v$VERSION"
+
+          IS_DRAFT="$(
+            gh release view "$TAG" --repo "$OWNER/$REPO" --json isDraft --jq .isDraft 2>/dev/null || true
+          )"
+
+          if [[ "$IS_DRAFT" == "false" ]]; then
+            echo "$TAG is published. Leaving it, and its tag, alone."
+            exit 0
+          fi
+
+          if [[ "$IS_DRAFT" == "true" ]]; then
+            # --cleanup-tag takes the git tag with it, which is the half that
+            # blocks a re-dispatch at the same version.
+            echo "Deleting the draft release $TAG and its tag."
+            gh release delete "$TAG" --repo "$OWNER/$REPO" --yes --cleanup-tag
+            exit 0
+          fi
+
+          # No release at all. The run died between pushing the tag and creating
+          # the release, so the tag is the only thing out there.
+          if git ls-remote --exit-code --tags \
+              "https://github.com/$OWNER/$REPO.git" "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "No release for $TAG, deleting the stranded tag."
+            gh api -X DELETE "repos/$OWNER/$REPO/git/refs/tags/$TAG"
+          else
+            echo "Nothing to clean up for $TAG."
+          fi
+
+      - name: Say what to do next
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "::notice::v$VERSION has been cleared. Fix the failure and"
+          echo "::notice::dispatch again with bump=none to reuse the number."

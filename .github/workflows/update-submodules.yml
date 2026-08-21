@@ -38,6 +38,7 @@ on:
           - cli
           - voice
           - mobile
+          - bot
 
 permissions:
   contents: write
@@ -91,7 +92,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          SUBMODULES="packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth packages/ui packages/cli packages/voice packages/mobile"
+          SUBMODULES="packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth packages/ui packages/cli packages/voice packages/mobile packages/bot"
 
           # Clone straight from the URL rather than `git submodule update`,
           # which insists on the recorded gitlink and so fails on a broken one.
@@ -196,6 +197,10 @@ jobs:
             update_submodule "packages/mobile" "$DEFAULT_SUBMODULE_BRANCH"
           fi
 
+          if [[ "$SELECTED" == "all" || "$SELECTED" == "bot" ]]; then
+            update_submodule "packages/bot" "$DEFAULT_SUBMODULE_BRANCH"
+          fi
+
       - name: Commit changes
         shell: bash
         run: |
@@ -226,7 +231,10 @@ jobs:
             git fetch origin "$TARGET_BRANCH"
             git reset --hard "origin/$TARGET_BRANCH"
 
-            for path in packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth packages/ui packages/cli packages/voice; do
+            # Every submodule, not most of them. mobile was missing, so a
+            # rejected push rebuilt the commit without it and silently dropped
+            # whatever bump had just been made.
+            for path in packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth packages/ui packages/cli packages/voice packages/mobile packages/bot; do
               [[ -d "$path" ]] || continue
               git -C "$path" fetch origin main
               git -C "$path" checkout -B main origin/main

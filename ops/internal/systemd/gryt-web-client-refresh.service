@@ -1,5 +1,5 @@
 [Unit]
-Description=Pull the released web client image for the hosted Gryt web clients
+Description=Keep the hosted Gryt stacks on the images the last release published
 Documentation=https://github.com/Gryt-chat/gryt/blob/main/ops/internal/README.md
 After=docker.service
 Requires=docker.service

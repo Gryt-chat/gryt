@@ -1,5 +1,5 @@
 [Unit]
-Description=Check GHCR for a newer web client every ten minutes
+Description=Check GHCR for newer Gryt images every ten minutes
 
 [Timer]
 # Monotonic, so there is no Persistent= here. That setting only does anything

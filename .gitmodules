@@ -42,3 +42,7 @@
 	path = packages/mobile
 	url = https://github.com/Gryt-chat/mobile.git
 	branch = main
+[submodule "packages/bot"]
+	path = packages/bot
+	url = https://github.com/Gryt-chat/bot.git
+	branch = main

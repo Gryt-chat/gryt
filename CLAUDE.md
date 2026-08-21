@@ -235,6 +235,12 @@ list in your head; that is the failure mode. On 2026-08-21 both were installed, 
 used on a Discord message, and the docs written an hour later still went out saying
 "Worth doing rather than skipping past".
 
-One caveat when running them over an existing page: check `git blame` before rewriting.
-"Worth knowing" and similar turn up in Sivert's own writing, where they read as his voice
-rather than as padding, and the rule above is about not adding more.
+One caveat when running them over an existing page. `git blame` will not tell you who
+wrote a line: every commit in these repositories is authored `Sivert`, including the ones
+an agent makes, so blame says "Sivert" for all of it. The `Co-authored-by: Claude` trailer
+on the commit is the only marker, and `git log --format=%b -- <file>` is how to read it.
+
+It matters less than it looks, because the answer is usually "leave it either way". A
+phrase like "worth knowing" reads as Sivert's voice in the pages that already had it, and
+the rule above is about not adding more rather than about editing what is there. Rewrite a
+line when it is genuinely announcing the next one, not because a scan matched it.

@@ -218,3 +218,23 @@ Match the surrounding code. Sivert's prose — docs, blog posts, comments — is
 direct, with hedges like "a bit", "probably", "honestly". Avoid aphorisms, antithesis pairs
 ("not X, but Y"), and sections that end on a punchy one-liner. If a sentence sounds like it
 belongs in a keynote, rewrite it.
+
+**Don't tell the reader a point is important.** "Worth noting", "worth a close look",
+"this is the moment the number is settled", "the one people miss" — each of those spends a
+sentence announcing the next one instead of saying anything. Cut the announcement and
+state the thing. A test that catches most of it: if a sentence could move to another
+project unchanged, it is filler, and it should be a fact, a number or a consequence
+specific to this one instead.
+
+This applies to PR bodies, commit messages and task descriptions as much as to docs. They
+are the longest prose in the repository and the least edited.
+
+Two skills are installed for this — `humanizer` for the named patterns and `no-ai-slop`
+for the principles. Run them over prose before it ships rather than trying to hold the
+list in your head; that is the failure mode. On 2026-08-21 both were installed, one was
+used on a Discord message, and the docs written an hour later still went out saying
+"Worth doing rather than skipping past".
+
+One caveat when running them over an existing page: check `git blame` before rewriting.
+"Worth knowing" and similar turn up in Sivert's own writing, where they read as his voice
+rather than as padding, and the rule above is about not adding more.

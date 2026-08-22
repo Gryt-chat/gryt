@@ -103,9 +103,13 @@ services:
       REPORTS_PUBLIC_URL: "${REPORTS_PUBLIC_URL:-https://reports.gryt.chat}"
       REPORTS_CORS_ORIGINS: "${REPORTS_CORS_ORIGINS:-https://app.gryt.chat,https://beta.gryt.chat}"
       REPORTS_REQUIRE_SIGNATURE: "${REPORTS_REQUIRE_SIGNATURE:-false}"
-      # Behind the tunnel the socket address is cloudflared, so the client
-      # address has to come from cf-connecting-ip.
+      # Behind the tunnel the socket address is the proxy, so the client
+      # address has to come from cf-connecting-ip — and only when the proxy is
+      # the one connecting. The ingest port is on the machine's network
+      # address, so without this list anything on the LAN can claim any address
+      # and skip every per-address rate limit and ban.
       REPORTS_TRUST_PROXY: "true"
+      REPORTS_TRUSTED_PROXIES: "${REPORTS_TRUSTED_PROXIES:-}"
       # Triage. A URL picks the local model, a key picks the API, and naming
       # the provider wins over both. Ollama runs on another machine, so this is
       # its address on the network rather than localhost.

@@ -35,11 +35,15 @@
 # So there is nothing to announce. A "restarting in five minutes" notice would
 # be warning people about something they are not going to notice.
 #
+# Not everything worth refreshing is called `gryt-<stack>-<service>`. The report
+# inbox is one container in the `internal` project, so it is named outright in
+# GRYT_CONTAINERS rather than pretending to be a stack. Everything downstream of
+# the name is identical — the same labels, the same pull, the same recreate.
+#
 # What still holds. MinIO, the one-shot init containers and anything under the
 # `auth` project are never touched: MinIO and the init containers because they
 # are not in the service list, and auth because it is a different compose
-# project entirely and this script only ever addresses containers by the name
-# `gryt-<stack>-<service>`.
+# project entirely and nothing here ever names it.
 #
 # It also only ever refreshes a container that is already there. It will not
 # bring a missing one up, because it does not know what that stack was supposed
@@ -53,6 +57,10 @@
 #                      exist is skipped rather than created — beta has no `-pp`
 #                      services, so the same list works for both.
 #                      GRYT_SERVICE (singular) still works.
+#   GRYT_CONTAINERS    containers to refresh by name, space separated, for
+#                      anything outside the stack naming. Default "gryt-reports".
+#                      The compose service is read off the container's own
+#                      label, so only the name goes here.
 #   GRYT_MIN_FREE_GB   refuse to pull below this much free disk. Default 10.
 
 set -euo pipefail
@@ -64,6 +72,10 @@ STACKS="${GRYT_STACKS:-prod beta}"
 # talking to a server about to restart.
 DEFAULT_SERVICES="sfu server server-nt server-pp image-worker image-worker-nt image-worker-pp client"
 SERVICES="${GRYT_SERVICES:-${GRYT_SERVICE:-$DEFAULT_SERVICES}}"
+# Containers that carry a released image and are not part of a stack. The report
+# inbox is the first: ghcr.io/gryt-chat/reports, one container in the `internal`
+# project, and nothing pulled it until this line existed.
+CONTAINERS="${GRYT_CONTAINERS:-gryt-reports}"
 MIN_FREE_GB="${GRYT_MIN_FREE_GB:-10}"
 
 log() { printf '%s  %s\n' "$(date -Is)" "$*"; }
@@ -89,10 +101,31 @@ sfu_peers() {
     | awk '/^gryt_sfu_peers_active /{print $2; found=1} END{if(!found) exit 1}'
 }
 
+# The stack form: gryt-<stack>-<service>, refreshed with the `web` profile
+# enabled because the client service sits behind it.
 refresh() {
-  local stack="$1"
+  refresh_container "gryt-${1}-${2}" "$2" "${1}/${2}" --profile web
+}
+
+# The general form. Everything the script needs comes off the container itself,
+# so a container that is not part of a stack needs no more configuration than
+# its name.
+refresh_named() {
+  local container="$1" service
+  service=$(label "$container" "service")
+  if [[ -z "$service" ]]; then
+    log "[$container] no container by that name — skipped"
+    return 0
+  fi
+  refresh_container "$container" "$service" "$container"
+}
+
+refresh_container() {
+  local container="$1"
   local service="$2"
-  local container="gryt-${stack}-${service}"
+  local tag="$3"
+  shift 3
+  local -a profile=("$@")
   local -a args=()
   local config_files env_file working_dir f free_gb
   local image_before image_after id_before id_after
@@ -108,7 +141,7 @@ refresh() {
   # up with, which is the only answer that cannot drift.
   config_files=$(label "$container" "project.config_files")
   if [[ -z "$config_files" ]]; then
-    log "[$stack/$service] no container named $container — skipped"
+    log "[$tag] no container named $container — skipped"
     return 0
   fi
 
@@ -120,7 +153,7 @@ refresh() {
   while IFS= read -r f; do
     [[ -z "$f" ]] && continue
     if [[ ! -f "$f" ]]; then
-      log "[$stack/$service] $f is gone since the stack came up — skipped"
+      log "[$tag] $f is gone since the stack came up — skipped"
       return 1
     fi
     args+=(-f "$f")
@@ -131,7 +164,7 @@ refresh() {
   # prevents is not cheap at all.
   free_gb=$(df -BG --output=avail "${working_dir:-/}" | tail -1 | tr -dc '0-9')
   if (( free_gb < MIN_FREE_GB )); then
-    log "[$stack/$service] only ${free_gb}G free, want ${MIN_FREE_GB}G — refusing to pull"
+    log "[$tag] only ${free_gb}G free, want ${MIN_FREE_GB}G — refusing to pull"
     return 1
   fi
 
@@ -150,8 +183,8 @@ refresh() {
   # `--profile web` because the client service sits behind that profile in the
   # compose files; naming a service in a profile that is not enabled is a no-op
   # rather than an error, which would be a silent one.
-  if ! docker compose --progress quiet "${args[@]}" --profile web pull --quiet "$service"; then
-    log "[$stack/$service] pull failed — leaving the running container alone"
+  if ! docker compose --progress quiet "${args[@]}" "${profile[@]}" pull --quiet "$service"; then
+    log "[$tag] pull failed — leaving the running container alone"
     return 1
   fi
 
@@ -173,14 +206,14 @@ refresh() {
     local peers
     peers=$(sfu_peers "$container") || peers=""
     if [[ -z "$peers" ]]; then
-      log "[$stack/$service] new image, but the peer count could not be read — deferring"
+      log "[$tag] new image, but the peer count could not be read — deferring"
       return 0
     fi
     if [[ "${peers%%.*}" -gt 0 ]]; then
-      log "[$stack/$service] new image, but ${peers%%.*} in voice — deferring"
+      log "[$tag] new image, but ${peers%%.*} in voice — deferring"
       return 0
     fi
-    log "[$stack/$service] new image and nobody in voice — recreating"
+    log "[$tag] new image and nobody in voice — recreating"
   fi
 
   # `--no-deps` because the client's `depends_on` reaches the server, and the
@@ -189,8 +222,8 @@ refresh() {
   #
   # This is a no-op when the pull brought nothing new: compose only recreates a
   # container whose image id has moved.
-  if ! docker compose --progress quiet "${args[@]}" --profile web up -d --no-deps "$service"; then
-    log "[$stack/$service] up failed"
+  if ! docker compose --progress quiet "${args[@]}" "${profile[@]}" up -d --no-deps "$service"; then
+    log "[$tag] up failed"
     return 1
   fi
 
@@ -198,11 +231,11 @@ refresh() {
   id_after=$(docker inspect --format '{{.Id}}' "$container" 2>/dev/null || echo none)
 
   if [[ "$image_before" != "$image_after" ]]; then
-    log "[$stack/$service] new image ${image_before:0:19} -> ${image_after:0:19}"
+    log "[$tag] new image ${image_before:0:19} -> ${image_after:0:19}"
   elif [[ "$id_before" != "$id_after" ]]; then
-    log "[$stack/$service] recreated on the same image (${image_after:0:19}) — the service definition changed"
+    log "[$tag] recreated on the same image (${image_after:0:19}) — the service definition changed"
   else
-    log "[$stack/$service] already current (${image_after:0:19})"
+    log "[$tag] already current (${image_after:0:19})"
   fi
 }
 
@@ -211,6 +244,10 @@ for stack in $STACKS; do
   for service in $SERVICES; do
     refresh "$stack" "$service" || status=1
   done
+done
+
+for container in $CONTAINERS; do
+  refresh_named "$container" || status=1
 done
 
 # Nothing is removed here on purpose. Each superseded client image is left

@@ -28,6 +28,7 @@ You must use unique host ports. Configure them in `ops/internal/.env`:
 - `INTERNAL_UI_HTTP_PORT` (default `9475`)
 - `FIDER_HTTP_PORT` (default `9473`)
 - `INTERNAL_REPORTS_HTTP_PORT` (default `9476`)
+- `INTERNAL_REPORTS_ADMIN_PORT` (default `9477`; `INTERNAL_REPORTS_ADMIN_BIND` decides which interfaces, default `0.0.0.0`)
 
 ## Fider auth: use Gryt Auth (Keycloak OIDC)
 
@@ -76,6 +77,65 @@ All five should be **proxied** and routed through the same Cloudflare Tunnel.
 also the only one where a Cloudflare rate limit in front earns its keep. The service rate
 limits and bans on its own; that is not a reason to leave the edge wide open.
 
+That hostname reaches the ingest port and nothing else. The inbox is a second listener on
+`INTERNAL_REPORTS_ADMIN_PORT`, and the ingest port answers `404` for `/admin` rather than
+asking for a token — an endpoint on the open internet should not advertise that there is
+an inbox behind it.
+
+Give the inbox its own hostname through the tunnel — `inbox.gryt.chat` →
+`http://<box>:9477` — and set `REPORTS_OIDC_REDIRECT_URI` to match. Everyone signs in with
+a Gryt account and still has to be on the list.
+
+It is published on all interfaces so cloudflared can reach it: cloudflared runs in its own
+container, and a port bound to the host's loopback is not reachable from there. So the bind
+address is not what protects the inbox — **sign-in is**, and a deploy with
+`REPORTS_OIDC_ISSUER` unset leaves a shared token as the only thing in front of every
+report anyone has sent.
+
+For SSH-tunnel-only instead, set `INTERNAL_REPORTS_ADMIN_BIND=127.0.0.1` and reach it with:
+
+```bash
+ssh -N -L 9477:127.0.0.1:9477 edition35
+```
+
+## Who can read the report inbox
+
+The inbox signs people in through Keycloak, and holds its own list of who may read it.
+Being on the list is what admits somebody; having a Gryt account is not, since anyone can
+make one.
+
+### 1) A Keycloak client for the inbox
+
+In Keycloak (`gryt` realm), the same shape as Fider's:
+
+- **Client ID**: `reports`
+- **Client authentication**: On (confidential)
+- **Standard flow**: On
+- **Valid redirect URIs**: the `REPORTS_OIDC_REDIRECT_URI` you configured, e.g.
+  `https://inbox.gryt.chat/admin/callback`
+- **Web origins**: that same host
+
+Copy the client secret into `REPORTS_OIDC_CLIENT_SECRET`.
+
+Create it through the admin console or the admin API. Not by editing the realm JSON —
+a bad realm import takes the whole auth stack down, and Keycloak is what everything else
+signs in with.
+
+### 2) The first person
+
+An empty list would lock everyone out of the page that manages it, so
+`REPORTS_BOOTSTRAP_ADMIN` names one person — a username or an email — who is admitted the
+first time they sign in **while the list is still empty**. After that the list is the only
+answer, so leaving the variable set does not quietly re-admit somebody who was removed.
+
+### 3) Everybody after that
+
+`/admin/people` in the inbox. Add somebody by Keycloak user id, username or email; the
+last two work before they have ever signed in, and the entry pins itself to their user id
+the first time they do. Removing somebody takes effect on their next request rather than
+whenever their session runs out, and the service refuses to remove the last person on the
+list.
+
 ## Downloads folder
 
 Static files placed in `ops/internal/downloads/` are served at `/downloads/*` on `gryt.chat`.
@@ -119,6 +179,7 @@ Three environment variables, none of them required:
 |---|---|
 | `GRYT_STACKS` | stacks to refresh, space separated. Default `prod beta`; each `<s>` means the container `gryt-<s>-client` |
 | `GRYT_SERVICE` | the compose service, if it is not called `client` |
+| `GRYT_CONTAINERS` | containers to refresh by name, for anything outside the stack naming. Default `gryt-reports`; the compose service is read off the container's own label |
 | `GRYT_MIN_FREE_GB` | refuse to pull below this much free disk. Default `10` |
 
 A release-triggered deploy would be tighter, and is not what this is: the box sits behind
@@ -169,8 +230,15 @@ lives on.
 The rest of the `gryt-prod` stack — server, SFU, image worker — is deliberately **not** in
 scope. Those carry data, and rolling them forward is a decision rather than a cron job.
 
-`reports` is a GHCR image too, and also not in scope: the script targets `gryt-<stack>-client`
-by name. Moving it forward is a `pull` and an `up -d --no-deps reports` by hand for now.
+Two things have to be true before the report inbox actually moves: `Release Reports` has to
+have pushed an image at least once, and the container has to already be running. Until
+both, every tick logs `no container by that name — skipped` and exits 0, which is the same
+answer it gives for a stack that does not exist on this box.
+
+`reports` is a GHCR image too and is in scope, but not as a stack. It is one container in
+the `internal` project rather than a `gryt-<stack>-<service>`, so it is named outright in
+`GRYT_CONTAINERS` and everything after the name is identical — same labels, same pull, same
+recreate, same refusal to create a container that is not already there.
 
 ## Keeping the sites built from source current
 

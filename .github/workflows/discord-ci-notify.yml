@@ -13,8 +13,9 @@ on:
     workflows:
       - Release Client
       - Release Server
-      - Update Submodules
       - Sync Vikunja task
+      - Update Submodules
+      - Windows build probe
     types: [completed]
 
 jobs:

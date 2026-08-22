@@ -233,13 +233,15 @@ specific to this one instead.
 This applies to PR bodies, commit messages and task descriptions as much as to docs. They
 are the longest prose in the repository and the least edited.
 
-Two skills are installed for this — `humanizer` for the named patterns and `no-ai-slop`
-for the principles. Run them over prose before it ships rather than trying to hold the
-list in your head; that is the failure mode. On 2026-08-21 both were installed, one was
-used on a Discord message, and the docs written an hour later still went out saying
-"Worth doing rather than skipping past".
+`no-ai-slop` is installed for this, at `~/.claude/skills/no-ai-slop/`. Run it over prose
+before it ships rather than trying to hold the list in your head; that is the failure
+mode. On 2026-08-21 it was installed, used once on a Discord message, and the docs
+written an hour later still went out saying "Worth doing rather than skipping past".
 
-One caveat when running them over an existing page. `git blame` will not tell you who
+This file also named a `humanizer` skill until 2026-08-22. It was never on the Windows
+machine and is not in the catalog, so nothing was running it.
+
+One caveat when running it over an existing page. `git blame` will not tell you who
 wrote a line: every commit in these repositories is authored `Sivert`, including the ones
 an agent makes, so blame says "Sivert" for all of it. The `Co-authored-by: Claude` trailer
 on the commit is the only marker, and `git log --format=%b -- <file>` is how to read it.

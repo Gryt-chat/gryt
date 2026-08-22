@@ -130,6 +130,26 @@ services:
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       REPORTS_TRIAGE_MODEL: "${REPORTS_TRIAGE_MODEL:-}"
       REPORTS_DISCORD_WEBHOOK_URL: "${REPORTS_DISCORD_WEBHOOK_URL:-}"
+      # Filing a report as a task on the board (GRYT-534). A write credential,
+      # so it is empty here and set in .env; without it the button is not
+      # offered rather than offered and broken.
+      REPORTS_VIKUNJA_URL: "${REPORTS_VIKUNJA_URL:-https://tasks.sivert.io}"
+      REPORTS_VIKUNJA_TOKEN: "${REPORTS_VIKUNJA_TOKEN:-}"
+      REPORTS_VIKUNJA_PROJECT: "${REPORTS_VIKUNJA_PROJECT:-2}"
+      # The weekly digest (GRYT-537). SMTP is the GRYT_SMTP_* set the rest of
+      # Gryt already points at Postmark, rather than a second copy to rotate —
+      # which is exactly why it has to be named here: a variable that is in
+      # .env and not in this block reaches nothing, silently.
+      REPORTS_DIGEST_ENABLED: "${REPORTS_DIGEST_ENABLED:-}"
+      REPORTS_DIGEST_DAY: "${REPORTS_DIGEST_DAY:-1}"
+      REPORTS_DIGEST_HOUR: "${REPORTS_DIGEST_HOUR:-9}"
+      GRYT_SMTP_HOST: "${GRYT_SMTP_HOST:-}"
+      GRYT_SMTP_PORT: "${GRYT_SMTP_PORT:-587}"
+      GRYT_SMTP_USER: "${GRYT_SMTP_USER:-}"
+      GRYT_SMTP_PASS: "${GRYT_SMTP_PASS:-}"
+      GRYT_SMTP_FROM: "${GRYT_SMTP_FROM:-hello@gryt.chat}"
+      GRYT_SMTP_FROM_NAME: "${GRYT_SMTP_FROM_NAME:-Gryt}"
+      GRYT_SMTP_REPLY_TO: "${GRYT_SMTP_REPLY_TO:-}"
       REPORTS_NOTIFY_ON: "${REPORTS_NOTIFY_ON:-triage}"
       # Signing in with a Gryt account. Who may actually read the inbox is a
       # list inside the service, not a role in the realm.

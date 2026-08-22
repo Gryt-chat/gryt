@@ -86,11 +86,11 @@ Give the inbox its own hostname through the tunnel — `inbox.gryt.chat` →
 `http://<box>:9477` — and set `REPORTS_OIDC_REDIRECT_URI` to match. Everyone signs in with
 a Gryt account and still has to be on the list.
 
-It is published on all interfaces so cloudflared can reach it: cloudflared runs in its own
-container, and a port bound to the host's loopback is not reachable from there. So the bind
-address is not what protects the inbox — **sign-in is**, and a deploy with
-`REPORTS_OIDC_ISSUER` unset leaves a shared token as the only thing in front of every
-report anyone has sent.
+It is published on all interfaces because the tunnel does not run on this box — it runs on
+another machine and reaches these services over the LAN, which is why every port here is
+published the same way. So the bind address is not what protects the inbox — **sign-in
+is**, and a deploy with `REPORTS_OIDC_ISSUER` unset leaves a shared token as the only thing
+in front of every report anyone has sent.
 
 For SSH-tunnel-only instead, set `INTERNAL_REPORTS_ADMIN_BIND=127.0.0.1` and reach it with:
 

@@ -83,7 +83,13 @@ services:
     image: ghcr.io/gryt-chat/reports:${REPORTS_IMAGE_TAG:-latest}
     container_name: gryt-reports
     ports:
+      # Ingest. The apps post here from wherever they are, so this is the one
+      # cloudflared routes.
       - "${INTERNAL_REPORTS_HTTP_PORT:-9476}:8080"
+      # The inbox, bound to loopback on the host. Reachable over an SSH tunnel,
+      # and by cloudflared if you put a hostname in front of it — which is worth
+      # doing behind Keycloak sign-in, not instead of it.
+      - "127.0.0.1:${INTERNAL_REPORTS_ADMIN_PORT:-9477}:8081"
     environment:
       # One key per app. Without at least one the service refuses to start,
       # because what it exposes is a public POST endpoint.
@@ -99,6 +105,14 @@ services:
       REPORTS_TRIAGE_MODEL: "${REPORTS_TRIAGE_MODEL:-claude-opus-5}"
       REPORTS_DISCORD_WEBHOOK_URL: "${REPORTS_DISCORD_WEBHOOK_URL:-}"
       REPORTS_NOTIFY_ON: "${REPORTS_NOTIFY_ON:-triage}"
+      # Signing in with a Gryt account. Who may actually read the inbox is a
+      # list inside the service, not a role in the realm.
+      REPORTS_OIDC_ISSUER: "${REPORTS_OIDC_ISSUER:-}"
+      REPORTS_OIDC_CLIENT_ID: "${REPORTS_OIDC_CLIENT_ID:-reports}"
+      REPORTS_OIDC_CLIENT_SECRET: "${REPORTS_OIDC_CLIENT_SECRET:-}"
+      REPORTS_OIDC_REDIRECT_URI: "${REPORTS_OIDC_REDIRECT_URI:-}"
+      REPORTS_BOOTSTRAP_ADMIN: "${REPORTS_BOOTSTRAP_ADMIN:-}"
+      REPORTS_SESSION_SECRET: "${REPORTS_SESSION_SECRET:-}"
     volumes:
       - gryt-reports-data:/data
     restart: unless-stopped

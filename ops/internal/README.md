@@ -28,6 +28,7 @@ You must use unique host ports. Configure them in `ops/internal/.env`:
 - `INTERNAL_UI_HTTP_PORT` (default `9475`)
 - `FIDER_HTTP_PORT` (default `9473`)
 - `INTERNAL_REPORTS_HTTP_PORT` (default `9476`)
+- `INTERNAL_REPORTS_ADMIN_PORT` (default `9477`, bound to `127.0.0.1` on the host)
 
 ## Fider auth: use Gryt Auth (Keycloak OIDC)
 
@@ -75,6 +76,60 @@ All five should be **proxied** and routed through the same Cloudflare Tunnel.
 `reports.gryt.chat` is the only one of these that takes POSTs from strangers, so it is
 also the only one where a Cloudflare rate limit in front earns its keep. The service rate
 limits and bans on its own; that is not a reason to leave the edge wide open.
+
+That hostname reaches the ingest port and nothing else. The inbox is a second listener on
+`INTERNAL_REPORTS_ADMIN_PORT`, bound to loopback, and the ingest port answers `404` for
+`/admin` rather than asking for a token — an endpoint on the open internet should not
+advertise that there is an inbox behind it.
+
+To read it over SSH and nothing else:
+
+```bash
+ssh -N -L 9477:127.0.0.1:9477 edition35
+```
+
+then open `http://127.0.0.1:9477/admin`. To reach it from a browser anywhere, give it its
+own hostname through the tunnel — `inbox.gryt.chat` → `http://127.0.0.1:9477` — and set
+`REPORTS_OIDC_REDIRECT_URI` to match. Everyone still signs in with a Gryt account and
+still has to be on the list.
+
+## Who can read the report inbox
+
+The inbox signs people in through Keycloak, and holds its own list of who may read it.
+Being on the list is what admits somebody; having a Gryt account is not, since anyone can
+make one.
+
+### 1) A Keycloak client for the inbox
+
+In Keycloak (`gryt` realm), the same shape as Fider's:
+
+- **Client ID**: `reports`
+- **Client authentication**: On (confidential)
+- **Standard flow**: On
+- **Valid redirect URIs**: the `REPORTS_OIDC_REDIRECT_URI` you configured, e.g.
+  `https://inbox.gryt.chat/admin/callback`
+- **Web origins**: that same host
+
+Copy the client secret into `REPORTS_OIDC_CLIENT_SECRET`.
+
+Create it through the admin console or the admin API. Not by editing the realm JSON —
+a bad realm import takes the whole auth stack down, and Keycloak is what everything else
+signs in with.
+
+### 2) The first person
+
+An empty list would lock everyone out of the page that manages it, so
+`REPORTS_BOOTSTRAP_ADMIN` names one person — a username or an email — who is admitted the
+first time they sign in **while the list is still empty**. After that the list is the only
+answer, so leaving the variable set does not quietly re-admit somebody who was removed.
+
+### 3) Everybody after that
+
+`/admin/people` in the inbox. Add somebody by Keycloak user id, username or email; the
+last two work before they have ever signed in, and the entry pins itself to their user id
+the first time they do. Removing somebody takes effect on their next request rather than
+whenever their session runs out, and the service refuses to remove the last person on the
+list.
 
 ## Downloads folder
 

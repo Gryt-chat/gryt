@@ -46,3 +46,7 @@
 	path = packages/bot
 	url = https://github.com/Gryt-chat/bot.git
 	branch = main
+[submodule "reports"]
+	path = packages/reports
+	url = https://github.com/Gryt-chat/reports.git
+	branch = main

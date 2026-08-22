@@ -6,6 +6,7 @@ This folder contains **internal** infrastructure used to run:
 - `docs.gryt.chat` (documentation)
 - `ui.gryt.chat` (the `@gryt/ui` component library docs)
 - `feedback.gryt.chat` (Fider feature requests board)
+- `reports.gryt.chat` (bug reports and feedback sent from inside the apps)
 
 It’s **not** intended for self-hosters. Self-hosting docs live under `ops/deploy/*` (Docker Compose) and `ops/helm/*` (Kubernetes).
 
@@ -26,6 +27,7 @@ You must use unique host ports. Configure them in `ops/internal/.env`:
 - `INTERNAL_DOCS_HTTP_PORT` (default `9471`)
 - `INTERNAL_UI_HTTP_PORT` (default `9475`)
 - `FIDER_HTTP_PORT` (default `9473`)
+- `INTERNAL_REPORTS_HTTP_PORT` (default `9476`)
 
 ## Fider auth: use Gryt Auth (Keycloak OIDC)
 
@@ -66,8 +68,13 @@ Use Fider’s **Test** button before enabling the provider.
 - `docs.gryt.chat` → `http://127.0.0.1:<INTERNAL_DOCS_HTTP_PORT>`
 - `ui.gryt.chat` → `http://127.0.0.1:<INTERNAL_UI_HTTP_PORT>`
 - `feedback.gryt.chat` → `http://127.0.0.1:<FIDER_HTTP_PORT>`
+- `reports.gryt.chat` → `http://127.0.0.1:<INTERNAL_REPORTS_HTTP_PORT>`
 
-All four should be **proxied** and routed through the same Cloudflare Tunnel.
+All five should be **proxied** and routed through the same Cloudflare Tunnel.
+
+`reports.gryt.chat` is the only one of these that takes POSTs from strangers, so it is
+also the only one where a Cloudflare rate limit in front earns its keep. The service rate
+limits and bans on its own; that is not a reason to leave the edge wide open.
 
 ## Downloads folder
 
@@ -161,6 +168,9 @@ lives on.
 
 The rest of the `gryt-prod` stack — server, SFU, image worker — is deliberately **not** in
 scope. Those carry data, and rolling them forward is a decision rather than a cron job.
+
+`reports` is a GHCR image too, and also not in scope: the script targets `gryt-<stack>-client`
+by name. Moving it forward is a `pull` and an `up -d --no-deps reports` by hand for now.
 
 ## Keeping the sites built from source current
 

@@ -86,13 +86,14 @@ services:
       # Ingest. The apps post here from wherever they are, so this is the one
       # cloudflared routes.
       - "${INTERNAL_REPORTS_HTTP_PORT:-9476}:8080"
-      # The inbox. On all interfaces by default, because cloudflared runs in a
-      # container and cannot reach the host's loopback — a hostname in front of
-      # this is the whole point of publishing it.
+      # The inbox. On all interfaces by default, because the tunnel does not run
+      # on this box — it runs on another machine and reaches these services over
+      # the LAN, which is why every port here is published the same way. A
+      # loopback bind would be unreachable from it entirely.
       #
-      # That also means anything routed to this box reaches it, so what guards
-      # the inbox here is Keycloak sign-in rather than the bind address. Set
-      # INTERNAL_REPORTS_ADMIN_BIND=127.0.0.1 to go back to SSH-tunnel-only.
+      # That also means anything on the network reaches it, so what guards the
+      # inbox here is Keycloak sign-in rather than the bind address. Set
+      # INTERNAL_REPORTS_ADMIN_BIND=127.0.0.1 for SSH-tunnel-only instead.
       - "${INTERNAL_REPORTS_ADMIN_BIND:-0.0.0.0}:${INTERNAL_REPORTS_ADMIN_PORT:-9477}:8081"
     environment:
       # One key per app. Without at least one the service refuses to start,
@@ -112,7 +113,7 @@ services:
       # Signing in with a Gryt account. Who may actually read the inbox is a
       # list inside the service, not a role in the realm.
       REPORTS_OIDC_ISSUER: "${REPORTS_OIDC_ISSUER:-}"
-      REPORTS_OIDC_CLIENT_ID: "${REPORTS_OIDC_CLIENT_ID:-reports}"
+      REPORTS_OIDC_CLIENT_ID: "${REPORTS_OIDC_CLIENT_ID:-}"
       REPORTS_OIDC_CLIENT_SECRET: "${REPORTS_OIDC_CLIENT_SECRET:-}"
       REPORTS_OIDC_REDIRECT_URI: "${REPORTS_OIDC_REDIRECT_URI:-}"
       REPORTS_BOOTSTRAP_ADMIN: "${REPORTS_BOOTSTRAP_ADMIN:-}"

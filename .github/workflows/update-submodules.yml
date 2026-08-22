@@ -39,6 +39,7 @@ on:
           - voice
           - mobile
           - bot
+          - reports
 
 permissions:
   contents: write
@@ -92,7 +93,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          SUBMODULES="packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth packages/ui packages/cli packages/voice packages/mobile packages/bot"
+          SUBMODULES="packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth packages/ui packages/cli packages/voice packages/mobile packages/bot packages/reports"
 
           # Clone straight from the URL rather than `git submodule update`,
           # which insists on the recorded gitlink and so fails on a broken one.
@@ -199,6 +200,14 @@ jobs:
 
           if [[ "$SELECTED" == "all" || "$SELECTED" == "bot" ]]; then
             update_submodule "packages/bot" "$DEFAULT_SUBMODULE_BRANCH"
+          fi
+
+          # Added with the submodule itself rather than after the first stale
+          # pointer, which is how docs, site and auth ended up in the comment
+          # above. A submodule missing from this list is one whose gitlink only
+          # ever moves by hand, and nothing reports that it has stopped.
+          if [[ "$SELECTED" == "all" || "$SELECTED" == "reports" ]]; then
+            update_submodule "packages/reports" "$DEFAULT_SUBMODULE_BRANCH"
           fi
 
       - name: Commit changes

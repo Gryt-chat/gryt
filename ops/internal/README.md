@@ -174,6 +174,7 @@ Three environment variables, none of them required:
 |---|---|
 | `GRYT_STACKS` | stacks to refresh, space separated. Default `prod beta`; each `<s>` means the container `gryt-<s>-client` |
 | `GRYT_SERVICE` | the compose service, if it is not called `client` |
+| `GRYT_CONTAINERS` | containers to refresh by name, for anything outside the stack naming. Default `gryt-reports`; the compose service is read off the container's own label |
 | `GRYT_MIN_FREE_GB` | refuse to pull below this much free disk. Default `10` |
 
 A release-triggered deploy would be tighter, and is not what this is: the box sits behind
@@ -224,8 +225,15 @@ lives on.
 The rest of the `gryt-prod` stack — server, SFU, image worker — is deliberately **not** in
 scope. Those carry data, and rolling them forward is a decision rather than a cron job.
 
-`reports` is a GHCR image too, and also not in scope: the script targets `gryt-<stack>-client`
-by name. Moving it forward is a `pull` and an `up -d --no-deps reports` by hand for now.
+Two things have to be true before the report inbox actually moves: `Release Reports` has to
+have pushed an image at least once, and the container has to already be running. Until
+both, every tick logs `no container by that name — skipped` and exits 0, which is the same
+answer it gives for a stack that does not exist on this box.
+
+`reports` is a GHCR image too and is in scope, but not as a stack. It is one container in
+the `internal` project rather than a `gryt-<stack>-<service>`, so it is named outright in
+`GRYT_CONTAINERS` and everything after the name is identical — same labels, same pull, same
+recreate, same refusal to create a container that is not already there.
 
 ## Keeping the sites built from source current
 

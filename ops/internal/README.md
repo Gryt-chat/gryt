@@ -6,7 +6,7 @@ This folder contains **internal** infrastructure used to run:
 - `docs.gryt.chat` (documentation)
 - `ui.gryt.chat` (the `@gryt/ui` component library docs)
 - `feedback.gryt.chat` (Fider feature requests board)
-- `reports.gryt.chat` (bug reports and feedback sent from inside the apps)
+- `reports.gryt.chat` (bug reports and feedback from inside the apps, and the inbox at `/admin`)
 
 It’s **not** intended for self-hosters. Self-hosting docs live under `ops/deploy/*` (Docker Compose) and `ops/helm/*` (Kubernetes).
 
@@ -28,7 +28,6 @@ You must use unique host ports. Configure them in `ops/internal/.env`:
 - `INTERNAL_UI_HTTP_PORT` (default `9475`)
 - `FIDER_HTTP_PORT` (default `9473`)
 - `INTERNAL_REPORTS_HTTP_PORT` (default `9476`)
-- `INTERNAL_REPORTS_ADMIN_PORT` (default `9477`; `INTERNAL_REPORTS_ADMIN_BIND` decides which interfaces, default `0.0.0.0`)
 
 ## Fider auth: use Gryt Auth (Keycloak OIDC)
 
@@ -77,26 +76,12 @@ All five should be **proxied** and routed through the same Cloudflare Tunnel.
 also the only one where a Cloudflare rate limit in front earns its keep. The service rate
 limits and bans on its own; that is not a reason to leave the edge wide open.
 
-That hostname reaches the ingest port and nothing else. The inbox is a second listener on
-`INTERNAL_REPORTS_ADMIN_PORT`, and the ingest port answers `404` for `/admin` rather than
-asking for a token — an endpoint on the open internet should not advertise that there is
-an inbox behind it.
-
-Give the inbox its own hostname through the tunnel — `inbox.gryt.chat` →
-`http://<box>:9477` — and set `REPORTS_OIDC_REDIRECT_URI` to match. Everyone signs in with
-a Gryt account and still has to be on the list.
-
-It is published on all interfaces because the tunnel does not run on this box — it runs on
-another machine and reaches these services over the LAN, which is why every port here is
-published the same way. So the bind address is not what protects the inbox — **sign-in
-is**, and a deploy with `REPORTS_OIDC_ISSUER` unset leaves a shared token as the only thing
-in front of every report anyone has sent.
-
-For SSH-tunnel-only instead, set `INTERNAL_REPORTS_ADMIN_BIND=127.0.0.1` and reach it with:
-
-```bash
-ssh -N -L 9477:127.0.0.1:9477 edition35
-```
+That one hostname is the whole service: reports come in on it, and the inbox is
+`/admin` on the same host behind Keycloak sign-in. It used to be a second port
+and a second hostname, `inbox.gryt.chat`, so that the public one could answer
+`404` for `/admin`. That bought a scan one guess and cost two of everything —
+and it is how the dashboard bundle came to be cached at the edge from before it
+was gated.
 
 ## Who can read the report inbox
 

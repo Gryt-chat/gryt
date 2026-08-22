@@ -83,18 +83,9 @@ services:
     image: ghcr.io/gryt-chat/reports:${REPORTS_IMAGE_TAG:-latest}
     container_name: gryt-reports
     ports:
-      # Ingest. The apps post here from wherever they are, so this is the one
-      # cloudflared routes.
+      # One port. Reports come in here and the inbox is /admin on the same
+      # hostname, behind Keycloak sign-in.
       - "${INTERNAL_REPORTS_HTTP_PORT:-9476}:8080"
-      # The inbox. On all interfaces by default, because the tunnel does not run
-      # on this box — it runs on another machine and reaches these services over
-      # the LAN, which is why every port here is published the same way. A
-      # loopback bind would be unreachable from it entirely.
-      #
-      # That also means anything on the network reaches it, so what guards the
-      # inbox here is Keycloak sign-in rather than the bind address. Set
-      # INTERNAL_REPORTS_ADMIN_BIND=127.0.0.1 for SSH-tunnel-only instead.
-      - "${INTERNAL_REPORTS_ADMIN_BIND:-0.0.0.0}:${INTERNAL_REPORTS_ADMIN_PORT:-9477}:8081"
     environment:
       # One key per app. Without at least one the service refuses to start,
       # because what it exposes is a public POST endpoint.

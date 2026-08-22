@@ -108,6 +108,10 @@ services:
       REPORTS_OLLAMA_URL: "${REPORTS_OLLAMA_URL:-}"
       REPORTS_OLLAMA_KEEP_ALIVE: "${REPORTS_OLLAMA_KEEP_ALIVE:-5m}"
       REPORTS_TRIAGE_TIMEOUT_MS: "${REPORTS_TRIAGE_TIMEOUT_MS:-120000}"
+      # Whether the model may reason before it answers. Worth the extra seconds
+      # on a model that fits on the card: it is the difference between "the app
+      # crashed" and "TypeError in ChannelList".
+      REPORTS_TRIAGE_THINK: "${REPORTS_TRIAGE_THINK:-}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       REPORTS_TRIAGE_MODEL: "${REPORTS_TRIAGE_MODEL:-}"
       REPORTS_DISCORD_WEBHOOK_URL: "${REPORTS_DISCORD_WEBHOOK_URL:-}"

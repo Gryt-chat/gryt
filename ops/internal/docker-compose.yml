@@ -87,9 +87,24 @@ services:
       # hostname, behind Keycloak sign-in.
       - "${INTERNAL_REPORTS_HTTP_PORT:-9476}:8080"
     environment:
-      # One key per app. Without at least one the service refuses to start,
-      # because what it exposes is a public POST endpoint.
+      # One key per app, and empty here (GRYT-529). A key that ships inside a
+      # public app is not a secret, and the day it needs rotating is the day
+      # everybody who has not updated stops being able to report a bug.
+      #
+      # Not additive with ALLOW_UNKEYED below: with keys set, an app id that is
+      # not among them is refused whatever that says. Unkeyed means both.
       REPORTS_APP_KEYS: "${REPORTS_APP_KEYS:-}"
+      REPORTS_ALLOW_UNKEYED: "${REPORTS_ALLOW_UNKEYED:-false}"
+      # The shortest gap between one client's reports. A script posting in a
+      # loop is stopped by its second request, before any hourly counter has
+      # noticed — the cheapest check here and the one that does the most.
+      REPORTS_MIN_INTERVAL_SEC: "${REPORTS_MIN_INTERVAL_SEC:-10}"
+      # Triage bans whoever keeps sending junk. Only the noise verdict counts;
+      # not_a_bug is a feature request or a support question, and banning that
+      # person is the opposite of what this inbox is for.
+      REPORTS_AUTO_BAN_NOISE: "${REPORTS_AUTO_BAN_NOISE:-3}"
+      REPORTS_AUTO_BAN_WINDOW_H: "${REPORTS_AUTO_BAN_WINDOW_H:-24}"
+      REPORTS_AUTO_BAN_DAYS: "${REPORTS_AUTO_BAN_DAYS:-7}"
       REPORTS_ADMIN_TOKEN: "${REPORTS_ADMIN_TOKEN:-}"
       REPORTS_PUBLIC_URL: "${REPORTS_PUBLIC_URL:-https://reports.gryt.chat}"
       REPORTS_CORS_ORIGINS: "${REPORTS_CORS_ORIGINS:-https://app.gryt.chat,https://beta.gryt.chat}"

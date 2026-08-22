@@ -1,7 +1,7 @@
 # Working rules for Gryt
 
 Gryt is a WebRTC voice chat platform maintained by one person. It's a superproject with
-eleven git submodules under `packages/`. Read these rules before making changes.
+twelve git submodules under `packages/`. Read these rules before making changes.
 
 ## Review-required paths
 
@@ -12,6 +12,7 @@ these paths, but they never merge without Sivert reading the whole diff:
 packages/sfu/**                                    # WebRTC media plane, RTP, ICE, SVC
 packages/auth/**                                   # identity certificate authority
 packages/image-worker/**                           # decodes untrusted uploads
+packages/reports/**                                # public POST endpoint, stranger-written input
 packages/server/src/auth/**                        # challenge-response, JWT validation
 packages/server/src/middleware/**                  # request auth
 packages/server/src/db/**                          # persistence
@@ -37,13 +38,16 @@ Rules for these paths:
   CI tweak. The other half of the same fix is not unrelated — that belongs with it, or in
   its own PR opened at the same time and cross-linked. Don't drop it.
 
-Two of these look like exceptions but aren't:
+Three of these look like exceptions but aren't:
 
 - **`packages/image-worker`** compresses avatars and makes thumbnails, which sounds like a
   utility. It also hands stranger-uploaded files to an image decoder. Untrusted input
   parsing belongs here, however mundane the job looks.
 - **`packages/client/src/packages/common/src/auth/`** sits inside the client, where UI code
   gets normal review. These specific files hold the user's private key.
+- **`packages/reports`** takes bug reports and feedback from inside the apps, which sounds
+  like a form handler. It is also the only Gryt service with an endpoint anyone on the
+  internet can POST to, it parses whatever they send, and it stores IP addresses.
 
 Everything else — docs, the site, client UI, `ops/`, build scripts, CI config, tests — gets
 normal review.

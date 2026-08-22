@@ -76,5 +76,34 @@ services:
       timeout: 10s
       retries: 10
 
+  # Bug reports and feedback sent from inside the apps (reports.gryt.chat).
+  # Fider above is the public half people vote on; this is the one nobody else
+  # reads. Pulled from GHCR rather than built here — Release Reports pushes it.
+  reports:
+    image: ghcr.io/gryt-chat/reports:${REPORTS_IMAGE_TAG:-latest}
+    container_name: gryt-reports
+    ports:
+      - "${INTERNAL_REPORTS_HTTP_PORT:-9476}:8080"
+    environment:
+      # One key per app. Without at least one the service refuses to start,
+      # because what it exposes is a public POST endpoint.
+      REPORTS_APP_KEYS: "${REPORTS_APP_KEYS:-}"
+      REPORTS_ADMIN_TOKEN: "${REPORTS_ADMIN_TOKEN:-}"
+      REPORTS_PUBLIC_URL: "${REPORTS_PUBLIC_URL:-https://reports.gryt.chat}"
+      REPORTS_CORS_ORIGINS: "${REPORTS_CORS_ORIGINS:-https://app.gryt.chat,https://beta.gryt.chat}"
+      REPORTS_REQUIRE_SIGNATURE: "${REPORTS_REQUIRE_SIGNATURE:-false}"
+      # Behind the tunnel the socket address is cloudflared, so the client
+      # address has to come from cf-connecting-ip.
+      REPORTS_TRUST_PROXY: "true"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      REPORTS_TRIAGE_MODEL: "${REPORTS_TRIAGE_MODEL:-claude-opus-5}"
+      REPORTS_DISCORD_WEBHOOK_URL: "${REPORTS_DISCORD_WEBHOOK_URL:-}"
+      REPORTS_NOTIFY_ON: "${REPORTS_NOTIFY_ON:-triage}"
+    volumes:
+      - gryt-reports-data:/data
+    restart: unless-stopped
+
 volumes:
   gryt-fider-pg-data:
+  # Every report anyone has ever sent. There are no off-box backups of this.
+  gryt-reports-data:

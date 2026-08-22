@@ -28,7 +28,7 @@ You must use unique host ports. Configure them in `ops/internal/.env`:
 - `INTERNAL_UI_HTTP_PORT` (default `9475`)
 - `FIDER_HTTP_PORT` (default `9473`)
 - `INTERNAL_REPORTS_HTTP_PORT` (default `9476`)
-- `INTERNAL_REPORTS_ADMIN_PORT` (default `9477`, bound to `127.0.0.1` on the host)
+- `INTERNAL_REPORTS_ADMIN_PORT` (default `9477`; `INTERNAL_REPORTS_ADMIN_BIND` decides which interfaces, default `0.0.0.0`)
 
 ## Fider auth: use Gryt Auth (Keycloak OIDC)
 
@@ -78,20 +78,25 @@ also the only one where a Cloudflare rate limit in front earns its keep. The ser
 limits and bans on its own; that is not a reason to leave the edge wide open.
 
 That hostname reaches the ingest port and nothing else. The inbox is a second listener on
-`INTERNAL_REPORTS_ADMIN_PORT`, bound to loopback, and the ingest port answers `404` for
-`/admin` rather than asking for a token — an endpoint on the open internet should not
-advertise that there is an inbox behind it.
+`INTERNAL_REPORTS_ADMIN_PORT`, and the ingest port answers `404` for `/admin` rather than
+asking for a token — an endpoint on the open internet should not advertise that there is
+an inbox behind it.
 
-To read it over SSH and nothing else:
+Give the inbox its own hostname through the tunnel — `inbox.gryt.chat` →
+`http://<box>:9477` — and set `REPORTS_OIDC_REDIRECT_URI` to match. Everyone signs in with
+a Gryt account and still has to be on the list.
+
+It is published on all interfaces so cloudflared can reach it: cloudflared runs in its own
+container, and a port bound to the host's loopback is not reachable from there. So the bind
+address is not what protects the inbox — **sign-in is**, and a deploy with
+`REPORTS_OIDC_ISSUER` unset leaves a shared token as the only thing in front of every
+report anyone has sent.
+
+For SSH-tunnel-only instead, set `INTERNAL_REPORTS_ADMIN_BIND=127.0.0.1` and reach it with:
 
 ```bash
 ssh -N -L 9477:127.0.0.1:9477 edition35
 ```
-
-then open `http://127.0.0.1:9477/admin`. To reach it from a browser anywhere, give it its
-own hostname through the tunnel — `inbox.gryt.chat` → `http://127.0.0.1:9477` — and set
-`REPORTS_OIDC_REDIRECT_URI` to match. Everyone still signs in with a Gryt account and
-still has to be on the list.
 
 ## Who can read the report inbox
 

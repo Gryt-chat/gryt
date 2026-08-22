@@ -106,8 +106,15 @@ services:
       # Behind the tunnel the socket address is cloudflared, so the client
       # address has to come from cf-connecting-ip.
       REPORTS_TRUST_PROXY: "true"
+      # Triage. A URL picks the local model, a key picks the API, and naming
+      # the provider wins over both. Ollama runs on another machine, so this is
+      # its address on the network rather than localhost.
+      REPORTS_TRIAGE_PROVIDER: "${REPORTS_TRIAGE_PROVIDER:-}"
+      REPORTS_OLLAMA_URL: "${REPORTS_OLLAMA_URL:-}"
+      REPORTS_OLLAMA_KEEP_ALIVE: "${REPORTS_OLLAMA_KEEP_ALIVE:-5m}"
+      REPORTS_TRIAGE_TIMEOUT_MS: "${REPORTS_TRIAGE_TIMEOUT_MS:-120000}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
-      REPORTS_TRIAGE_MODEL: "${REPORTS_TRIAGE_MODEL:-claude-opus-5}"
+      REPORTS_TRIAGE_MODEL: "${REPORTS_TRIAGE_MODEL:-}"
       REPORTS_DISCORD_WEBHOOK_URL: "${REPORTS_DISCORD_WEBHOOK_URL:-}"
       REPORTS_NOTIFY_ON: "${REPORTS_NOTIFY_ON:-triage}"
       # Signing in with a Gryt account. Who may actually read the inbox is a

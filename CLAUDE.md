@@ -230,13 +230,33 @@ state the thing. A test that catches most of it: if a sentence could move to ano
 project unchanged, it is filler, and it should be a fact, a number or a consequence
 specific to this one instead.
 
-This applies to PR bodies, commit messages and task descriptions as much as to docs. They
-are the longest prose in the repository and the least edited.
-
 `no-ai-slop` is installed for this, at `~/.claude/skills/no-ai-slop/`. Run it over prose
-before it ships rather than trying to hold the list in your head; that is the failure
-mode. On 2026-08-21 it was installed, used once on a Discord message, and the docs
-written an hour later still went out saying "Worth doing rather than skipping past".
+rather than trying to hold the list in your head; that is the failure mode. On 2026-08-21
+it was installed, used once on a Discord message, and the docs written an hour later still
+went out saying "Worth doing rather than skipping past".
+
+**On anything a person reads in the product, running it is not optional.** Run it on the
+copy before you commit, not as a later pass — the draft is what ships. In scope:
+
+- UI strings in the client and the mobile app: labels, empty states, error messages,
+  onboarding, settings hints, anything rendered on screen
+- `packages/docs` and `packages/site`
+- `README.md` files, package descriptions, the server and channel descriptions shipped as
+  defaults, invite and share text, release notes and patch notes
+- anything that reaches somebody outside the repository — emails, store listings, meta
+  descriptions, alt text
+
+**Not on text that is never rendered.** Code comments, log lines, test names, variable and
+function names. Those want to be plain and direct, and a copy skill spends a turn on prose
+nobody browses. Comments here are load-bearing and long on purpose — leave them alone.
+
+PR bodies, commit messages and task descriptions are in between. The style rule above
+applies to them, and they are the longest prose in the repository and the least edited —
+but they are work records rather than product surface, so write them carefully instead of
+running the skill over each one.
+
+If you cannot tell which side something is on: could a person read it without opening an
+editor or a terminal? If yes, run the skill.
 
 This file also named a `humanizer` skill until 2026-08-22. It was never on the Windows
 machine and is not in the catalog, so nothing was running it.

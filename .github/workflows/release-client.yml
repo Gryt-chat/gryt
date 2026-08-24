@@ -498,6 +498,47 @@ jobs:
 
           cat .release/manifest.json
 
+      # Every other repository in the org gets its release notes from
+      # `generate_release_notes: true`, which lists the pull requests merged
+      # since the previous tag. That is useless here: the superproject's own
+      # commits between two releases are submodule bumps and a version bump, and
+      # the work is in four repositories GitHub cannot see across.
+      #
+      # Runs before the tag is pushed, so the newest stable tag is still the
+      # previous release rather than this one.
+      - name: Build release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.version.outputs.version }}"
+          PREVIOUS_MANIFEST="${RUNNER_TEMP}/previous-manifest.json"
+
+          # The previous stable release, whichever channel this one is. A beta
+          # then lists everything since the last thing most people are running,
+          # which is what patch-notes-style.md asks of the written note too — a
+          # note covering only beta.4..beta.5 describes a build nobody is on.
+          PREVIOUS_TAG="$(git tag --list 'v*' --sort=-v:refname \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | grep -vx "v${VERSION}" \
+            | head -n1 || true)"
+
+          ARGS=(--current .release/manifest.json --repo-root .)
+          if [[ -n "$PREVIOUS_TAG" ]] \
+            && git show "${PREVIOUS_TAG}:.release/manifest.json" > "$PREVIOUS_MANIFEST" 2>/dev/null; then
+            echo "Comparing against $PREVIOUS_TAG"
+            ARGS+=(--previous "$PREVIOUS_MANIFEST")
+          else
+            # Only reachable for a release line older than the manifest itself.
+            # Worth degrading rather than failing: a release with no list of
+            # changes still installs.
+            echo "No previous manifest found — the notes will say so."
+            rm -f "$PREVIOUS_MANIFEST"
+          fi
+
+          node .github/scripts/release-notes.mjs "${ARGS[@]}" > "${RUNNER_TEMP}/release-notes.md"
+          cat "${RUNNER_TEMP}/release-notes.md"
+
       - name: Commit release metadata and tag
         shell: bash
         env:
@@ -634,15 +675,7 @@ jobs:
           prerelease: ${{ steps.channel.outputs.channel == 'beta' }}
           draft: true
           files: .release/manifest.json
-          body: |
-            Gryt v${{ steps.version.outputs.version }}
-
-            Channel: ${{ steps.channel.outputs.channel }}
-
-            This release was built from the monorepo with pinned submodule commits.
-
-            See `manifest.json` for the exact client, server, SFU and image
-            worker commits.
+          body_path: ${{ runner.temp }}/release-notes.md
         env:
           GITHUB_TOKEN: ${{ github.token }}
 

@@ -622,6 +622,87 @@ jobs:
 
           cat .release/server/manifest.json
 
+      # Same reasoning as release-client.yml: `generate_release_notes: true`
+      # lists the pull requests merged in *this* repository since the previous
+      # tag, and this repository's commits between two server releases are
+      # gitlink bumps. The work is in three others GitHub cannot see across.
+      #
+      # The previous manifest comes out of the release asset rather than out of
+      # a tag, which is the one way this differs from the client. That workflow
+      # commits its manifest, so it can read the old one back with `git show`.
+      # This one never has — the only copy of the last release's component
+      # commits is the file attached to that release.
+      - name: Build release notes
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+          BUILD_WINDOWS: ${{ github.event.inputs.build_windows }}
+          BUILD_LINUX: ${{ github.event.inputs.build_linux }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          PREVIOUS_MANIFEST="${RUNNER_TEMP}/previous-manifest.json"
+          DETAILS="${RUNNER_TEMP}/release-details.md"
+
+          # What somebody came to this page for, so it goes above the changes.
+          # Only the bundles that were actually built: both were listed
+          # unconditionally before, and the two build inputs can be turned off
+          # one at a time, so the note promised a zip nobody uploaded.
+          {
+            printf '%s\n' "Docker image:" "ghcr.io/gryt-chat/server:${VERSION}" ""
+            if [[ "$BUILD_WINDOWS" == "true" || "$BUILD_LINUX" == "true" ]]; then
+              printf '%s\n' "Self-hosted bundles:"
+              if [[ "$BUILD_WINDOWS" == "true" ]]; then
+                printf '%s\n' "* Windows x64: gryt-server-windows-x64-v${VERSION}.zip"
+              fi
+              if [[ "$BUILD_LINUX" == "true" ]]; then
+                printf '%s\n' "* Linux x64: gryt-server-linux-x64-v${VERSION}.zip"
+              fi
+              printf '%s\n' "" "Each bundle carries the server, SFU and image-worker commits named in manifest.json."
+            fi
+          } > "$DETAILS"
+
+          # The newest stable tag whichever channel this is, so a beta lists
+          # everything since the last thing most people are running. The same
+          # choice release-client.yml makes, and what patch-notes-style.md asks
+          # of the written note: one covering only beta.4..beta.5 describes a
+          # build nobody is on.
+          #
+          # `Fetch server tags` ran long before this and the new tag is not
+          # created until two steps below, so this cannot pick itself. The
+          # grep is there for a rerun that arrives with the tag already local.
+          PREVIOUS_TAG="$(git -C packages/server tag --list 'v*' --sort=-v:refname \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | grep -vx "$TAG" \
+            | head -n1 || true)"
+
+          ARGS=(
+            --current .release/server/manifest.json
+            --repo-root .
+            --title "Gryt Server"
+            --details "$DETAILS"
+          )
+
+          if [[ -n "$PREVIOUS_TAG" ]] && gh release download "$PREVIOUS_TAG" \
+              --repo "${{ env.RELEASE_OWNER }}/${{ env.RELEASE_REPO }}" \
+              --pattern manifest.json \
+              --output "$PREVIOUS_MANIFEST" \
+              --clobber; then
+            echo "Comparing against $PREVIOUS_TAG"
+            ARGS+=(--previous "$PREVIOUS_MANIFEST")
+          else
+            # Reachable for a release line older than the manifest asset itself,
+            # and for one whose release was deleted. Worth degrading rather than
+            # failing: a release with no list of changes still installs.
+            echo "No manifest to compare against — the notes will say so."
+            rm -f "$PREVIOUS_MANIFEST"
+          fi
+
+          node .github/scripts/release-notes.mjs "${ARGS[@]}" > "${RUNNER_TEMP}/release-notes.md"
+          cat "${RUNNER_TEMP}/release-notes.md"
+
       - name: Commit monorepo release state
         shell: bash
         env:
@@ -756,27 +837,10 @@ jobs:
             FLAGS+=(--latest)
           fi
 
-          mkdir -p .release/server
-
-          printf '%s\n' \
-            "Gryt Server ${TAG}" \
-            "" \
-            "Channel: ${CHANNEL}" \
-            "" \
-            "Docker image:" \
-            "ghcr.io/gryt-chat/server:${VERSION}" \
-            "" \
-            "Self-hosted bundles:" \
-            "- Windows x64: gryt-server-windows-x64-v${VERSION}.zip" \
-            "- Linux x64: gryt-server-linux-x64-v${VERSION}.zip" \
-            "" \
-            "The self-hosted bundles include the server, SFU, and image-worker commits listed in manifest.json." \
-            > .release/server/release-notes.md
-
           gh release create "$TAG" \
             --repo "${{ env.RELEASE_OWNER }}/${{ env.RELEASE_REPO }}" \
             --title "Gryt Server ${TAG}" \
-            --notes-file .release/server/release-notes.md \
+            --notes-file "${RUNNER_TEMP}/release-notes.md" \
             "${FLAGS[@]}" \
             "${ASSETS[@]}"
 

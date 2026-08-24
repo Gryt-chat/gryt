@@ -18,7 +18,15 @@
  * for the exact commits". True, and nobody has ever done it.
  *
  *   node .github/scripts/release-notes.mjs \
- *     --previous <manifest.json> --current <manifest.json> [--repo-root .]
+ *     --previous <manifest.json> --current <manifest.json> [--repo-root .] \
+ *     [--title "Gryt Server"] [--details <file>]
+ *
+ * `--title` names the product in the first line, because two workflows use
+ * this and one of them is releasing the server rather than Gryt itself.
+ * `--details` is a file of markdown dropped in under the channel line, which
+ * is where the server release puts its image tag and its bundle names —
+ * before the list of changes, since somebody opening that page came for the
+ * download.
  *
  * Writes markdown to stdout. Missing a previous manifest is not an error — the
  * first release of a line has nothing to diff against and says so.
@@ -37,6 +45,8 @@ for (let i = 2; i < process.argv.length; i += 2) {
 const repoRoot = args.get("repo-root") ?? process.cwd();
 const currentPath = args.get("current");
 const previousPath = args.get("previous");
+const title = args.get("title") ?? "Gryt";
+const detailsPath = args.get("details");
 
 if (!currentPath) {
   console.error("usage: release-notes.mjs --current <manifest.json> [--previous <manifest.json>]");
@@ -186,7 +196,11 @@ for (const [key, label] of COMPONENTS) {
 /* --- output -------------------------------------------------------------- */
 
 const out = [];
-out.push(`Gryt v${current.version}`, "", `Channel: ${current.channel}`, "");
+out.push(`${title} v${current.version}`, "", `Channel: ${current.channel}`, "");
+
+if (detailsPath && existsSync(detailsPath)) {
+  out.push(readFileSync(detailsPath, "utf8").trim(), "");
+}
 
 if (!previous) {
   out.push(

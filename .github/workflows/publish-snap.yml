@@ -99,11 +99,11 @@ jobs:
         shell: bash
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-          # Long enough that a ~100MB upload finishes on a slow runner, and no
-          # longer. All the wait buys is the status line proving the Store took
-          # the file; the review that follows takes tens of minutes and this job
-          # has no reason to watch it.
-          WAIT_SECONDS: "180"
+          # A ceiling on the file transfer, not a review wait. The step below
+          # returns as soon as the Store acknowledges the upload, so in the
+          # normal case this number is never reached and costs nothing. It is
+          # here so a stalled transfer eventually fails instead of hanging.
+          MAX_UPLOAD_SECONDS: "600"
         run: |
           set -euo pipefail
 
@@ -122,49 +122,106 @@ jobs:
 
           echo "Uploading $SNAP to latest/stable."
 
-          # Hand the snap over, then stop caring.
+          # Push and go.
           #
-          # `snapcraft upload` blocks until the Store finishes its automated
-          # review and has no flag to return early. Gryt reviews have taken 25
-          # and 77 minutes, and on 2026-08-17 one polled the Store once a second
-          # for three hours before the job was cancelled, writing about 28000
-          # lines of HTTP GET on the way.
+          # `snapcraft upload` has no flag to return once the file is in. It
+          # transfers the snap, then polls the Store until the automated review
+          # finishes — which has taken 25 minutes, 77 minutes, and once three
+          # hours of one-second polling that wrote about 28000 lines of HTTP GET
+          # before somebody cancelled the job.
           #
-          # Waiting buys nothing. `--release=stable` is honoured by the Store
-          # rather than by this client: the snap is released to the channel if
-          # the review passes, whether or not anyone is still watching. Nothing
-          # downstream depends on it either, since the .snap is already attached
-          # to the GitHub release.
+          # Watching that buys nothing. `--release=stable` is recorded by the
+          # Store at upload time and honoured when the review passes, whether or
+          # not anyone is still connected, and the .snap is already attached to
+          # the GitHub release for anyone who wants it now.
+          #
+          # So: run it in the background, and stop the moment the Store says it
+          # has the file. A revision number or a processing status is that
+          # acknowledgement — nothing is printed until the transfer completes.
+          # This replaces a fixed timeout, which meant every release waited out
+          # the same number regardless of how fast the upload actually was.
+          #
+          # Output goes to a file rather than the console because the pid has to
+          # be snapcraft's rather than a pipeline's. The log is printed below.
           set +e
-          timeout --signal=INT "$WAIT_SECONDS" \
-            snapcraft upload --release=stable "$SNAP" 2>&1 | tee upload.log
-          rc=${PIPESTATUS[0]}
-          set -e
+          snapcraft upload --release=stable "$SNAP" > upload.log 2>&1 &
+          upload_pid=$!
 
-          if [[ $rc -eq 0 ]]; then
-            echo
-            echo "Store finished while we watched. Released to latest/stable."
-            exit 0
-          fi
-
-          # Timing out is the expected path for a slow review, but only if the
-          # upload itself landed. Otherwise there is nothing for the Store to
-          # review and exiting 0 would hide a real failure.
+          # Stopping the poller does not cancel anything: the file is already
+          # with the Store and the channel was chosen at upload time.
           #
-          # The Store hands back a build to poll once it has accepted the file,
-          # so any status line at all is proof the upload completed.
-          if [[ $rc -eq 124 ]] && grep -qiE 'Status: (processing|reviewing)|Revision [0-9]+ created' upload.log; then
+          # INT first, because that is what snapcraft handles cleanly, then KILL
+          # if it is still there. A process blocked in a syscall does not act on
+          # INT until it returns, and `wait` on a process that ignored the signal
+          # blocks for as long as the process feels like living — which is the
+          # whole thing this job exists to avoid.
+          stop_upload () {
+            kill -INT "$upload_pid" 2>/dev/null
+            for _ in $(seq 1 10); do
+              kill -0 "$upload_pid" 2>/dev/null || return
+              sleep 0.5
+            done
+            kill -KILL "$upload_pid" 2>/dev/null
+            wait "$upload_pid" 2>/dev/null
+          }
+
+          accepted=0
+          started=$SECONDS
+
+          while true; do
+            if grep -qiE 'Status: (processing|reviewing)|Revision [0-9]+ created' upload.log 2>/dev/null; then
+              accepted=1
+              break
+            fi
+
+            # Finished on its own — a fast review, or a failure. Either way the
+            # exit code below is the answer.
+            kill -0 "$upload_pid" 2>/dev/null || break
+
+            if (( SECONDS - started >= MAX_UPLOAD_SECONDS )); then
+              break
+            fi
+
+            sleep 2
+          done
+
+          elapsed=$(( SECONDS - started ))
+
+          if (( accepted )); then
+            stop_upload
+            set -e
+
+            cat upload.log
             echo
-            echo "Stopped waiting after ${WAIT_SECONDS}s. The upload landed and the Store is"
-            echo "still reviewing it; it releases to latest/stable on its own from here."
+            echo "Store has the file after ${elapsed}s. Leaving the review to run on its"
+            echo "own — it releases to latest/stable from here."
             echo "Check https://snapcraft.io/gryt/releases if it never appears."
             exit 0
           fi
 
-          if [[ $rc -eq 124 ]]; then
-            echo "::error::Gave up after ${WAIT_SECONDS}s without the upload being accepted."
-            echo "No revision or status line in the output, so the file never reached the Store."
+          # Nothing acknowledged. If it is somehow still running we are out of
+          # time, so stop it rather than waiting on it.
+          if kill -0 "$upload_pid" 2>/dev/null; then
+            stop_upload
+            set -e
+
+            cat upload.log
+            echo
+            echo "::error::Gave up after ${elapsed}s with no acknowledgement from the Store."
+            echo "No revision or status line in the output, so the file never landed."
             exit 1
+          fi
+
+          wait "$upload_pid"
+          rc=$?
+          set -e
+
+          cat upload.log
+          echo
+
+          if [[ $rc -eq 0 ]]; then
+            echo "Store finished before we noticed. Released to latest/stable."
+            exit 0
           fi
 
           echo "::error::snapcraft upload failed with exit code $rc."

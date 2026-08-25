@@ -11,6 +11,7 @@ name: Discord CI notification
 on:
   workflow_run:
     workflows:
+      - Avatar parity
       - Release Client
       - Release Server
       - Sync Vikunja task

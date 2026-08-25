@@ -1,0 +1,76 @@
+name: Avatar parity
+
+# Checks that the desktop client and the mobile app resolve the same
+# @gryt/owl, so one person is drawn the same way in both.
+#
+# This lives in the superproject because nowhere else can see both apps. Each
+# repository tests against its own node_modules, so a skew leaves every test in
+# both suites green — which is how a copied set of hashes went on passing while
+# the two had already drifted apart once.
+
+on:
+  # The primary trigger, and it has to be time-based. The commit that changes
+  # which two versions ship together is the gitlink bump from Update
+  # Submodules, and that commit carries [skip ci] — so anything hung off
+  # `push` would be skipped on exactly the commits worth checking.
+  schedule:
+    - cron: "23 6 * * *"
+
+  workflow_dispatch:
+
+  # So a change to the check is exercised by the PR that makes it, rather than
+  # first running at 06:23 the morning after it merges.
+  pull_request:
+    paths:
+      - .github/scripts/check-avatar-parity.sh
+      - .github/workflows/avatar-parity.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: avatar-parity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    name: Compare resolved avatar package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout monorepo
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Clone the two apps
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Cloned from the URL at main rather than resolved from the recorded
+          # gitlink, and the difference matters here. What ships is each
+          # repository's own main: the desktop client is built from client:main
+          # by Release Client, and the mobile app from mobile:main. The gitlink
+          # is a snapshot of that, usually current but sometimes an hour
+          # behind, so checking it would answer a slightly different question
+          # than the one being asked — and a pointer left at a commit that is
+          # not on the remote would fail the checkout outright.
+          #
+          # Blobless rather than shallow: --depth 1 would do, but a partial
+          # clone leaves the lockfile a normal file to read while skipping the
+          # rest of the history's contents.
+          for app in client mobile; do
+            # actions/checkout leaves an empty directory for each gitlink, and
+            # clone refuses a directory that has anything in it.
+            rm -rf "packages/${app}"
+
+            git clone --quiet --filter=blob:none --no-checkout \
+              "https://github.com/Gryt-chat/${app}.git" "packages/${app}"
+            git -C "packages/${app}" checkout --quiet origin/main -- yarn.lock
+            echo "${app}: $(git -C "packages/${app}" rev-parse --short origin/main)"
+          done
+
+      - name: Compare
+        shell: bash
+        run: .github/scripts/check-avatar-parity.sh

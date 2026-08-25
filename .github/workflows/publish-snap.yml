@@ -1,0 +1,171 @@
+name: Publish snap to the Snap Store
+
+# Split out of Release Client, because it was never on the release path and it
+# was holding the release up anyway.
+#
+# `concurrency` is declared per workflow, and Release Client shares its group
+# with Release Server so the two cannot race for a push. A job in that workflow
+# holds the group until it finishes — so ten minutes spent watching a Snap Store
+# review delayed the next release of anything by ten minutes. On 2026-08-25 a
+# server release sat `pending` for exactly that reason while a client release
+# waited out a review nobody was reading.
+#
+# Out here it holds nothing. The GitHub release is already published when this
+# starts — that is the event that triggers it — so the Store either gets the
+# same artifact or it does not, on its own time.
+
+on:
+  release:
+    types: [published]
+
+  # For a release whose upload failed, or one from before this existed. The tag
+  # is the only thing this needs.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish, e.g. v1.6.42'
+        required: true
+        type: string
+
+# Its own group, and it may be cancelled. Two of these running means two
+# releases went out close together, and the older upload is the one nobody
+# wants in the Store.
+concurrency:
+  group: publish-snap
+  cancel-in-progress: true
+
+jobs:
+  publish-snap:
+    name: Publish snap to the Snap Store
+    runs-on: ubuntu-latest
+
+    # Stable only. Every upload waits on the Store's automated review, and betas
+    # ship often. Linux beta testers already have the AppImage, .deb and .snap
+    # attached to the GitHub release, so putting every beta through the review
+    # queue buys very little.
+    #
+    # `latest/beta` is closed in the Store to match. Leaving it open but unfed
+    # would serve an increasingly stale beta indefinitely.
+    #
+    # Read off the tag rather than a workflow input, because a `release` event
+    # has no idea which dispatch produced it. A beta is `v1.2.3-beta.N`.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      !contains(github.event.release.tag_name, '-beta')
+
+    # The Snap Store is not part of the release's availability contract. GitHub,
+    # Windows, macOS, AppImage, deb and the downloadable snap have all shipped
+    # before this runs, so a Canonical outage or review backlog must not read as
+    # a failed Gryt release.
+    continue-on-error: true
+
+    # A backstop, not the mechanism — the upload step stops waiting on its own.
+    # On 2026-08-17 a run polled the Store once a second for three hours before
+    # somebody cancelled it.
+    timeout-minutes: 15
+
+    env:
+      OWNER: Gryt-chat
+      REPO: gryt
+      TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+
+    steps:
+      - name: Install Snapcraft
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo snap install snapcraft --classic
+
+          echo "Snapcraft version:"
+          snapcraft --version
+
+      - name: Download the snap from the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          gh release download "$TAG" \
+            --repo "$OWNER/$REPO" \
+            --pattern '*.snap' \
+            --dir .
+
+          echo "Downloaded snap:"
+          ls -lah ./*.snap
+
+      - name: Upload to the Snap Store
+        shell: bash
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+          # Long enough that a ~100MB upload finishes on a slow runner, and no
+          # longer. All the wait buys is the status line proving the Store took
+          # the file; the review that follows takes tens of minutes and this job
+          # has no reason to watch it.
+          WAIT_SECONDS: "180"
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${SNAPCRAFT_STORE_CREDENTIALS:-}" ]]; then
+            echo "SNAPCRAFT_STORE_CREDENTIALS is not set, skipping the Store."
+            exit 0
+          fi
+
+          # Always stable: this job does not run for beta releases.
+          SNAP="$(find . -maxdepth 1 -type f -name '*.snap' -print -quit)"
+
+          if [[ -z "$SNAP" ]]; then
+            echo "::error::No .snap file was downloaded from $TAG."
+            exit 1
+          fi
+
+          echo "Uploading $SNAP to latest/stable."
+
+          # Hand the snap over, then stop caring.
+          #
+          # `snapcraft upload` blocks until the Store finishes its automated
+          # review and has no flag to return early. Gryt reviews have taken 25
+          # and 77 minutes, and on 2026-08-17 one polled the Store once a second
+          # for three hours before the job was cancelled, writing about 28000
+          # lines of HTTP GET on the way.
+          #
+          # Waiting buys nothing. `--release=stable` is honoured by the Store
+          # rather than by this client: the snap is released to the channel if
+          # the review passes, whether or not anyone is still watching. Nothing
+          # downstream depends on it either, since the .snap is already attached
+          # to the GitHub release.
+          set +e
+          timeout --signal=INT "$WAIT_SECONDS" \
+            snapcraft upload --release=stable "$SNAP" 2>&1 | tee upload.log
+          rc=${PIPESTATUS[0]}
+          set -e
+
+          if [[ $rc -eq 0 ]]; then
+            echo
+            echo "Store finished while we watched. Released to latest/stable."
+            exit 0
+          fi
+
+          # Timing out is the expected path for a slow review, but only if the
+          # upload itself landed. Otherwise there is nothing for the Store to
+          # review and exiting 0 would hide a real failure.
+          #
+          # The Store hands back a build to poll once it has accepted the file,
+          # so any status line at all is proof the upload completed.
+          if [[ $rc -eq 124 ]] && grep -qiE 'Status: (processing|reviewing)|Revision [0-9]+ created' upload.log; then
+            echo
+            echo "Stopped waiting after ${WAIT_SECONDS}s. The upload landed and the Store is"
+            echo "still reviewing it; it releases to latest/stable on its own from here."
+            echo "Check https://snapcraft.io/gryt/releases if it never appears."
+            exit 0
+          fi
+
+          if [[ $rc -eq 124 ]]; then
+            echo "::error::Gave up after ${WAIT_SECONDS}s without the upload being accepted."
+            echo "No revision or status line in the output, so the file never reached the Store."
+            exit 1
+          fi
+
+          echo "::error::snapcraft upload failed with exit code $rc."
+          exit $rc

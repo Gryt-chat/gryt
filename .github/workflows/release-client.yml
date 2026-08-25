@@ -1348,8 +1348,9 @@ jobs:
   #
   # The Store has taken 25 minutes, 77 minutes, and sometimes longer to process
   # Gryt uploads. `snapcraft upload --release` waits for that processing rather
-  # than returning immediately, so a long-running job here does not necessarily
-  # mean the upload is hung.
+  # than returning immediately, so this job stops watching once the Store has
+  # accepted the file and lets the review finish without it. Reaching the end
+  # of that wait is the normal outcome, not a failure.
   publish-snap:
     name: Publish snap to the Snap Store
     needs: [prepare-release, publish-release]
@@ -1373,11 +1374,13 @@ jobs:
     continue-on-error: true
 
     # A backstop, not the mechanism. The upload step below stops waiting on its
-    # own well before this, so reaching 25 minutes means something is wrong
-    # rather than merely slow. The old value was 180, and on 2026-08-17 a run
-    # sat here for three hours polling the Store once a second before it was
-    # cancelled.
-    timeout-minutes: 25
+    # own after WAIT_SECONDS, so reaching this means something is wrong rather
+    # than merely slow. On 2026-08-17 a run sat here for three hours polling the
+    # Store once a second before it was cancelled.
+    #
+    # Kept a few minutes clear of WAIT_SECONDS to leave room for installing
+    # snapcraft and pulling the .snap off the release.
+    timeout-minutes: 10
 
     env:
       OWNER: Gryt-chat
@@ -1416,7 +1419,18 @@ jobs:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
           # Long enough that a ~100MB upload finishes on a slow runner, short
           # enough that we are not paying to watch a review queue.
-          WAIT_SECONDS: "600"
+          # Long enough for the file to land, and not a second longer.
+          #
+          # This was 600, and every stable release spent all ten minutes of it
+          # before giving up and exiting 0 — the upload finishes in a couple of
+          # minutes and the Store review takes tens of them, so the wait always
+          # ended the same way. It is not free either: `concurrency` is declared
+          # at workflow level and shared with Release Server, so those ten
+          # minutes held the group and delayed the next release of anything.
+          #
+          # All the wait has to buy is the status line proving the Store
+          # accepted the file. That arrives as soon as the transfer does.
+          WAIT_SECONDS: "180"
         run: |
           set -euo pipefail
 

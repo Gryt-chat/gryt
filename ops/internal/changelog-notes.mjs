@@ -61,31 +61,52 @@ function sh(cmd, args, opts = {}) {
 
 /* ── Releases ──────────────────────────────────────────────────────────
    The tag is the source of truth for what shipped, and `isPrerelease` is
-   what separates a beta from a stable one. The manifest inside the tag
-   says which channel it called itself, but a tag that exists is a release
-   that happened, which a file in a working tree is not. */
+   what separates a beta from a stable one. */
+
+/* Ordered by version, not by date. Two reasons, both real here: the February
+   history rewrite re-pushed every old tag, so v1.0.137 carries a March 2026
+   publish date and sorts *after* releases that shipped long before it; and
+   v1.6.21 carries `0001-01-01`, which sorts before everything. "The previous
+   release" means the previous version, and only the version says so. */
+function compareVersions(a, b) {
+  const parse = (v) => v.replace(/^v/, '').split(/[.-]/).map((p) => (/^\d+$/.test(p) ? Number(p) : p))
+  const pa = parse(a)
+  const pb = parse(b)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i]
+    const y = pb[i]
+    if (x === undefined) return -1
+    if (y === undefined) return 1
+    if (x === y) continue
+    if (typeof x === 'number' && typeof y === 'number') return x - y
+    return String(x).localeCompare(String(y))
+  }
+  return 0
+}
+
 function releases() {
-  /* A fixed, generous fetch. Scaling this off GRYT_CHANGELOG_LIMIT was wrong:
-     betas outnumber stable releases by roughly ten to one, so asking for four
-     releases to draft four stable notes returned four pre-releases and no
-     stable ones at all. The limit belongs on what gets drafted, not on what
-     gets looked at. */
   const raw = sh('gh', [
     'release', 'list', '-R', 'Gryt-chat/gryt',
     '--limit', '300',
     '--json', 'tagName,isPrerelease,publishedAt',
   ], { cwd: REPO })
-  /* Sort before mapping. Mapping first drops publishedAt, which left the
-     comparator reading undefined on both sides, the order untouched, and every
-     diff running from the newer release to the older one. */
+
   return JSON.parse(raw)
-    .sort((a, b) => (a.publishedAt < b.publishedAt ? -1 : 1))
-    .map((r) => ({
-      tag: r.tagName,
-      version: r.tagName.replace(/^v/, ''),
-      channel: r.isPrerelease ? 'beta' : 'latest',
-      date: r.publishedAt.slice(0, 10),
-    }))
+    .map((r) => {
+      /* A tag that was never published, or was published by a rewrite, has a
+         date that is not the release's. The manifest records when the release
+         was actually cut, so prefer it and keep publishedAt as the fallback. */
+      const published = /^\d{4}/.test(r.publishedAt) && !r.publishedAt.startsWith('0001')
+        ? r.publishedAt.slice(0, 10)
+        : null
+      return {
+        tag: r.tagName,
+        version: r.tagName.replace(/^v/, ''),
+        channel: r.isPrerelease ? 'beta' : 'latest',
+        date: published,
+      }
+    })
+    .sort((a, b) => compareVersions(a.version, b.version))
 }
 
 function manifestAt(tag) {
@@ -429,6 +450,11 @@ async function main() {
       const prev = inChannel[inChannel.indexOf(release) - 1]
       if (!prev) { log(`${release.version}: no previous ${channel} release, skipping`); continue }
 
+      /* The manifest is the only honest record of when this release happened
+         for a tag whose publish date was rewritten. */
+      const date = release.date ?? manifestAt(release.tag)?.createdAt?.slice(0, 10) ?? null
+      if (!date) { log(`${release.version}: no usable date, skipping`); continue }
+
       const changes = changesBetween(prev.tag, release.tag)
       if (!changes) { log(`${release.version}: no manifest on one of the tags, skipping`); continue }
       if (changes.incomplete) { log(`${release.version}: incomplete history, skipping`); continue }
@@ -452,7 +478,7 @@ async function main() {
 
       doc.entries.push({
         version: release.version,
-        date: release.date,
+        date,
         channel: release.channel,
         headline: entry.headline.trim(),
         sections: entry.sections,

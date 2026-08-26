@@ -198,6 +198,10 @@ const SCHEMA = {
   type: 'object',
   properties: {
     headline: { type: 'string' },
+    /* The untitled paragraph or two before the first heading. Every note
+       written by hand has one, and its absence is most of what made the first
+       drafts read like output rather than like writing. */
+    intro: { type: 'array', items: { type: 'string' } },
     sections: {
       type: 'array',
       items: {
@@ -224,7 +228,7 @@ const SCHEMA = {
       },
     },
   },
-  required: ['headline', 'sections', 'recap'],
+  required: ['headline', 'intro', 'sections', 'recap'],
 }
 
 /* The three notes written by hand, as the target. A rule can say "a sentence,
@@ -238,6 +242,26 @@ function examples(repo) {
     .filter((f) => f.endsWith('.mdx'))
     .map((f) => readFileSync(join(dir, f), 'utf8').match(/^headline:\s*(.+)$/m)?.[1]?.trim())
     .filter(Boolean)
+}
+
+/* One hand-written note in full, as the worked example.
+   The headlines alone were not enough: the drafts came back with no opening
+   paragraph at all, because nothing had shown the model that a note has one.
+   The newest is used on the assumption it is the most representative. */
+function workedExample(repo) {
+  const dir = join(repo, 'packages/site/content/changelog')
+  if (!existsSync(dir)) return null
+  const files = readdirSync(dir).filter((f) => f.endsWith('.mdx')).sort()
+  const newest = files[files.length - 1]
+  if (!newest) return null
+  const raw = readFileSync(join(dir, newest), 'utf8')
+  const body = raw.split('---').slice(2).join('---').trim()
+  /* Media and MDX components are not something the drafter can produce, and
+     showing them invites an attempt. */
+  return body
+    .replace(/^<(Image|Clip)[^>]*\/>\s*$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 function prompt(release, changes, style) {
@@ -254,13 +278,10 @@ function prompt(release, changes, style) {
     }
   }
   return [
-    `Gryt ${release.version} shipped on ${release.date}.`,
-    '',
-    'These are the commits it contains, grouped by component. Commit bodies are',
-    'included where the author wrote one, and they are usually the best source',
-    'for why a change was made.',
-    '',
-    lines.join('\n'),
+    'You are writing the release notes for one version of Gryt. The style guide',
+    'comes first, then an example of a finished note about a different release,',
+    'then the commits this release actually contains, then the rules for your',
+    'answer. Write about the commits. Follow the rules at the bottom.',
     '',
     '─────────────────────────────────────────────────────────────────────',
     'HOW GRYT PATCH NOTES ARE WRITTEN',
@@ -270,6 +291,30 @@ function prompt(release, changes, style) {
     '',
     style,
     '',
+    '─────────────────────────────────────────────────────────────────────',
+    'AN EXAMPLE OF THE SHAPE — ABOUT A DIFFERENT RELEASE',
+    '',
+    'This is a note somebody wrote by hand, for a version that is not the one you',
+    'are writing about. Read it for its shape and its voice: the paragraph at the',
+    'top with no heading, the length of the sections, how a sentence sounds.',
+    '',
+    'Its subject matter is not yours. It is about identity backups, password',
+    'managers and certificate authorities. Your release is almost certainly about',
+    'something else entirely. If any of its subjects appear in what you write, you',
+    'have copied the example instead of reading the commits, and the note is wrong.',
+    '',
+    '<<<EXAMPLE>>>',
+    workedExample(REPO) ?? '(none available)',
+    '<<<END EXAMPLE>>>',
+    '',
+    '─────────────────────────────────────────────────────────────────────',
+    `THE RELEASE YOU ARE WRITING ABOUT: Gryt ${release.version}, ${release.date}`,
+    '',
+    'These are the commits it contains, grouped by component, and they are the',
+    'only source for what this release changed. Commit bodies are included where',
+    'the author wrote one, and are usually the best source for why.',
+    '',
+    lines.join('\n'),
     '─────────────────────────────────────────────────────────────────────',
     'WHAT APPLIES TO THIS DRAFT',
     '',
@@ -294,6 +339,11 @@ function prompt(release, changes, style) {
     '',
     ...examples(REPO).map((h) => `              ${h}`),
     '',
+    '  intro     One or two paragraphs, no heading, before everything else.',
+    '            What this release is about: what was wrong, or what changed',
+    '            direction, or what somebody notices first. Not a summary of',
+    '            the sections below. If the release is small, one sentence',
+    '            saying so is the right answer.',
     '  sections  The article. Two to four, each about one thing that changed,',
     '            in the order the guide gives: what you notice, then what a',
     '            host notices, then what a careful person asks about. Each has',
@@ -337,7 +387,9 @@ function prompt(release, changes, style) {
     'date, a feature or a reason.',
     '',
     'If nothing in this release is visible to a user, return an empty sections',
-    'array, an empty recap, and a headline saying it is a maintenance release.',
+    'array, an empty recap, a one-sentence intro saying so, and a headline',
+    'saying it is a maintenance release.',
+    '',
   ].join('\n')
 }
 
@@ -392,10 +444,55 @@ async function ask(text) {
   }
 }
 
+/* Words that belong to the example and to nothing in this release.
+   The example is there to show the shape, and a model that has just read a
+   finished note is very willing to write that note again — the 1.6.43 draft
+   came back describing 24-word backups and certificate authorities, none of
+   which appear anywhere in its commit range. Telling it not to is not enough,
+   so this checks. */
+function contamination(entry, exampleText, commitText) {
+  if (!exampleText) return null
+  const words = (t) => new Set((t.toLowerCase().match(/[a-z][a-z-]{4,}/g) ?? []))
+  const inCommits = words(commitText)
+  const distinctive = [...words(exampleText)].filter(
+    (w) => !inCommits.has(w) && !COMMON.has(w),
+  )
+  const draft = words(JSON.stringify(entry))
+  const borrowed = distinctive.filter((w) => draft.has(w))
+  /* A handful is coincidence. A pile of it is the example being retold. The
+     contaminated 1.6.43 draft scored 59 against a correct one's 8, so there is
+     a lot of room between them; the ordinary English filtered out by COMMON is
+     what keeps a short commit range from making that gap look narrower than it
+     is. */
+  return borrowed.length > 20
+    ? `looks copied from the example (${borrowed.length} of its words, none in the commits: ${borrowed.slice(0, 6).join(', ')})`
+    : null
+}
+
+/* Ordinary English long enough to pass the length filter. A four-commit range
+   is small, so plenty of unremarkable words are "not in the commits" without
+   meaning anything at all. */
+const COMMON = new Set(`about after again against along already also although always
+  another anything around because become been before being below better between both
+  cannot could different does doing done during each either enough even every
+  everything first from further given gives going great group hardly have having
+  here however into itself just keep kept know large last later least less like
+  little long made make many might more most much must never next nothing
+  often once only other others over own part particular perhaps place point
+  quite rather really right same seem seems several should since small some
+  something sometimes still such take taken than that their them then there
+  these they thing things think this those though three through thus time
+  together
+  under until upon used uses using usually very want well were what when where
+  whether which while with within without would your yours` .split(/\s+/).filter(Boolean))
+
 /* Anything the model got wrong in a way that would reach the page. A bad entry
    is not written at all; the next run tries again. */
 function validate(entry) {
   if (typeof entry?.headline !== 'string' || !entry.headline.trim()) return 'no headline'
+  if (!Array.isArray(entry.intro) || entry.intro.some((p) => typeof p !== 'string')) {
+    return 'intro is missing or is not all strings'
+  }
   if (!Array.isArray(entry.sections)) return 'sections is not an array'
   for (const s of entry.sections) {
     if (typeof s?.heading !== 'string' || !s.heading.trim()) return 'a section has no heading'
@@ -474,13 +571,30 @@ async function main() {
         continue
       }
       const bad = validate(entry)
-      if (bad) { log(`  ! rejected: ${bad}`); continue }
+        ?? contamination(entry, workedExample(REPO), JSON.stringify(changes.parts))
+      if (bad) {
+        log(`  ! rejected: ${bad}`)
+        /* Kept, because a refusal nobody can read is a refusal nobody can
+           judge. This is how the first contaminated draft was diagnosed at
+           all, and a false positive is only findable this way. */
+        try {
+          const dir = join(dirname(OUT), 'rejected')
+          mkdirSync(dir, { recursive: true })
+          writeFileSync(
+            join(dir, `${release.version}.json`),
+            `${JSON.stringify({ version: release.version, reason: bad, entry }, null, 2)}\n`,
+          )
+          log(`    kept for inspection: ${join(dir, `${release.version}.json`)}`)
+        } catch { /* the draft is lost, which is the status quo */ }
+        continue
+      }
 
       doc.entries.push({
         version: release.version,
         date,
         channel: release.channel,
         headline: entry.headline.trim(),
+        intro: entry.intro,
         sections: entry.sections,
         recap: entry.recap,
         source: { since: prev.version, commits: count, model: OLLAMA_MODEL },

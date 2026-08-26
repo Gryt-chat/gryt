@@ -244,10 +244,16 @@ function examples(repo) {
     .filter(Boolean)
 }
 
-/* One hand-written note in full, as the worked example.
-   The headlines alone were not enough: the drafts came back with no opening
-   paragraph at all, because nothing had shown the model that a note has one.
-   The newest is used on the assumption it is the most representative. */
+/* One hand-written note in full.
+   Not in the prompt any more, and the reason is worth keeping. It was added
+   because the drafts had no opening paragraph, and it did fix that — and it
+   also produced a note for 1.6.43 about 24-word backups and certificate
+   authorities, which belong to the release the example described. Reordering
+   the prompt fixed the wholesale case and left a paraphrased one: a fabricated
+   security section about keychain encryption, in a release whose commit range
+   does not contain the word "keychain".
+   Still used by the contamination check below, which needs to know what the
+   example says in order to notice a draft repeating it. */
 function workedExample(repo) {
   const dir = join(repo, 'packages/site/content/changelog')
   if (!existsSync(dir)) return null
@@ -279,9 +285,8 @@ function prompt(release, changes, style) {
   }
   return [
     'You are writing the release notes for one version of Gryt. The style guide',
-    'comes first, then an example of a finished note about a different release,',
-    'then the commits this release actually contains, then the rules for your',
-    'answer. Write about the commits. Follow the rules at the bottom.',
+    'comes first, then the commits this release actually contains, then the',
+    'rules for your answer. Write about the commits. Follow the rules.',
     '',
     '─────────────────────────────────────────────────────────────────────',
     'HOW GRYT PATCH NOTES ARE WRITTEN',
@@ -290,22 +295,6 @@ function prompt(release, changes, style) {
     'the bullet rules matter most.',
     '',
     style,
-    '',
-    '─────────────────────────────────────────────────────────────────────',
-    'AN EXAMPLE OF THE SHAPE — ABOUT A DIFFERENT RELEASE',
-    '',
-    'This is a note somebody wrote by hand, for a version that is not the one you',
-    'are writing about. Read it for its shape and its voice: the paragraph at the',
-    'top with no heading, the length of the sections, how a sentence sounds.',
-    '',
-    'Its subject matter is not yours. It is about identity backups, password',
-    'managers and certificate authorities. Your release is almost certainly about',
-    'something else entirely. If any of its subjects appear in what you write, you',
-    'have copied the example instead of reading the commits, and the note is wrong.',
-    '',
-    '<<<EXAMPLE>>>',
-    workedExample(REPO) ?? '(none available)',
-    '<<<END EXAMPLE>>>',
     '',
     '─────────────────────────────────────────────────────────────────────',
     `THE RELEASE YOU ARE WRITING ABOUT: Gryt ${release.version}, ${release.date}`,

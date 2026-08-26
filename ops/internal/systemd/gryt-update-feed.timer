@@ -1,0 +1,17 @@
+[Unit]
+Description=Check for a new Gryt release to mirror every ten minutes
+
+[Timer]
+# Monotonic, so there is no Persistent= here. That setting only does anything
+# for OnCalendar= timers, and a line claiming to catch up missed runs while
+# doing nothing is worse than no line.
+OnBootSec=5min
+OnUnitActiveSec=10min
+
+# Offset from gryt-sites-refresh and gryt-web-client-refresh, both also on ten
+# minutes. This one saturates the link for a minute rather than competing for
+# the Docker daemon, which is worth keeping off the same tick as a build.
+RandomizedDelaySec=4min
+
+[Install]
+WantedBy=timers.target

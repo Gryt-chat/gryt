@@ -1,0 +1,40 @@
+[Unit]
+Description=Mirror the current Gryt release so gryt.chat can serve differential updates
+Documentation=https://github.com/Gryt-chat/gryt/blob/main/ops/internal/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+
+# Same reasoning as gryt-sites-refresh: bring the checkout up to date first, in
+# a separate process, because bash reads a script as it runs it and this unit's
+# ExecStart is a symlink into the checkout the pull rewrites.
+#
+# The leading dash so a failed pull does not stop the mirror. A few commits
+# behind is better than a release nobody can download differentially.
+ExecStartPre=-/usr/local/bin/gryt-pull-superproject
+
+ExecStart=/usr/local/bin/gryt-update-feed
+
+# Optional, and the only file that should know anything about this particular
+# machine. See gryt-update-feed.env.example. Nothing in it is needed for the
+# deployment this was written for.
+EnvironmentFile=-/etc/default/gryt-update-feed
+
+# No Docker socket here, unlike its neighbours — this writes files into a
+# directory the site container already has mounted, and nginx picks them up
+# without being restarted. To run as someone other than root, drop in an
+# override rather than editing this file:
+#
+#   systemctl edit gryt-update-feed.service
+#   [Service]
+#   User=youruser
+#
+# Whoever it runs as has to be able to write GRYT_UPDATE_DIR and
+# GRYT_UPDATE_STATE.
+
+# Long, because a release is roughly 600MB across three platforms and this
+# refuses to serve a half-mirrored one. If a mirror is still running when the
+# timer next fires, systemd leaves the running one alone.
+TimeoutStartSec=3600

@@ -125,6 +125,84 @@ list.
 
 Static files placed in `ops/internal/downloads/` are served at `/downloads/*` on `gryt.chat`.
 
+`downloads/updates/` is not hand-placed. It is written by the update feed mirror below.
+
+## Serving the update feed
+
+macOS was downloading the whole 198MB app on every update when 84MB would do.
+electron-updater works the diff out correctly and then cannot fetch it:
+
+```
+Update: Full: 193,385.43 KB, To download: 84,367.41 KB (44%)
+Update ERROR: Cannot download differentially, fallback to full download: HttpError: 501
+```
+
+A differential download asks for the changed blocks, which is one request carrying many
+ranges. GitHub's asset host answers a single range with a `206` and many ranges with a
+`501`. nginx answers both, and so does the Cloudflare edge in front of `gryt.chat` —
+checked end to end before any of this was written.
+
+So `refresh-update-feed.sh` mirrors the files an update reads into
+`downloads/updates/<channel>/`, and the client is pointed at `gryt.chat` instead of GitHub.
+A mirror rather than a reverse proxy: the assets are immutable per version, and nginx
+serves static files with full range support and no configuration at all.
+
+It keeps one release per channel. History stays GitHub's job, and it keeps the disk
+bounded on the box the Keycloak database is also on. The one exception is the previous
+release's `.blockmap` files, which are kept because electron-updater fetches the *old*
+blockmap from the old version's URL whenever its own cache is cold — a fresh install, a
+cleared cache, anyone arriving from an older build. A 404 there is a silent fall back to
+the full download, with nothing logged. A blockmap is about a tenth of a percent of the
+installer beside it.
+
+`stable` is releases with no prerelease part. `beta` is whichever of the two is newer,
+which is what a client with beta releases turned on expects: somebody on beta who is behind
+a finished stable release should get that stable release.
+
+Each channel is downloaded into a staging directory, checked against the `sha512` in the
+release's own channel file, and swapped into place. Nothing ever serves a half-mirrored
+release, which matters because `Release Client` publishes from three runners over several
+minutes.
+
+### Installing the timer
+
+```bash
+sudo ln -sfn "$PWD/ops/internal/refresh-update-feed.sh" /usr/local/bin/gryt-update-feed
+sudo ln -sfn "$PWD/ops/internal/pull-superproject.sh" /usr/local/bin/gryt-pull-superproject
+sudo cp ops/internal/systemd/gryt-update-feed.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now gryt-update-feed.timer
+```
+
+Same shape as the two timers above, including the symlink, the superproject pull as an
+`ExecStartPre`, and root by default. It fires every ten minutes with a randomised delay
+offset from the others — this one saturates the link for a minute rather than competing for
+the Docker daemon, so it is worth keeping off the same tick as a build.
+
+The first run downloads both channels, roughly 600MB each across the three platforms. After
+that most runs print two `already mirroring <tag>` lines and stop.
+
+Read what it did with `sudo journalctl -u gryt-update-feed -n 50`.
+
+### One Cloudflare setting this depends on
+
+The installers are versioned filenames and are served `immutable`. `latest*.yml` is a fixed
+name whose contents change on every release, and it is the file that tells a client a
+release exists — cached, it hides the release it is meant to announce. nginx serves it
+`Cache-Control: no-cache`, which Cloudflare respects at the edge.
+
+What Cloudflare tells *browsers* is a dashboard setting that overrides the origin. **Browser
+Cache TTL has to be "Respect Existing Headers"**, or add a cache rule bypassing
+`gryt.chat/downloads/updates/*.yml`. gryt.chat already served a stale logo for a month
+because an edge cache outlived a deploy (GRYT-610); this is the same failure with a worse
+consequence.
+
+### Watch the disk
+
+Two channels is roughly 1.2GB, replaced rather than accumulated. The script refuses to
+download below `GRYT_MIN_FREE_GB` (10 by default) for the same reason `CLAUDE.md` says to
+check `df -h` before builds: a full disk takes the auth database down.
+
 ## Keeping the hosted web clients current
 
 `app.gryt.chat` and `beta.gryt.chat` are not built from source like the sites above. They

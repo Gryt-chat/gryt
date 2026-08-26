@@ -330,3 +330,74 @@ the same reason it does above.
 
 The first run rebuilds all three and will take a few minutes. After that, most runs print
 three `already on <commit>` lines and stop.
+
+## Drafting the changelog
+
+`changelog-notes.mjs` writes the release notes for a stable release and leaves
+them where the site can fetch them. The facts are not guessed: every release
+commits `.release/manifest.json`, which pins the exact client, server, sfu and
+image worker commit it shipped, so the diff between two releases is `git log
+old..new` in four submodules. `patch-notes-style.md` at the repository root is
+the style guide, and it is handed to the model in full along with the headlines
+of the three notes written by hand.
+
+The model never writes markup. It fills a fixed shape — a headline, two to four
+sections of heading and paragraphs, and the recap list grouped by label — and
+the changelog page renders that shape with its own components. A malformed
+answer is detectable rather than merely ugly, and is dropped: the next run tries
+again rather than publishing something half-formed.
+
+Output goes to `GRYT_CHANGELOG_OUT`, which the `site` service bind-mounts at
+`/usr/share/nginx/html/release-notes`. The page fetches it at runtime, so a
+note is live as soon as the run finishes. Nothing rebuilds and nothing waits
+for a pull request.
+
+Stable releases only by default. `GRYT_CHANGELOG_CHANNELS="latest beta"` drafts
+the pre-releases as well, which the changelog page hides behind a toggle.
+
+Notes written by hand in `packages/site/content/changelog` are not touched and
+win where both exist.
+
+Releases older than **v1.2.12** have no manifest and are skipped — the format
+did not exist yet. Nothing here involves changesets; those live in the `ui`
+repository and version npm packages, which is a different job.
+
+### Installing the timer
+
+```bash
+sudo mkdir -p /var/lib/gryt-changelog
+sudo mkdir -p /usr/local/lib/gryt
+sudo ln -sfn "$PWD/ops/internal/changelog-notes.mjs" /usr/local/lib/gryt/changelog-notes.mjs
+sudo cp ops/internal/systemd/gryt-changelog-notes.env.example /etc/default/gryt-changelog-notes
+sudo cp ops/internal/systemd/gryt-changelog-notes.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now gryt-changelog-notes.timer
+```
+
+Edit `/etc/default/gryt-changelog-notes` before the first run. `OLLAMA_URL` has
+no useful default — the model does not run on this box — and the port is not
+optional.
+
+Then recreate the site container once so it picks up the new mount:
+
+```bash
+docker compose -f ops/internal/docker-compose.yml up -d --no-deps site
+```
+
+Needs Node 20 or newer on the host, and `gh` authenticated as something that
+can list releases on `Gryt-chat/gryt`.
+
+Run it by hand first, and read what it wrote before letting the timer have it:
+
+```bash
+node ops/internal/changelog-notes.mjs --dry-run   # the prompt, without the model
+node ops/internal/changelog-notes.mjs             # one run
+```
+
+`--dry-run` prints what it would ask for each release and calls nothing. Useful
+for reading the prompt after changing the style guide.
+
+A run with nothing to do costs one `gh release list`. A run with something to do
+is minutes: roughly eight per release on qwen3:32b on the machine this was
+written for, three on qwen3:14b. `sudo journalctl -u gryt-changelog-notes -n 50`
+for what it did.

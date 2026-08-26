@@ -16,6 +16,18 @@ services:
       - "${INTERNAL_SITE_HTTP_PORT:-9472}:80"
     volumes:
       - ./downloads:/usr/share/nginx/html/downloads:ro
+      # Release notes drafted after a release by gryt-changelog-notes.service,
+      # which the changelog page fetches at runtime. Mounted rather than built
+      # in so a new note is live without rebuilding the site.
+      #
+      # Its own path, not /changelog.json at the root: the site router owns
+      # /changelog, and a real file under a path the router also claims is a
+      # collision waiting to be discovered by somebody else.
+      #
+      # A missing source directory makes Docker create one, which is harmless
+      # here — the page treats an absent file the same as an empty one and
+      # renders the hand-written notes on their own.
+      - ${GRYT_CHANGELOG_DIR:-/var/lib/gryt-changelog}:/usr/share/nginx/html/release-notes:ro
     restart: unless-stopped
 
   # Component library docs (ui.gryt.chat). Built from packages/ui, which is a

@@ -103,8 +103,14 @@ neither. If the only honest bullet is "we tidied up", write nothing.
 
 ## Security
 
-Its own section, never folded into bug fixes, and never softened. Say what was
-wrong and what it meant, in the same voice as everything else:
+When a release contains one. Most do not, and a release with no security fix in
+it has no security section — the drafter read this heading as a shape to fill
+and wrote one about insecure connections for a release whose only commit was a
+CORS preflight failing behind a proxy.
+
+When there is one: its own section, never folded into bug fixes, and never
+softened. Say what was wrong and what it meant, in the same voice as everything
+else:
 
 > - SVG uploads are refused. An SVG can carry scripts, and Gryt was serving them
 >   from its own address

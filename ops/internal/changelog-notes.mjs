@@ -45,6 +45,10 @@
 //                          "latest beta" also drafts the pre-releases, which
 //                          the site hides behind a toggle.
 //   GRYT_CHANGELOG_LIMIT   how many releases back to consider. Default 12.
+//   GRYT_CHANGELOG_ATTEMPTS  how many times to ask for one release before
+//                          giving up on it. Default 3. A refused draft is
+//                          handed back with the reasons rather than thrown
+//                          away, which is what usually fixes it.
 //   GRYT_CHANGELOG_DUMP    with --dump, where to write drafts for inspection.
 //                          Default ./changelog/drafts beside this file. Nothing
 //                          reads what is written there.
@@ -55,7 +59,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO = resolve(process.env.GRYT_CHANGELOG_REPO ?? join(HERE, '..', '..'))
@@ -65,6 +69,14 @@ const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://127.0.0.1:11434'
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'llama3.1:8b'
 const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS ?? 180_000)
 const DRY_RUN = process.argv.includes('--dry-run')
+
+/* How many times to ask for one release before giving up on it.
+   Each attempt is a full generation — eight minutes on qwen3:32b — so this is
+   the difference between a release drafted and eight minutes wasted, and also
+   the difference between a backfill of five hours and one of fifteen. Three is
+   enough in practice: the second attempt fixes it almost every time, because
+   what gets refused is two sentences rather than the whole note. */
+const ATTEMPTS = Math.max(1, Number(process.env.GRYT_CHANGELOG_ATTEMPTS ?? 3))
 
 /* Where a draft goes. */
 const REPORTS_URL = (process.env.GRYT_CHANGELOG_URL ?? '').replace(/\/$/, '')
@@ -80,8 +92,57 @@ const DUMP_DIR = resolve(process.env.GRYT_CHANGELOG_DUMP ?? join(HERE, 'changelo
 
 const log = (...a) => console.log('[changelog]', ...a)
 
+/**
+ * Who owns the checkout, and where their home is.
+ *
+ * Everything this script shells out to belongs to that person rather than to
+ * the process: the git objects, and gh's login, which lives in their
+ * ~/.config/gh/hosts.yml. The unit runs as root, so running either directly
+ * gets git refusing the repository as dubiously owned and gh refusing outright:
+ *
+ *   To get started with GitHub CLI, please run:  gh auth login
+ *
+ * which is what failed the hourly unit, with a stack trace and exit 1, in the
+ * one place a stack trace is least useful. pull-superproject.sh has done this
+ * since it was written; the drafter simply never needed to until it started
+ * fetching tags of its own.
+ *
+ * Worked out rather than configured. The alternative is a `User=` in the unit
+ * or a name in the env file, and a machine's user account has no business being
+ * in a public repository.
+ */
+const owner = (() => {
+  if (process.getuid?.() !== 0) return null
+  try {
+    const name = execFileSync('stat', ['-c', '%U', REPO], { encoding: 'utf8' }).trim()
+    if (!name || name === 'root') return null
+    /* HOME is not changed by `runuser -u`, so without this gh looks in
+       /root/.config and finds nothing — the same failure, one layer along. */
+    const home = execFileSync('getent', ['passwd', name], { encoding: 'utf8' })
+      .trim().split(':')[5]
+    return home ? { name, home } : null
+  } catch {
+    return null
+  }
+})()
+
+
+
+/* Not on a normal user's PATH — it lives in /usr/sbin, which is root's, and
+   root is the only one who can use it anyway. pull-superproject.sh has the same
+   two lines for the same reason. */
+const RUNUSER = (() => {
+  for (const path of ['/usr/sbin/runuser', '/sbin/runuser', '/usr/bin/runuser']) {
+    if (existsSync(path)) return path
+  }
+  return null
+})()
+
 function sh(cmd, args, opts = {}) {
-  return execFileSync(cmd, args, {
+  const [run, argv] = owner && RUNUSER
+    ? [RUNUSER, ['-u', owner.name, '--', 'env', `HOME=${owner.home}`, cmd, ...args]]
+    : [cmd, args]
+  return execFileSync(run, argv, {
     encoding: 'utf8',
     maxBuffer: 32 * 1024 * 1024,
     ...opts,
@@ -176,7 +237,7 @@ function releases() {
  */
 function fetchTags() {
   try {
-    execFileSync('git', ['-C', REPO, 'fetch', '--quiet', '--tags', 'origin'], { stdio: 'ignore' })
+    sh('git', ['-C', REPO, 'fetch', '--quiet', '--tags', 'origin'], { stdio: 'pipe' })
   } catch {
     /* Not fatal. Whatever tags are already here still work, and the manifest
        check says plainly which releases cannot be reached. */
@@ -201,7 +262,7 @@ const NOISE = /^(release:|chore:|ci:|build:|Version Packages|Merge (pull request
    checkout that must not draft notes off half the changes. */
 function have(dir, sha) {
   try {
-    execFileSync('git', ['-C', dir, 'cat-file', '-e', `${sha}^{commit}`], { stdio: 'ignore' })
+    sh('git', ['-C', dir, 'cat-file', '-e', `${sha}^{commit}`], { stdio: 'pipe' })
     return true
   } catch {
     return false
@@ -212,7 +273,7 @@ function reach(dir, sha) {
   if (have(dir, sha)) return true
   for (const args of [['fetch', '--quiet', 'origin', sha], ['fetch', '--quiet', '--unshallow', 'origin']]) {
     try {
-      execFileSync('git', ['-C', dir, ...args], { stdio: 'ignore' })
+      sh('git', ['-C', dir, ...args], { stdio: 'pipe' })
       if (have(dir, sha)) return true
     } catch { /* try the next one */ }
   }
@@ -245,6 +306,32 @@ function commitsFor(component, from, to) {
     log(`  ! ${component.name}: ${String(err.message).split('\n')[0]}`)
     return null
   }
+}
+
+/**
+ * What to call each part of Gryt on a page a user reads.
+ *
+ * The manifest names repositories, and a repository name is the wrong register
+ * for release notes — "sfu" and "imageWorker" mean nothing to somebody deciding
+ * whether they need to update anything. Mapped here rather than asked of the
+ * model, because this is a fact off the manifest diff and the prompt goes out
+ * of its way to forbid the model writing these words at all: a draft that
+ * leaked "the SFU handles disconnections more clearly" into a headline is what
+ * that rule is for.
+ *
+ * The point of showing them is the question prose cannot answer at a glance —
+ * a self-hoster wants to know whether the server moved or whether this is only
+ * the app (GRYT-231).
+ */
+const COMPONENT_NAMES = {
+  client: 'The app',
+  server: 'The server',
+  sfu: 'Voice',
+  imageWorker: 'Images',
+}
+
+function componentName(key) {
+  return COMPONENT_NAMES[key] ?? key
 }
 
 function changesBetween(prevTag, tag) {
@@ -398,6 +485,12 @@ function prompt(release, changes, style) {
     '            for somebody deciding whether to read on. Do not name the',
     '            version number in it; the page already shows that. Do not list',
     '            three things to sound complete — pick what matters and say it.',
+    '            "Gryt now lets you save custom avatars, adds a new logo, and',
+    '            fixes the avatar editor" is three headlines pretending to be',
+    '            one, and it tells a reader nothing about which of the three is',
+    '            worth their time. Pick the one somebody would mention first and',
+    '            write that. The other two have sections; they do not need to be',
+    '            in the headline as well.',
     '            These are the headlines written by hand, and they are the',
     '            target:',
     '',
@@ -405,15 +498,23 @@ function prompt(release, changes, style) {
     '',
     '  intro     One or two paragraphs, no heading, before everything else.',
     '            What this release is about: what was wrong, or what changed',
-    '            direction, or what somebody notices first. Not a summary of',
-    '            the sections below. If the release is small, one sentence',
-    '            saying so is the right answer.',
+    '            direction, or what somebody notices first.',
+    '',
+    '            Never a summary of the sections below. "The most visible change',
+    '            is the new logo, but the improvements to the editor are where',
+    '            the work matters" is a table of contents in prose, and the',
+    '            reader is about to read the sections anyway. If the second',
+    '            paragraph is listing what the first three headings say, there',
+    '            should not be a second paragraph.',
     '  sections  The article. Two to four, each about one thing that changed,',
     '            in the order the guide gives: what you notice, then what a',
     '            host notices, then what a careful person asks about. Each has',
     '            a heading that is a sentence rather than a label, and a body',
-    '            of one to three paragraphs. Security is always its own',
-    '            section and is never softened.',
+    '            of one to three paragraphs.',
+    '',
+    '            A heading must not be the headline again. The headline is',
+    '            directly above it on the page; a section that repeats it',
+    '            spends the reader\'s first heading saying nothing.',
     '  recap     The short version. Groups from the guide\'s list: Voice,',
     '            Avatars and images, Emoji, Updates, Hosting, Security,',
     '            Accessibility, Under the hood. Skip a group with nothing in',
@@ -441,7 +542,9 @@ function prompt(release, changes, style) {
     '',
     'A section belongs in "Under the hood" only if a user cannot see it. A',
     'redesigned hover card is something they can see, so it is not under the',
-    'hood.',
+    'hood. Neither is a new logo, a new colour, a new button or anything else',
+    'you wrote a section about — if it was worth a section, the reader can see',
+    'it, and filing it under the hood in the recap contradicts your own note.',
     '',
     'Do not start more than one section with the same word. "Previously" in',
     'front of every contrast reads as a form someone filled in. Vary it, or',
@@ -450,9 +553,72 @@ function prompt(release, changes, style) {
     'Every fact must come from the commits above. Do not invent a number, a',
     'date, a feature or a reason.',
     '',
+    'SECURITY',
+    '',
+    'If the commits contain a security fix, it gets its own section and is',
+    'never softened. If they do not, this release has no security section and',
+    'you must not write one. A shape is not a reason: a note about a connection',
+    'that failed is not a note about security, however easy it is to describe',
+    'it that way. The same goes for the Security group in the recap.',
+    '',
+    'HOW LONG',
+    '',
+    'Match the release. One or two commits is one section and one short intro',
+    'paragraph — say the thing and stop. Two paragraphs and three headings',
+    'about a single fix is the same sentence three times, and a reader can',
+    'tell. A release with nothing much in it is allowed to have a short note;',
+    'that is information too.',
+    '',
+    'WHAT NOT TO WRITE',
+    '',
+    'No sentence that would read the same in another product\'s release notes.',
+    'If it would survive a find-and-replace of the word Gryt, it is filler and',
+    'it is taking the place of a fact. "Improves the user experience", "keeps',
+    'the visual language consistent", "this change is for you" — none of these',
+    'say anything. Say what changed and who notices.',
+    '',
+    'Do not address the reader about the release itself. They are reading it;',
+    'they know.',
+    '',
     'If nothing in this release is visible to a user, return an empty sections',
     'array, an empty recap, a one-sentence intro saying so, and a headline',
     'saying it is a maintenance release.',
+    '',
+  ].join('\n')
+}
+
+/**
+ * What to send back when a draft was refused.
+ *
+ * Rejecting a draft and waiting for the next tick throws away eight minutes of
+ * GPU and gets the same mistakes again, because nothing about the next run is
+ * different. Telling the model what it broke, with the draft in front of it, is
+ * the one thing that changes the answer.
+ *
+ * The previous answer goes in as well as the reasons. Without it the model
+ * writes a new note from scratch and loses whatever was already right — and
+ * most of what these drafts get wrong is two sentences in an otherwise sound
+ * article.
+ */
+function retryPrompt(previous, problems) {
+  return [
+    '',
+    '─────────────────────────────────────────────────────────────────────',
+    'YOUR LAST ANSWER WAS REFUSED',
+    '',
+    'You have already written this note once. It was checked and sent back.',
+    'Here it is:',
+    '',
+    JSON.stringify(previous, null, 2),
+    '',
+    'It was refused for these reasons, and only these:',
+    '',
+    ...problems.map((p) => `  - ${p}`),
+    '',
+    'Write it again with those fixed. Everything else was fine — keep it.',
+    'Do not start over, do not change what was not named above, and do not',
+    'add anything to make up for what you are removing. A note that gets',
+    'shorter because a section was wrong is a shorter note, not a worse one.',
     '',
   ].join('\n')
 }
@@ -550,6 +716,227 @@ const COMMON = new Set(`about after again against along already also although al
   under until upon used uses using usually very want well were what when where
   whether which while with within without would your yours` .split(/\s+/).filter(Boolean))
 
+/* ── The house style, as code ────────────────────────────────────────────
+   Everything below is also a rule in the prompt, and the prompt is where a
+   model is meant to learn it. These exist because it demonstrably does not.
+   The first drafts off the box broke the "Previously" rule twice in one note,
+   wrote a security section for a release with no security in it, and used the
+   headline again as the first section heading — all while being told not to.
+
+   A rule the model can ignore is a suggestion. A rule here is a rule: a draft
+   that breaks one is not written and the next run tries again. */
+
+/** Comparable form, so "the same sentence" survives punctuation and case. */
+export function normalise(text) {
+  return String(text).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+/* Ignored when comparing two sentences, because a short heading is mostly
+   these and they make any two English sentences look alike. Without this,
+   1.5.0's "The client is a server" scored 0.8 against its own headline —
+   four words shared, and all four of them were "the", "is", "a" and "server". */
+const STOPWORDS = new Set(`a an and are as at be been but by can do does for from
+  has have how if in into is it its more no not now of on or so than that the
+  their them then there these they this to up was were what when which who will
+  with you your`.split(/\s+/).filter(Boolean))
+
+const contentWords = (text) =>
+  new Set(normalise(text).split(' ').filter((w) => w && !STOPWORDS.has(w)))
+
+/**
+ * How much two sentences are the same sentence.
+ *
+ * Against the longer of the two, not the shorter. A headline often covers two
+ * things and a section takes one of them — 1.5.0's headline is about not
+ * needing an account *and* the app being a server, and its first heading is
+ * "You do not need an account". Measured against the heading that is a perfect
+ * score; measured against the headline it is a quarter, which is the honest
+ * answer. Restating the whole headline still scores high, because then there
+ * is nothing in the longer one that the shorter one left out.
+ */
+export function overlap(a, b) {
+  const x = contentWords(a)
+  const y = contentWords(b)
+  if (!x.size || !y.size) return 0
+  const shared = [...x].filter((w) => y.has(w)).length
+  return shared / Math.max(x.size, y.size)
+}
+
+/* Words that make a change a security change.
+   Not `auth` on its own, and not a bare substring match. The first version of
+   this check used both, and cleared a security section for 1.6.41 — a CORS
+   preflight failing behind a proxy — because the commit body happens to
+   contain "one unauthenticated GET to /info". `auth` also lives inside
+   "author" and "authoritative", and `escap` inside "landscape". */
+const SECURITY_WORDS = new RegExp(
+  '\\b(security|vulnerabilit(y|ies)|exploit|cve-\\d|xss|csrf|clickjack' +
+    '|injection|sanitis|sanitiz|spoof|privilege|credential|password|passphrase' +
+    '|secret|encrypt|decrypt|signature|certificate|keychain|authenticat' +
+    '|authoris|authoriz|permission)\\b',
+  'gi',
+)
+
+/**
+ * Whether the range actually contains a security change.
+ *
+ * A subject that says so is taken at its word — that is somebody labelling
+ * their own commit. A body is weaker evidence, because a commit explains
+ * mechanism and mechanism mentions authentication in passing, so a body has to
+ * raise the subject twice over before it counts.
+ *
+ * The failure this exists to stop is the model reaching for a security section
+ * because the house style asks for one, not because the release had one.
+ */
+export function hasSecurityChange(parts) {
+  const subjects = parts.flatMap((part) => part.commits.map((c) => c.subject)).join('\n')
+  if (SECURITY_WORDS.test(subjects)) return true
+
+  const bodies = parts.flatMap((part) => part.commits.map((c) => c.body)).join('\n')
+  const distinct = new Set((bodies.match(SECURITY_WORDS) ?? []).map((w) => w.toLowerCase()))
+  return distinct.size >= 2
+}
+
+/* Sentences that would sit unchanged in any other project's release notes.
+   The style guide calls this the portability test; this is the short version
+   of it, drawn from what the drafts actually produced. */
+const FILLER = [
+  /this change is for you/i,
+  /we('| a)re (excited|pleased|happy)/i,
+  /visual language/i,
+  /user experience/i,
+  /seamless/i,
+  /under the hood improvements/i,
+  /stay tuned/i,
+  /and much more/i,
+]
+
+/**
+ * The rules that are about writing rather than about shape.
+ *
+ * Returned as a list rather than the first failure, because a draft that
+ * breaks three of these is worth seeing all three of at once when it lands in
+ * `rejected/`. Reading a refusal is how the first fabricated draft was
+ * diagnosed, and one reason at a time makes that three runs instead of one.
+ */
+export function styleProblems(entry, parts) {
+  const problems = []
+  const headings = entry.sections.map((s) => s.heading)
+  const prose = [...entry.intro, ...entry.sections.flatMap((s) => s.body)]
+
+  /* At most once in the whole note. It is the obvious way to write a contrast
+     and it reads as a form somebody filled in when every paragraph has it. */
+  const previously = prose.join(' ').match(/\bpreviously\b/gi)?.length ?? 0
+  if (previously > 1) problems.push(`"Previously" ${previously} times, and once is the limit`)
+
+  /* The headline is already on the page, directly above. A section that
+     repeats it spends the reader's first heading saying nothing new. */
+  for (const heading of headings) {
+    if (overlap(entry.headline, heading) > 0.6) {
+      problems.push(`the heading "${heading}" is the headline again`)
+    }
+  }
+
+  /* Two sections opening on the same word reads as a template rather than as
+     writing, and "Previously" is the one it always is. */
+  const firstWords = headings.map((h) => normalise(h).split(' ')[0]).filter(Boolean)
+  const repeated = firstWords.find((w, i) => firstWords.indexOf(w) !== i)
+  if (repeated) problems.push(`more than one section starts with "${repeated}"`)
+
+  /* The recap is the short version, not the headings again. Somebody who read
+     the article should still find something in it. */
+  const items = entry.recap.flatMap((g) => g.items)
+  const echoes = items.filter((item) => headings.some((h) => overlap(item, h) > 0.7))
+  if (items.length && echoes.length === items.length) {
+    problems.push('every recap line is one of the section headings again')
+  }
+
+  /* Security is its own section when there is security in the release, and no
+     section at all when there is not. The prompt used to say "always", which
+     is a shape to fill rather than a fact to report. */
+  /* Anywhere in the note, not just in a heading. The draft that started this
+     had "Security:" in a heading and was caught by that, but the same
+     fabrication written as "Gryt no longer risks insecure connections" with
+     "this change improves security" in the body would have gone straight
+     through — the claim is what matters, not where it is made. */
+  const claimsSecurity = [...headings, ...entry.recap.map((g) => g.group), ...prose].some(
+    (text) => /\b(security|insecure|vulnerab)/i.test(text),
+  )
+  if (claimsSecurity && !hasSecurityChange(parts)) {
+    problems.push('the note claims security, and nothing in the commits is about security')
+  }
+
+  /* A heading is a sentence. "Security:" and "Performance:" are labels with a
+     sentence stapled on. */
+  const labelled = headings.find((h) => /^[A-Z][A-Za-z ]{0,20}:/.test(h))
+  if (labelled) problems.push(`the heading "${labelled}" is a label, not a sentence`)
+
+  /* "A, B, and C" in the headline. The guide says pick what matters and say
+     it, and a list of three is the model sounding complete instead of
+     choosing — "Gryt now lets you save custom avatars, adds a new logo, and
+     fixes the avatar editor" is three releases' worth of headline for one.
+
+     Counting commas alone would refuse 1.6.0's hand-written headline, which
+     has two of them and names one thing: the middle segment is "even without
+     an account", a qualifier rather than a list item. So a segment that opens
+     with a subordinator does not count towards the list. */
+  const segments = entry.headline.split(',').map((seg) => seg.trim()).filter(Boolean)
+  const subordinator = /^(even|which|so|because|though|although|while|if|when|unless|and then)\b/i
+  if (
+    segments.length >= 3 &&
+    /^and\b/i.test(segments[segments.length - 1]) &&
+    !segments.slice(1, -1).some((seg) => subordinator.test(seg))
+  ) {
+    problems.push('the headline lists three things rather than naming the one that matters')
+  }
+
+  /* Under the hood is for what a user cannot see. A release that got a whole
+     section about it is, by construction, something they can — the note itself
+     is the evidence. The new brand mark went in there while the intro two
+     paragraphs above called it the most visible change in the release. */
+  const underHood = entry.recap.find((g) => /under the hood/i.test(g.group))
+  if (underHood) {
+    /* Two ways of asking the same question. The heading comparison catches an
+       item that restates a heading; the containment one catches the same fact
+       worded differently, which is what actually happens — "The app no longer
+       defaults to HTTP for servers added before HTTPS logic existed" shares
+       almost nothing with the heading above it and every word with the
+       paragraph underneath.
+
+       The hand-written notes put real invisible things here — a compiled
+       SQLite library swapped for Node's, React 19, the client compiling in CI —
+       and none of them appear in their own article, which is the whole point:
+       if it was worth explaining, the reader can see it. */
+    const article = contentWords([...headings, ...prose].join(' '))
+    const visible = underHood.items.find((item) => {
+      if (headings.some((h) => overlap(item, h) > 0.4)) return true
+      const words = [...contentWords(item)]
+      if (words.length < 4) return false
+      return words.filter((w) => article.has(w)).length / words.length > 0.7
+    })
+    if (visible) {
+      problems.push(`"${visible}" is under the hood, and the note explains it above`)
+    }
+  }
+
+  for (const pattern of FILLER) {
+    const hit = prose.find((paragraph) => pattern.test(paragraph))
+    if (hit) {
+      problems.push(`filler: "${hit.match(pattern)[0]}"`)
+      break
+    }
+  }
+
+  /* A release of one commit is a short note. Padding it is how a one-line fix
+     became two intro paragraphs and a section saying the same thing again. */
+  const commits = parts.reduce((n, part) => n + part.commits.length, 0)
+  if (commits <= 2) {
+    if (entry.intro.length > 1) problems.push('more than one intro paragraph for a tiny release')
+    if (entry.sections.length > 1) problems.push('more than one section for a tiny release')
+  }
+
+  return problems
+}
+
 /* Anything the model got wrong in a way that would reach the page. A bad entry
    is not written at all; the next run tries again. */
 function validate(entry) {
@@ -595,9 +982,30 @@ async function reports(path, init = {}) {
 /* Versions reports has already been given a draft for, in any state. A
    rejected one is not in this list, so a note somebody refused is drafted
    again on the next tick — which is what rejecting it is for. */
+/**
+ * Versions reports has already been given a draft for.
+ *
+ * Told apart from a configuration problem on purpose. A refused key or a
+ * missing route means somebody has to go and fix something, and exiting 0 on
+ * that would hide it for as long as nobody looked. Anything else — the service
+ * restarting for a deploy, a connection refused for two seconds — is not this
+ * script's problem and not worth a failed unit every hour, because a unit that
+ * cries wolf hourly is a unit whose real failure nobody reads.
+ */
 async function alreadyDrafted() {
-  const { versions } = await reports('/v1/changelog/versions')
-  return new Set(Array.isArray(versions) ? versions : [])
+  let last
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const { versions } = await reports('/v1/changelog/versions')
+      return new Set(Array.isArray(versions) ? versions : [])
+    } catch (err) {
+      last = err
+      if (/reports 4\d\d/.test(err.message)) throw err
+      log(`! reports did not answer (${err.message}); attempt ${attempt} of 3`)
+      await new Promise((r) => setTimeout(r, attempt * 2000))
+    }
+  }
+  return { unreachable: last }
 }
 
 async function postDraft(entry) {
@@ -636,8 +1044,23 @@ async function main() {
   fetchTags()
 
   const style = readFileSync(join(REPO, 'patch-notes-style.md'), 'utf8')
-  const all = releases()
+
+  /* `gh` reaches the network, and the network is allowed to be down for a
+     minute. Same reasoning as the reports call below: nothing here is urgent
+     and the next tick is an hour away. */
+  let all
+  try {
+    all = releases()
+  } catch (err) {
+    log(`! could not list releases (${String(err.message).split('\n')[0]}) — nothing to do this run`)
+    return
+  }
+
   const have = DRY_RUN || DUMP ? new Set() : await alreadyDrafted()
+  if (have.unreachable) {
+    log(`! reports is unreachable (${have.unreachable.message}) — nothing to do this run`)
+    return
+  }
   if (REDRAFT) {
     have.delete(REDRAFT)
     log(`drafting ${REDRAFT} again, replacing the draft reports already has`)
@@ -671,15 +1094,44 @@ async function main() {
       const text = prompt(release, changes, style)
       if (DRY_RUN) { console.log(`\n───── prompt for ${release.version} ─────\n${text}\n`); continue }
 
-      let entry
-      try {
-        entry = await ask(text)
-      } catch (err) {
-        log(`  ! model failed: ${err.message}`)
-        continue
+      const commitText = JSON.stringify(changes.parts)
+      const judge = (draft) => {
+        const shape = validate(draft) ?? contamination(draft, workedExample(REPO), commitText)
+        return shape ? [shape] : styleProblems(draft, changes.parts)
       }
-      const bad = validate(entry)
-        ?? contamination(entry, workedExample(REPO), JSON.stringify(changes.parts))
+
+      /* Ask, check, and hand the reasons back rather than giving up on the
+         first refusal. The rules the model breaks are the same few every time —
+         "Previously" twice, a visible change filed under the hood — and it
+         fixes them readily once it is told which ones. */
+      let entry = null
+      let problems = []
+      /* Every attempt's verdict, kept for the rejected file. A release that
+         fails all three is the interesting case, and the question it raises is
+         whether a rule is satisfiable rather than whether the model is bad —
+         which you can only answer by seeing whether the same reason came back
+         every time or whether it was chasing a different one each round. */
+      const history = []
+      for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+        try {
+          entry = await ask(attempt === 1 ? text : text + retryPrompt(entry, problems))
+        } catch (err) {
+          log(`  ! model failed: ${err.message}`)
+          history.push({ attempt, error: err.message })
+          entry = null
+          break
+        }
+        problems = judge(entry)
+        history.push({ attempt, problems })
+        if (!problems.length) break
+        log(`  · attempt ${attempt} sent back: ${problems.join('; ')}`)
+      }
+      if (!entry) continue
+      if (history.length > 1 && !problems.length) {
+        log(`    accepted on attempt ${history.length}`)
+      }
+
+      const bad = problems.length ? problems.join('; ') : null
       if (bad) {
         log(`  ! rejected: ${bad}`)
         /* Kept, because a refusal nobody can read is a refusal nobody can
@@ -690,7 +1142,11 @@ async function main() {
           mkdirSync(dir, { recursive: true })
           writeFileSync(
             join(dir, `${release.version}.json`),
-            `${JSON.stringify({ version: release.version, reason: bad, entry }, null, 2)}\n`,
+            `${JSON.stringify(
+              { version: release.version, reason: bad, attempts: history, entry },
+              null,
+              2,
+            )}\n`,
           )
           log(`    kept for inspection: ${join(dir, `${release.version}.json`)}`)
         } catch { /* the draft is lost, which is the status quo */ }
@@ -705,7 +1161,16 @@ async function main() {
         intro: entry.intro,
         sections: entry.sections,
         recap: entry.recap,
-        source: { since: prev.version, commits: count, model: OLLAMA_MODEL },
+        source: {
+          since: prev.version,
+          commits: count,
+          model: OLLAMA_MODEL,
+          /* Which parts of Gryt moved, in the order the manifest lists them.
+             Straight off the diff, so there is nothing here for a model to get
+             wrong, and the page can answer "is this just the app?" without the
+             prose having to say a word about it. */
+          components: changes.parts.map((part) => componentName(part.component)),
+        },
         /* The range this was written from, so whoever reads the note can check
            a claim against the commits rather than agree with prose that reads
            well. Checking is what caught the paraphrased security section; the
@@ -742,7 +1207,13 @@ async function main() {
   )
 }
 
-main().catch((err) => {
-  console.error('[changelog] failed:', err)
-  process.exit(1)
-})
+/* Only when run, not when imported.
+   The style rules below are exported so CI can check them against the notes
+   written by hand, and a module that drafts a changelog as a side effect of
+   being imported is a module nobody can test. */
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error('[changelog] failed:', err)
+    process.exit(1)
+  })
+}

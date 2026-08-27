@@ -166,6 +166,40 @@ const BAD_DRAFTS = [
     },
   },
   {
+    name: '1.6.31, which filed a whole privacy fix as invisible',
+    expect: 'every recap line is under the hood',
+    range: [
+      {
+        component: 'client',
+        commits: [
+          {
+            subject: 'Do not send the log unless asked, and show the payload (GRYT-532) (#232)',
+            body: 'The form attached the last 300 console lines to every report. host is the server address, often a home IP or a personal domain.',
+          },
+        ],
+      },
+    ],
+    /* Real output, and the third draft running to put the whole user-visible
+       change under the hood. The word matching missed it on morphology alone —
+       "avoids sending" against "no longer sends". */
+    note: {
+      headline: 'Gryt no longer sends server addresses in crash reports',
+      intro: ['This release removes a privacy risk in the crash reporting form.'],
+      sections: [
+        {
+          heading: 'The app only sends logs when asked',
+          body: ['It used to attach the last 300 console lines to every report.'],
+        },
+      ],
+      recap: [
+        {
+          group: 'Under the hood',
+          items: ['The app now avoids sending server addresses in crash logs unless requested'],
+        },
+      ],
+    },
+  },
+  {
     name: '1.6.39, which listed three things in the headline and hid a new logo under the hood',
     expect: 'lists three things',
     range: [

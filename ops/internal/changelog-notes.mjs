@@ -740,6 +740,13 @@ const STOPWORDS = new Set(`a an and are as at be been but by can do does for fro
   their them then there these they this to up was were what when which who will
   with you your`.split(/\s+/).filter(Boolean))
 
+/* Deliberately not stemmed.
+   Making "sends" and "sending" the same word would have caught one more recap
+   line filed under the hood, and it also made the containment check below
+   refuse 1.4.0's "The image worker ships with the app now" — a genuinely
+   invisible change, in a note whose article is about images. That is the third
+   time tuning that measure moved the problem rather than fixing it, so the
+   structural rule underneath does the work instead and this stays literal. */
 const contentWords = (text) =>
   new Set(normalise(text).split(' ').filter((w) => w && !STOPWORDS.has(w)))
 
@@ -927,6 +934,20 @@ export function styleProblems(entry, parts) {
     if (visible) {
       problems.push(`"${visible}" is under the hood, and the note explains it above`)
     }
+  }
+
+  /* Under the hood as the only group.
+     A note with sections in it has just described something a reader can see,
+     so a recap whose only heading is "Under the hood" is not summarising that
+     note — it is filing the whole release as invisible. Three drafts running
+     did exactly this, and the word matching above missed two of them by a hair
+     either way.
+
+     Asked structurally instead: no threshold, no vocabulary, nothing to tune,
+     and nothing for a change of wording to slip past. The hand-written notes
+     have eight, five and four recap groups. */
+  if (entry.sections.length && entry.recap.length === 1 && underHood) {
+    problems.push('every recap line is under the hood, for a release with sections in it')
   }
 
   for (const pattern of FILLER) {

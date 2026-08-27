@@ -12,6 +12,7 @@ on:
   workflow_run:
     workflows:
       - Avatar parity
+      - Changelog style
       - Release Client
       - Release Server
       - Sync Vikunja task

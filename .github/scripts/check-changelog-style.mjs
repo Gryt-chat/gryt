@@ -63,14 +63,20 @@ function handWritten(dir) {
     .filter((f) => f.endsWith('.mdx'))
     .sort()
     .map((file) => {
+      /* Four parts, not three: the two rules around the frontmatter, then the
+         article, then the rule above "The short version" and the recap after
+         it. Reading only the first three silently dropped every recap, and an
+         empty recap passes every recap rule — which is why the check below
+         refuses a note that parsed to nothing. */
       const raw = readFileSync(join(dir, file), 'utf8')
-      const [, front, body] = raw.split(/^---$/m)
-      const headline = front.match(/^headline:\s*(.+)$/m)?.[1]?.trim() ?? ''
+      const parts = raw.split(/^---$/m)
+      const headline = parts[1]?.match(/^headline:\s*(.+)$/m)?.[1]?.trim() ?? ''
 
-      const clean = body
+      const clean = (parts[2] ?? '')
         .replace(/^<(Image|Clip)[^>]*\/>\s*$/gm, '')
         .replace(/^import .*$/gm, '')
-      const [article, recapRaw = ''] = clean.split(/^---$/m)
+      const article = clean
+      const recapRaw = parts.slice(3).join('\n')
 
       const chunks = article.split(/^## /m)
       const paragraphs = (text) =>
@@ -81,16 +87,20 @@ function handWritten(dir) {
         return { heading: heading.trim(), body: paragraphs(rest.join('\n')) }
       })
 
+      /* Line by line, not block by block. A blank line sits between the bold
+         label and its bullets, so splitting on blank lines separated every
+         group from its own items and each of these notes tested with an empty
+         recap — which meant the recap rules were never exercised against the
+         writing they are supposed to be judged by. */
       const recap = []
-      for (const block of recapRaw.split(/\n{2,}/)) {
-        const group = block.match(/^\*\*(.+?)\*\*/)?.[1]
-        if (!group) continue
-        const items = block
-          .split('\n')
-          .slice(1)
-          .map((line) => line.replace(/^[-*]\s*/, '').trim())
-          .filter(Boolean)
-        recap.push({ group, items })
+      for (const line of recapRaw.split('\n')) {
+        const label = line.match(/^\*\*(.+?)\*\*\s*$/)?.[1]
+        if (label) {
+          recap.push({ group: label, items: [] })
+          continue
+        }
+        const item = line.match(/^[-*]\s+(.*)$/)?.[1]
+        if (item && recap.length) recap[recap.length - 1].items.push(item.trim())
       }
 
       return { name: file.replace(/\.mdx$/, ''), headline, intro: paragraphs(chunks[0]), sections, recap }
@@ -194,12 +204,20 @@ if (!existsSync(notes)) {
 console.log('The notes written by hand, which must all pass:\n')
 for (const note of handWritten(notes)) {
   const problems = styleProblems(note, WIDE_RANGE)
+  const shape = `${note.sections.length} sections, ${note.recap.length} recap groups, ${note.recap.reduce((n, g) => n + g.items.length, 0)} items`
   if (problems.length) {
     failed++
-    console.error(`  ✗ ${note.name} was refused by its own house style:`)
+    console.error(`  ✗ ${note.name} (${shape}) was refused by its own house style:`)
     for (const p of problems) console.error(`      ${p}`)
   } else {
-    console.log(`  ✓ ${note.name}`)
+    console.log(`  ✓ ${note.name} (${shape})`)
+  }
+
+  /* A note that parsed to nothing passes every rule, which is not the same as
+     passing. The parser has been wrong about this once already. */
+  if (!note.sections.length || !note.recap.length) {
+    failed++
+    console.error(`  ✗ ${note.name} parsed to an empty ${note.sections.length ? 'recap' : 'article'} — the parser is wrong, not the note`)
   }
 }
 

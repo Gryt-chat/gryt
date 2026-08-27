@@ -845,9 +845,28 @@ export function styleProblems(entry, parts) {
      is the evidence. The new brand mark went in there while the intro two
      paragraphs above called it the most visible change in the release. */
   const underHood = entry.recap.find((g) => /under the hood/i.test(g.group))
-  const visible = underHood?.items.find((item) => headings.some((h) => overlap(item, h) > 0.4))
-  if (visible) {
-    problems.push(`"${visible}" is under the hood, and the note has a section about it`)
+  if (underHood) {
+    /* Two ways of asking the same question. The heading comparison catches an
+       item that restates a heading; the containment one catches the same fact
+       worded differently, which is what actually happens — "The app no longer
+       defaults to HTTP for servers added before HTTPS logic existed" shares
+       almost nothing with the heading above it and every word with the
+       paragraph underneath.
+
+       The hand-written notes put real invisible things here — a compiled
+       SQLite library swapped for Node's, React 19, the client compiling in CI —
+       and none of them appear in their own article, which is the whole point:
+       if it was worth explaining, the reader can see it. */
+    const article = contentWords([...headings, ...prose].join(' '))
+    const visible = underHood.items.find((item) => {
+      if (headings.some((h) => overlap(item, h) > 0.4)) return true
+      const words = [...contentWords(item)]
+      if (words.length < 4) return false
+      return words.filter((w) => article.has(w)).length / words.length > 0.7
+    })
+    if (visible) {
+      problems.push(`"${visible}" is under the hood, and the note explains it above`)
+    }
   }
 
   for (const pattern of FILLER) {
@@ -1002,19 +1021,30 @@ async function main() {
          fixes them readily once it is told which ones. */
       let entry = null
       let problems = []
+      /* Every attempt's verdict, kept for the rejected file. A release that
+         fails all three is the interesting case, and the question it raises is
+         whether a rule is satisfiable rather than whether the model is bad —
+         which you can only answer by seeing whether the same reason came back
+         every time or whether it was chasing a different one each round. */
+      const history = []
       for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
         try {
           entry = await ask(attempt === 1 ? text : text + retryPrompt(entry, problems))
         } catch (err) {
           log(`  ! model failed: ${err.message}`)
+          history.push({ attempt, error: err.message })
           entry = null
           break
         }
         problems = judge(entry)
+        history.push({ attempt, problems })
         if (!problems.length) break
         log(`  · attempt ${attempt} sent back: ${problems.join('; ')}`)
       }
       if (!entry) continue
+      if (history.length > 1 && !problems.length) {
+        log(`    accepted on attempt ${history.length}`)
+      }
 
       const bad = problems.length ? problems.join('; ') : null
       if (bad) {
@@ -1027,7 +1057,11 @@ async function main() {
           mkdirSync(dir, { recursive: true })
           writeFileSync(
             join(dir, `${release.version}.json`),
-            `${JSON.stringify({ version: release.version, reason: bad, entry }, null, 2)}\n`,
+            `${JSON.stringify(
+              { version: release.version, reason: bad, attempts: history, entry },
+              null,
+              2,
+            )}\n`,
           )
           log(`    kept for inspection: ${join(dir, `${release.version}.json`)}`)
         } catch { /* the draft is lost, which is the status quo */ }

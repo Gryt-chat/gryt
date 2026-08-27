@@ -32,7 +32,18 @@
 
 set -euo pipefail
 
-ROOT="${GRYT_ROOT:-/home/sivert/gryt}"
+# Where the checkout is.
+#
+# Worked out from this script's own path rather than named, because it is
+# symlinked into /usr/local/bin from inside the checkout it maintains — so it
+# already knows, and every install that follows the README is that shape.
+#
+# It used to default to one machine's home directory, which is wrong for anybody
+# else and is not something a public repository should be carrying at all.
+#
+# GRYT_ROOT still wins, for an install that copies the script instead.
+SELF=$(readlink -f "${BASH_SOURCE[0]}")
+ROOT="${GRYT_ROOT:-$(cd "$(dirname "$SELF")/../.." && pwd)}"
 BRANCH="${GRYT_BRANCH:-main}"
 
 log() { printf '%s  %s\n' "$(date -Is)" "$*"; }

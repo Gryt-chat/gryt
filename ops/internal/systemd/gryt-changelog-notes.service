@@ -23,15 +23,30 @@ ExecStart=/usr/bin/env node /usr/local/lib/gryt/changelog-notes.mjs
 # draft. See gryt-changelog-notes.env.example.
 EnvironmentFile=-/etc/default/gryt-changelog-notes
 
-# It reads a git checkout and talks to two hosts, one on the LAN and one on
+# It works on a git checkout and talks to two hosts, one on the LAN and one on
 # loopback. None of that wants the rest of the machine.
 #
+# `full` rather than `strict`, and no ProtectHome, because both of those were
+# wrong about what this does. It is not a reader: ExecStartPre pulls the
+# checkout, and the run itself fetches release tags and deepens a shallow
+# submodule to reach the commit an old manifest pins. Under `strict` the whole
+# hierarchy is read-only, and the checkout on dev.lan lives in a home directory,
+# so ProtectHome=read-only would have blocked it there even without that.
+#
+# What it cost to find out: the unit failed on every run with
+# "cannot open '.git/FETCH_HEAD': Read-only file system", which reads like a
+# broken checkout rather than a sandbox refusing a write.
+#
+# `full` still keeps /usr, /boot, /efi and /etc read-only, which is the part
+# worth having for something that runs as root on a timer.
+#
 # No ReadWritePaths any more. This wrote /var/lib/gryt-changelog directly until
-# GRYT-635; the reports service owns that file now, and this posts to it.
+# GRYT-635; the reports service owns that file now, and this posts to it. Naming
+# the checkout here instead is not an option — it is a different path on every
+# machine, and EnvironmentFile cannot reach this directive.
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=read-only
+ProtectSystem=full
 
 # A 32b model on CPU is minutes per release, and a first run with a backlog is
 # several of them in a row. Longer than the timer interval on purpose; systemd

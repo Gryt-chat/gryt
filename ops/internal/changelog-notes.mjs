@@ -113,29 +113,75 @@ function compareVersions(a, b) {
   return 0
 }
 
+/* Asked for as lines rather than as JSON, and through `gh api` rather than
+   `gh release list`. Both halves of that are about the gh on the machine this
+   runs on, and both were found by installing the timer rather than by reading
+   anything:
+
+   - `--json` on `gh release list` landed in gh 2.24. dev.lan runs Debian's
+     2.23, where it is an unknown flag, so the process exited 1 before drafting
+     anything and did so every hour.
+   - `gh api --paginate` on an array endpoint concatenates one array per page
+     on that version, so the output is `[...][...]` and JSON.parse refuses it
+     with "Extra data". `--slurp`, which merges them, is gh 2.42.
+
+   A `-q` projection is applied per page and comes back as lines, which is the
+   one shape every version in between agrees on. */
+const RELEASE_FIELDS =
+  '.[] | [.tag_name, (.prerelease|tostring), (.draft|tostring), (.published_at // "")] | @tsv'
+
 function releases() {
   const raw = sh('gh', [
-    'release', 'list', '-R', 'Gryt-chat/gryt',
-    '--limit', '300',
-    '--json', 'tagName,isPrerelease,publishedAt',
+    'api', '--paginate',
+    '-q', RELEASE_FIELDS,
+    'repos/Gryt-chat/gryt/releases?per_page=100',
   ], { cwd: REPO })
 
-  return JSON.parse(raw)
-    .map((r) => {
+  return raw.split('\n')
+    .map((line) => line.split('\t'))
+    /* A draft release has no tag pointing at it and never shipped, so there is
+       nothing to diff and nobody to tell about it. `gh release list --json`
+       could not report this at all, so the old call would have drafted notes
+       for the untagged v1.6.21 a workflow left behind. */
+    .filter(([tag, , draft]) => tag && draft !== 'true')
+    .map(([tag, prerelease, , publishedAt]) => {
       /* A tag that was never published, or was published by a rewrite, has a
          date that is not the release's. The manifest records when the release
-         was actually cut, so prefer it and keep publishedAt as the fallback. */
-      const published = /^\d{4}/.test(r.publishedAt) && !r.publishedAt.startsWith('0001')
-        ? r.publishedAt.slice(0, 10)
+         was actually cut, so prefer it and keep published_at as the fallback.
+         The REST field is null rather than absent where the CLI said
+         "0001-01-01", so both shapes have to miss the test below. */
+      const published = /^\d{4}/.test(publishedAt ?? '') && !publishedAt.startsWith('0001')
+        ? publishedAt.slice(0, 10)
         : null
       return {
-        tag: r.tagName,
-        version: r.tagName.replace(/^v/, ''),
-        channel: r.isPrerelease ? 'beta' : 'latest',
+        tag,
+        version: tag.replace(/^v/, ''),
+        channel: prerelease === 'true' ? 'beta' : 'latest',
         date: published,
       }
     })
     .sort((a, b) => compareVersions(a.version, b.version))
+}
+
+/**
+ * Bring the release tags in, once, before anything asks for a manifest.
+ *
+ * The checkout this reads is kept current by `git fetch origin main`, which
+ * does not bring tags with it. So every release cut since somebody last fetched
+ * tags by hand is simply not a ref here, and `git show <tag>:.release/…` fails
+ * for it — which surfaces as "no manifest on one of the tags" for every recent
+ * release at once. That reads like a missing file and is a missing ref, and on
+ * dev.lan it was the difference between 344 tags present and the three releases
+ * that mattered absent.
+ */
+function fetchTags() {
+  try {
+    execFileSync('git', ['-C', REPO, 'fetch', '--quiet', '--tags', 'origin'], { stdio: 'ignore' })
+  } catch {
+    /* Not fatal. Whatever tags are already here still work, and the manifest
+       check says plainly which releases cannot be reached. */
+    log('! could not fetch tags — working from the ones already here')
+  }
 }
 
 function manifestAt(tag) {
@@ -586,6 +632,8 @@ async function main() {
         'or --dry-run to print the prompt without asking the model.',
     )
   }
+
+  fetchTags()
 
   const style = readFileSync(join(REPO, 'patch-notes-style.md'), 'utf8')
   const all = releases()

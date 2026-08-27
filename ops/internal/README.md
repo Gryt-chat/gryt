@@ -424,40 +424,44 @@ and writes each draft to `GRYT_CHANGELOG_DUMP` instead of posting it, which is
 for working on the prompt without a reports instance to hand; nothing reads what
 it writes.
 
-A run with nothing to do costs one `gh release list`. A run with something to do
-is minutes: roughly eight per release on qwen3:32b on the machine this was
-written for, three on qwen3:14b. `sudo journalctl -u gryt-changelog-notes -n 50`
-for what it did.
+A run with nothing to do costs one call to the releases API. A run with something
+to do is minutes: roughly eight per release on qwen3:32b, which is the model to
+use. `sudo journalctl -u gryt-changelog-notes -n 50` for what it did.
 
 ### The backfill
 
 42 stable releases have shipped and three have notes written by hand, so the
-first real run has about 35 to draft. That is four and a half hours on qwen3:32b
-and under two on qwen3:14b, and the unit's `TimeoutStartSec` is two hours — so
-run it by hand on the smaller model rather than letting the timer discover it:
+first real run has about 35 to draft, at roughly eight minutes each on
+qwen3:32b. Four and a half hours, which the machine spends on its own.
+
+**Use the largest model that fits on the card.** qwen3:14b is three minutes a
+release rather than eight and reads flatter for it: in one run it produced a
+headline word for word from a hand-written note it had been shown as an example,
+for a release about something else entirely. The point of this is prose somebody
+might have written, so the hours are the cheaper half of that trade. On the
+machine this was written for, qwen3:32b is the largest there is.
+
+The unit's two-hour `TimeoutStartSec` does not apply. It bounds one run of the
+service, which drafts at most one release; a backfill is run by hand and systemd
+never sees it. Stopping the timer for the duration only keeps two runs off the
+card at once — reports refuses the second draft either way, so what it saves is
+GPU rather than correctness.
 
 ```bash
-# Old manifests pin commits a --depth 1 clone cannot reach, and the script
-# skips a release rather than drafting from half a range. Once, on the box.
-git -C /opt/gryt submodule foreach git fetch --unshallow
-
 sudo systemctl stop gryt-changelog-notes.timer
 set -a; . /etc/default/gryt-changelog-notes; set +a
-OLLAMA_MODEL=qwen3:14b GRYT_CHANGELOG_LIMIT=50 \
-  node ops/internal/changelog-notes.mjs
+GRYT_CHANGELOG_LIMIT=50 node ops/internal/changelog-notes.mjs
 sudo systemctl start gryt-changelog-notes.timer
 ```
 
 Idempotent, so an interrupted run picks up where it stopped: the script asks
-reports which versions already have a note and skips those.
+reports which versions already have a note and skips those. A shallow submodule
+deepens itself on demand, so there is no `--unshallow` to run first.
 
 Nothing is published by any of that. All 35 land in the queue at
 `/admin/changelog` waiting to be read, which is the point — and reading 35 is a
 sitting or two, not an afternoon, because the queue advances to the next one
 still waiting after each decision.
 
-Expect to reject some. qwen3:14b reads flatter than the 32b and copies more:
-in one run it produced a headline word for word from one of the hand-written
-notes it had been shown as an example, for a release about something else
-entirely. Rejecting frees the version, so the next tick draws it again — on
-whichever model is configured then.
+Expect to reject a few anyway. Rejecting frees the version, so the next tick
+draws it again.

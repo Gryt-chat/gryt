@@ -92,8 +92,57 @@ const DUMP_DIR = resolve(process.env.GRYT_CHANGELOG_DUMP ?? join(HERE, 'changelo
 
 const log = (...a) => console.log('[changelog]', ...a)
 
+/**
+ * Who owns the checkout, and where their home is.
+ *
+ * Everything this script shells out to belongs to that person rather than to
+ * the process: the git objects, and gh's login, which lives in their
+ * ~/.config/gh/hosts.yml. The unit runs as root, so running either directly
+ * gets git refusing the repository as dubiously owned and gh refusing outright:
+ *
+ *   To get started with GitHub CLI, please run:  gh auth login
+ *
+ * which is what failed the hourly unit, with a stack trace and exit 1, in the
+ * one place a stack trace is least useful. pull-superproject.sh has done this
+ * since it was written; the drafter simply never needed to until it started
+ * fetching tags of its own.
+ *
+ * Worked out rather than configured. The alternative is a `User=` in the unit
+ * or a name in the env file, and a machine's user account has no business being
+ * in a public repository.
+ */
+const owner = (() => {
+  if (process.getuid?.() !== 0) return null
+  try {
+    const name = execFileSync('stat', ['-c', '%U', REPO], { encoding: 'utf8' }).trim()
+    if (!name || name === 'root') return null
+    /* HOME is not changed by `runuser -u`, so without this gh looks in
+       /root/.config and finds nothing — the same failure, one layer along. */
+    const home = execFileSync('getent', ['passwd', name], { encoding: 'utf8' })
+      .trim().split(':')[5]
+    return home ? { name, home } : null
+  } catch {
+    return null
+  }
+})()
+
+
+
+/* Not on a normal user's PATH — it lives in /usr/sbin, which is root's, and
+   root is the only one who can use it anyway. pull-superproject.sh has the same
+   two lines for the same reason. */
+const RUNUSER = (() => {
+  for (const path of ['/usr/sbin/runuser', '/sbin/runuser', '/usr/bin/runuser']) {
+    if (existsSync(path)) return path
+  }
+  return null
+})()
+
 function sh(cmd, args, opts = {}) {
-  return execFileSync(cmd, args, {
+  const [run, argv] = owner && RUNUSER
+    ? [RUNUSER, ['-u', owner.name, '--', 'env', `HOME=${owner.home}`, cmd, ...args]]
+    : [cmd, args]
+  return execFileSync(run, argv, {
     encoding: 'utf8',
     maxBuffer: 32 * 1024 * 1024,
     ...opts,
@@ -188,7 +237,7 @@ function releases() {
  */
 function fetchTags() {
   try {
-    execFileSync('git', ['-C', REPO, 'fetch', '--quiet', '--tags', 'origin'], { stdio: 'ignore' })
+    sh('git', ['-C', REPO, 'fetch', '--quiet', '--tags', 'origin'], { stdio: 'pipe' })
   } catch {
     /* Not fatal. Whatever tags are already here still work, and the manifest
        check says plainly which releases cannot be reached. */
@@ -213,7 +262,7 @@ const NOISE = /^(release:|chore:|ci:|build:|Version Packages|Merge (pull request
    checkout that must not draft notes off half the changes. */
 function have(dir, sha) {
   try {
-    execFileSync('git', ['-C', dir, 'cat-file', '-e', `${sha}^{commit}`], { stdio: 'ignore' })
+    sh('git', ['-C', dir, 'cat-file', '-e', `${sha}^{commit}`], { stdio: 'pipe' })
     return true
   } catch {
     return false
@@ -224,7 +273,7 @@ function reach(dir, sha) {
   if (have(dir, sha)) return true
   for (const args of [['fetch', '--quiet', 'origin', sha], ['fetch', '--quiet', '--unshallow', 'origin']]) {
     try {
-      execFileSync('git', ['-C', dir, ...args], { stdio: 'ignore' })
+      sh('git', ['-C', dir, ...args], { stdio: 'pipe' })
       if (have(dir, sha)) return true
     } catch { /* try the next one */ }
   }

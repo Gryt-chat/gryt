@@ -29,6 +29,25 @@ two things that actually matter.
 
 Then **the note itself, written as prose**, and **a recap list at the end**.
 
+### The opening
+
+Before the first heading, a paragraph or two with no heading of its own, saying
+what this release is about. Every note so far has one and it is the part that
+makes the rest read like writing rather than output.
+
+It is not a summary of the sections below. It is the frame the sections hang on
+— what was wrong, or what changed direction, or what somebody will notice first:
+
+> Using Gryt without an account has always had one sharp edge: whatever you were
+> on a server lived in one browser on one machine. Clear your site data and it
+> was gone, along with any roles you had and any server you owned. This release
+> takes that apart.
+
+> Two things changed in this release and they point the same way.
+
+If the release is small, say so in a sentence and move on. A release with one
+fix in it does not need a paragraph pretending otherwise.
+
 ### The article
 
 A few sections with real headings, each about one thing that changed, in the order
@@ -151,6 +170,42 @@ there were no sponsors.
 Not every beta deserves notes. If a release contains nothing above **Under the
 hood**, skip it — a note saying "we deleted a dead script" is worse than silence.
 Accumulate and publish when there is something to say.
+
+## Things that make it read like a machine wrote it
+
+Worth its own section because they are the failures that actually turn up, and
+because every one of them survives a read-through unless you are looking for it.
+
+**Groups of three.** "Voice presence is now reliable, avatars are consistent,
+and macOS icons look right" is three things in a row because three sounds
+finished, not because three things matter equally. Pick the one that matters and
+say that.
+
+**The same word starting every paragraph.** "Previously" in front of every
+contrast reads as a form somebody filled in. Once per note is plenty. Put the
+old behaviour in the second half of the sentence instead, or leave it out where
+the fix speaks for itself.
+
+**"Not X, but Y."** State Y. "This is not a redesign, it is a rewrite" is one
+sentence pretending to be two.
+
+**A noun phrase, a colon, then a reveal.** "The detail that makes it work: a
+separate process." Write it as a sentence.
+
+**Importance claims.** "marks a significant step", "underscores our commitment",
+"a major improvement to". Say what changed and let the reader decide what it was
+worth. If it needs to be called significant, it probably was not.
+
+**Trailing -ing clauses that pretend to explain.** "…, ensuring a smoother
+experience", "…, reflecting our focus on reliability". They add length and no
+information. Cut at the comma.
+
+**Every sentence the same length.** Real writing varies. A run of medium
+sentences with no short one anywhere is the most reliable tell there is, and the
+hardest to notice.
+
+**A closing paragraph that restates the note.** The reader was just there. Stop
+on the last real thing.
 
 ## Voice
 

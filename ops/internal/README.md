@@ -330,3 +330,134 @@ the same reason it does above.
 
 The first run rebuilds all three and will take a few minutes. After that, most runs print
 three `already on <commit>` lines and stop.
+
+## Drafting the changelog
+
+`changelog-notes.mjs` drafts the release notes for a stable release. The facts
+are not guessed: every release commits `.release/manifest.json`, which pins the
+exact client, server, sfu and image worker commit it shipped, so the diff
+between two releases is `git log old..new` in four submodules.
+`patch-notes-style.md` at the repository root is the style guide, and it is
+handed to the model in full along with the headlines of the three notes written
+by hand.
+
+The model never writes markup. It fills a fixed shape — a headline, two to four
+sections of heading and paragraphs, and the recap list grouped by label — and
+the changelog page renders that shape with its own components. A malformed
+answer is detectable rather than merely ugly, and is dropped: the next run tries
+again rather than posting something half-formed.
+
+### A draft is not published
+
+Each draft is posted to the reports service, which holds it until somebody has
+read it at [reports.gryt.chat/admin/changelog](https://reports.gryt.chat/admin/changelog)
+and pressed Publish or Reject. Reports is what writes `changelog.json` into the
+directory both containers mount, and the changelog page fetches it at runtime —
+so publishing takes seconds and nothing rebuilds.
+
+This script wrote that file itself until GRYT-635. Two fabricated drafts were
+caught by reading them while it was being built: one retold a different release
+wholesale, and one was a paraphrase — a section headed "Security improvements
+for identity and account tokens", about keychain encryption, in a release whose
+commit range does not contain the word keychain. It read like the rest of the
+note and it scored under the contamination guard in this script, so the guard is
+a backstop rather than a proof.
+
+`GRYT_CHANGELOG_URL` and `GRYT_CHANGELOG_KEY` are required and the script
+refuses to start without them. `GRYT_CHANGELOG_REDRAFT=1.6.43` drafts one
+version again even though reports already has a note for it; the existing draft
+is kept and marked superseded.
+
+The commit range each note was drafted from is posted with it and shown beside
+it in the inbox, so a claim can be checked against the commits. It is not in the
+file the site reads.
+
+Stable releases only by default. `GRYT_CHANGELOG_CHANNELS="latest beta"` drafts
+the pre-releases as well, which the changelog page hides behind a toggle.
+
+Notes written by hand in `packages/site/content/changelog` are not touched and
+win where both exist.
+
+Releases older than **v1.2.12** have no manifest and are skipped — the format
+did not exist yet. Nothing here involves changesets; those live in the `ui`
+repository and version npm packages, which is a different job.
+
+### Installing the timer
+
+```bash
+sudo mkdir -p /var/lib/gryt-changelog
+sudo mkdir -p /usr/local/lib/gryt
+sudo ln -sfn "$PWD/ops/internal/changelog-notes.mjs" /usr/local/lib/gryt/changelog-notes.mjs
+sudo cp ops/internal/systemd/gryt-changelog-notes.env.example /etc/default/gryt-changelog-notes
+sudo cp ops/internal/systemd/gryt-changelog-notes.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now gryt-changelog-notes.timer
+```
+
+Edit `/etc/default/gryt-changelog-notes` before the first run. `OLLAMA_URL` has
+no useful default — the model does not run on this box — and the port is not
+optional.
+
+`GRYT_CHANGELOG_KEY` here has to match `REPORTS_CHANGELOG_KEY` in
+`ops/internal/.env`, which is what the reports service checks.
+
+Then recreate both containers once so they pick up the mounts:
+
+```bash
+docker compose -f ops/internal/docker-compose.yml up -d --no-deps site reports
+```
+
+Needs Node 20 or newer on the host, and `gh` authenticated as something that
+can list releases on `Gryt-chat/gryt`.
+
+Run it by hand first, and read what it wrote before letting the timer have it:
+
+```bash
+node ops/internal/changelog-notes.mjs --dry-run   # the prompt, without the model
+node ops/internal/changelog-notes.mjs --dump      # draft to disk, post nothing
+node ops/internal/changelog-notes.mjs             # one run
+```
+
+`--dry-run` prints what it would ask for each release and calls nothing. Useful
+for reading the prompt after changing the style guide. `--dump` asks the model
+and writes each draft to `GRYT_CHANGELOG_DUMP` instead of posting it, which is
+for working on the prompt without a reports instance to hand; nothing reads what
+it writes.
+
+A run with nothing to do costs one `gh release list`. A run with something to do
+is minutes: roughly eight per release on qwen3:32b on the machine this was
+written for, three on qwen3:14b. `sudo journalctl -u gryt-changelog-notes -n 50`
+for what it did.
+
+### The backfill
+
+42 stable releases have shipped and three have notes written by hand, so the
+first real run has about 35 to draft. That is four and a half hours on qwen3:32b
+and under two on qwen3:14b, and the unit's `TimeoutStartSec` is two hours — so
+run it by hand on the smaller model rather than letting the timer discover it:
+
+```bash
+# Old manifests pin commits a --depth 1 clone cannot reach, and the script
+# skips a release rather than drafting from half a range. Once, on the box.
+git -C /opt/gryt submodule foreach git fetch --unshallow
+
+sudo systemctl stop gryt-changelog-notes.timer
+set -a; . /etc/default/gryt-changelog-notes; set +a
+OLLAMA_MODEL=qwen3:14b GRYT_CHANGELOG_LIMIT=50 \
+  node ops/internal/changelog-notes.mjs
+sudo systemctl start gryt-changelog-notes.timer
+```
+
+Idempotent, so an interrupted run picks up where it stopped: the script asks
+reports which versions already have a note and skips those.
+
+Nothing is published by any of that. All 35 land in the queue at
+`/admin/changelog` waiting to be read, which is the point — and reading 35 is a
+sitting or two, not an afternoon, because the queue advances to the next one
+still waiting after each decision.
+
+Expect to reject some. qwen3:14b reads flatter than the 32b and copies more:
+in one run it produced a headline word for word from one of the hand-written
+notes it had been shown as an example, for a release about something else
+entirely. Rejecting frees the version, so the next tick draws it again — on
+whichever model is configured then.

@@ -1,0 +1,16 @@
+[Unit]
+Description=Look for Gryt releases without changelog notes, hourly
+
+[Timer]
+# Hourly is far more often than releases happen, and a run with nothing to do
+# costs one `gh release list`. The point is that a release cut at any hour has
+# notes within the hour rather than whenever somebody remembers.
+OnBootSec=15min
+OnUnitActiveSec=1h
+
+# The model is the expensive part and it is shared with whatever else uses that
+# box. No reason for this to start on the hour, every hour.
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

@@ -8,9 +8,19 @@
 // submodules. patch-notes-style.md says how the result should read. This puts
 // the two together and asks the Ollama instance on this machine for the prose.
 //
-// What it writes is `changelog.json`, which nginx serves beside the site at
-// /release-notes/changelog.json and the site fetches at runtime. So a new entry is live as soon as this finishes;
-// there is no rebuild and no pull request in the path.
+// What it produces is not published. Each draft is posted to the reports
+// service, which holds it until somebody reads it at /admin/changelog and
+// presses Publish or Reject; reports is what writes the changelog.json nginx
+// serves beside the site.
+//
+// This used to write that file itself, so a note nobody had read was public the
+// moment the model finished writing it. Two fabricated drafts were caught by
+// reading them while this was being built. One retold a different release
+// wholesale. The other was a paraphrase: a section headed "Security
+// improvements for identity and account tokens", about keychain encryption, in
+// a release whose commit range does not contain the word keychain. It read like
+// the rest of the note and it scored under the contamination guard below, which
+// is why that guard is a backstop rather than a proof.
 //
 // The model never writes markup. It fills a fixed JSON shape — headline, then
 // sections of heading + paragraphs + bullets — and the site renders that with
@@ -22,32 +32,51 @@
 // `--dry-run` prints what it would ask the model without asking it.
 //
 // Environment:
-//   GRYT_CHANGELOG_OUT     changelog.json to write.
-//                          Default ./changelog/changelog.json beside this file.
+//   GRYT_CHANGELOG_URL     the reports service to post drafts to, e.g.
+//                          http://127.0.0.1:9476. Required unless --dump.
+//   GRYT_CHANGELOG_KEY     what it sends as X-Gryt-Changelog-Key. Required
+//                          unless --dump. Matches REPORTS_CHANGELOG_KEY there.
+//   GRYT_CHANGELOG_REDRAFT a version to draft again even though reports
+//                          already has one for it. Replaces the existing draft;
+//                          the old one is kept and marked superseded.
 //   GRYT_CHANGELOG_REPO    the superproject checkout to read releases from.
 //                          Default the checkout this script lives in.
 //   GRYT_CHANGELOG_CHANNELS  which channels to draft. Default "latest".
 //                          "latest beta" also drafts the pre-releases, which
 //                          the site hides behind a toggle.
 //   GRYT_CHANGELOG_LIMIT   how many releases back to consider. Default 12.
+//   GRYT_CHANGELOG_DUMP    with --dump, where to write drafts for inspection.
+//                          Default ./changelog/drafts beside this file. Nothing
+//                          reads what is written there.
 //   OLLAMA_URL             Default http://127.0.0.1:11434
 //   OLLAMA_MODEL           Default llama3.1:8b
 //   OLLAMA_TIMEOUT_MS      Default 180000
 
 import { execFileSync } from 'node:child_process'
-import { readFileSync, readdirSync, writeFileSync, renameSync, mkdirSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO = resolve(process.env.GRYT_CHANGELOG_REPO ?? join(HERE, '..', '..'))
-const OUT = resolve(process.env.GRYT_CHANGELOG_OUT ?? join(HERE, 'changelog', 'changelog.json'))
 const CHANNELS = (process.env.GRYT_CHANGELOG_CHANNELS ?? 'latest').split(/\s+/).filter(Boolean)
 const LIMIT = Number(process.env.GRYT_CHANGELOG_LIMIT ?? 12)
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://127.0.0.1:11434'
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'llama3.1:8b'
 const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS ?? 180_000)
 const DRY_RUN = process.argv.includes('--dry-run')
+
+/* Where a draft goes. */
+const REPORTS_URL = (process.env.GRYT_CHANGELOG_URL ?? '').replace(/\/$/, '')
+const REPORTS_KEY = process.env.GRYT_CHANGELOG_KEY ?? ''
+const REDRAFT = process.env.GRYT_CHANGELOG_REDRAFT?.trim().replace(/^v/, '') || null
+
+/* Writing drafts to disk instead of posting them, for working on the prompt
+   without a reports instance to hand. Nothing reads what this writes — the
+   flag is spelled out rather than inferred from a path, because the previous
+   arrangement was a path and a path is what made an unread note public. */
+const DUMP = process.argv.includes('--dump')
+const DUMP_DIR = resolve(process.env.GRYT_CHANGELOG_DUMP ?? join(HERE, 'changelog', 'drafts'))
 
 const log = (...a) => console.log('[changelog]', ...a)
 
@@ -498,31 +527,73 @@ function validate(entry) {
   return null
 }
 
-function readOut() {
-  if (!existsSync(OUT)) return { generatedAt: null, entries: [] }
-  try {
-    const parsed = JSON.parse(readFileSync(OUT, 'utf8'))
-    return { generatedAt: parsed.generatedAt ?? null, entries: parsed.entries ?? [] }
-  } catch {
-    log('! existing changelog.json is not valid JSON, starting a new one')
-    return { generatedAt: null, entries: [] }
+/* ── Reports ───────────────────────────────────────────────────────────
+   Drafts go to the reports service and wait there. It owns changelog.json —
+   one writer per file — and nothing reaches the changelog page until somebody
+   has read the note at /admin/changelog. */
+
+async function reports(path, init = {}) {
+  const res = await fetch(`${REPORTS_URL}${path}`, {
+    ...init,
+    headers: {
+      'x-gryt-changelog-key': REPORTS_KEY,
+      ...(init.headers ?? {}),
+    },
+  })
+  if (!res.ok) {
+    throw new Error(`reports ${res.status} ${(await res.text().catch(() => '')).slice(0, 300)}`.trim())
   }
+  return res.json()
 }
 
-/* Written to a sibling and renamed, because nginx is serving this file and a
-   half-written one is a broken changelog page rather than an old one. */
-function writeOut(doc) {
-  mkdirSync(dirname(OUT), { recursive: true })
-  const tmp = `${OUT}.tmp`
-  writeFileSync(tmp, `${JSON.stringify(doc, null, 2)}\n`)
-  renameSync(tmp, OUT)
+/* Versions reports has already been given a draft for, in any state. A
+   rejected one is not in this list, so a note somebody refused is drafted
+   again on the next tick — which is what rejecting it is for. */
+async function alreadyDrafted() {
+  const { versions } = await reports('/v1/changelog/versions')
+  return new Set(Array.isArray(versions) ? versions : [])
+}
+
+async function postDraft(entry) {
+  const query = REDRAFT === entry.version ? '?force=1' : ''
+  return reports(`/v1/changelog${query}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(entry),
+  })
+}
+
+/* --dump. A draft on disk, for reading while the prompt is being worked on.
+   One file per release rather than one document, so a run is a set of things
+   to read rather than a file to diff against the last one. */
+function dumpDraft(entry) {
+  mkdirSync(DUMP_DIR, { recursive: true })
+  const path = join(DUMP_DIR, `${entry.version}.json`)
+  writeFileSync(path, `${JSON.stringify(entry, null, 2)}\n`)
+  return path
 }
 
 async function main() {
+  if (!DRY_RUN && !DUMP && (!REPORTS_URL || !REPORTS_KEY)) {
+    /* Refused rather than defaulted. There is no safe default here: the whole
+       point of this script no longer writing the file itself is that a note
+       goes somewhere a person reads it first, and a fallback would be a way
+       back to the arrangement that published two fabricated drafts. */
+    throw new Error(
+      'GRYT_CHANGELOG_URL and GRYT_CHANGELOG_KEY are required. Drafts are ' +
+        'posted to the reports service, which holds them until somebody reads ' +
+        'them at /admin/changelog. Use --dump to write drafts to disk instead, ' +
+        'or --dry-run to print the prompt without asking the model.',
+    )
+  }
+
   const style = readFileSync(join(REPO, 'patch-notes-style.md'), 'utf8')
   const all = releases()
-  const doc = readOut()
-  const have = new Set(doc.entries.map((e) => e.version))
+  const have = DRY_RUN || DUMP ? new Set() : await alreadyDrafted()
+  if (REDRAFT) {
+    have.delete(REDRAFT)
+    log(`drafting ${REDRAFT} again, replacing the draft reports already has`)
+  }
 
   let wrote = 0
   for (const channel of CHANNELS) {
@@ -567,7 +638,7 @@ async function main() {
            judge. This is how the first contaminated draft was diagnosed at
            all, and a false positive is only findable this way. */
         try {
-          const dir = join(dirname(OUT), 'rejected')
+          const dir = join(DUMP_DIR, 'rejected')
           mkdirSync(dir, { recursive: true })
           writeFileSync(
             join(dir, `${release.version}.json`),
@@ -578,7 +649,7 @@ async function main() {
         continue
       }
 
-      doc.entries.push({
+      const drafted = {
         version: release.version,
         date,
         channel: release.channel,
@@ -587,18 +658,40 @@ async function main() {
         sections: entry.sections,
         recap: entry.recap,
         source: { since: prev.version, commits: count, model: OLLAMA_MODEL },
-      })
+        /* The range this was written from, so whoever reads the note can check
+           a claim against the commits rather than agree with prose that reads
+           well. Checking is what caught the paraphrased security section; the
+           guard above scored that draft as clean. */
+        commits: changes.parts,
+      }
+
+      if (DUMP) {
+        log(`  ✓ ${entry.headline}`)
+        log(`    ${dumpDraft(drafted)}`)
+      } else {
+        try {
+          const result = await postDraft(drafted)
+          log(`  ✓ ${entry.headline}`)
+          log(`    ${result.created ? 'waiting to be read' : `reports already had ${result.version}`}`)
+        } catch (err) {
+          /* Not fatal. The release is still without a draft, so the next tick
+             tries again, and the ones already posted are safe where they are. */
+          log(`  ! could not post ${release.version}: ${err.message}`)
+          continue
+        }
+      }
+
       have.add(release.version)
       wrote++
-      log(`  ✓ ${entry.headline}`)
     }
   }
 
   if (!wrote) { log('nothing new'); return }
-  doc.generatedAt = new Date().toISOString()
-  doc.entries.sort((a, b) => (a.version < b.version ? 1 : -1))
-  writeOut(doc)
-  log(`wrote ${wrote} entr${wrote === 1 ? 'y' : 'ies'} to ${OUT}`)
+  log(
+    DUMP
+      ? `wrote ${wrote} draft${wrote === 1 ? '' : 's'} to ${DUMP_DIR}`
+      : `posted ${wrote} draft${wrote === 1 ? '' : 's'}, waiting to be read at ${REPORTS_URL}/admin/changelog`,
+  )
 }
 
 main().catch((err) => {

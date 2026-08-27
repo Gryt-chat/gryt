@@ -333,24 +333,44 @@ three `already on <commit>` lines and stop.
 
 ## Drafting the changelog
 
-`changelog-notes.mjs` writes the release notes for a stable release and leaves
-them where the site can fetch them. The facts are not guessed: every release
-commits `.release/manifest.json`, which pins the exact client, server, sfu and
-image worker commit it shipped, so the diff between two releases is `git log
-old..new` in four submodules. `patch-notes-style.md` at the repository root is
-the style guide, and it is handed to the model in full along with the headlines
-of the three notes written by hand.
+`changelog-notes.mjs` drafts the release notes for a stable release. The facts
+are not guessed: every release commits `.release/manifest.json`, which pins the
+exact client, server, sfu and image worker commit it shipped, so the diff
+between two releases is `git log old..new` in four submodules.
+`patch-notes-style.md` at the repository root is the style guide, and it is
+handed to the model in full along with the headlines of the three notes written
+by hand.
 
 The model never writes markup. It fills a fixed shape — a headline, two to four
 sections of heading and paragraphs, and the recap list grouped by label — and
 the changelog page renders that shape with its own components. A malformed
 answer is detectable rather than merely ugly, and is dropped: the next run tries
-again rather than publishing something half-formed.
+again rather than posting something half-formed.
 
-Output goes to `GRYT_CHANGELOG_OUT`, which the `site` service bind-mounts at
-`/usr/share/nginx/html/release-notes`. The page fetches it at runtime, so a
-note is live as soon as the run finishes. Nothing rebuilds and nothing waits
-for a pull request.
+### A draft is not published
+
+Each draft is posted to the reports service, which holds it until somebody has
+read it at [reports.gryt.chat/admin/changelog](https://reports.gryt.chat/admin/changelog)
+and pressed Publish or Reject. Reports is what writes `changelog.json` into the
+directory both containers mount, and the changelog page fetches it at runtime —
+so publishing takes seconds and nothing rebuilds.
+
+This script wrote that file itself until GRYT-635. Two fabricated drafts were
+caught by reading them while it was being built: one retold a different release
+wholesale, and one was a paraphrase — a section headed "Security improvements
+for identity and account tokens", about keychain encryption, in a release whose
+commit range does not contain the word keychain. It read like the rest of the
+note and it scored under the contamination guard in this script, so the guard is
+a backstop rather than a proof.
+
+`GRYT_CHANGELOG_URL` and `GRYT_CHANGELOG_KEY` are required and the script
+refuses to start without them. `GRYT_CHANGELOG_REDRAFT=1.6.43` drafts one
+version again even though reports already has a note for it; the existing draft
+is kept and marked superseded.
+
+The commit range each note was drafted from is posted with it and shown beside
+it in the inbox, so a claim can be checked against the commits. It is not in the
+file the site reads.
 
 Stable releases only by default. `GRYT_CHANGELOG_CHANNELS="latest beta"` drafts
 the pre-releases as well, which the changelog page hides behind a toggle.
@@ -378,10 +398,13 @@ Edit `/etc/default/gryt-changelog-notes` before the first run. `OLLAMA_URL` has
 no useful default — the model does not run on this box — and the port is not
 optional.
 
-Then recreate the site container once so it picks up the new mount:
+`GRYT_CHANGELOG_KEY` here has to match `REPORTS_CHANGELOG_KEY` in
+`ops/internal/.env`, which is what the reports service checks.
+
+Then recreate both containers once so they pick up the mounts:
 
 ```bash
-docker compose -f ops/internal/docker-compose.yml up -d --no-deps site
+docker compose -f ops/internal/docker-compose.yml up -d --no-deps site reports
 ```
 
 Needs Node 20 or newer on the host, and `gh` authenticated as something that
@@ -391,11 +414,15 @@ Run it by hand first, and read what it wrote before letting the timer have it:
 
 ```bash
 node ops/internal/changelog-notes.mjs --dry-run   # the prompt, without the model
+node ops/internal/changelog-notes.mjs --dump      # draft to disk, post nothing
 node ops/internal/changelog-notes.mjs             # one run
 ```
 
 `--dry-run` prints what it would ask for each release and calls nothing. Useful
-for reading the prompt after changing the style guide.
+for reading the prompt after changing the style guide. `--dump` asks the model
+and writes each draft to `GRYT_CHANGELOG_DUMP` instead of posting it, which is
+for working on the prompt without a reports instance to hand; nothing reads what
+it writes.
 
 A run with nothing to do costs one `gh release list`. A run with something to do
 is minutes: roughly eight per release on qwen3:32b on the machine this was

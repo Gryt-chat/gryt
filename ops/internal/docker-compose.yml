@@ -16,9 +16,13 @@ services:
       - "${INTERNAL_SITE_HTTP_PORT:-9472}:80"
     volumes:
       - ./downloads:/usr/share/nginx/html/downloads:ro
-      # Release notes drafted after a release by gryt-changelog-notes.service,
-      # which the changelog page fetches at runtime. Mounted rather than built
-      # in so a new note is live without rebuilding the site.
+      # Release notes, which the changelog page fetches at runtime. Mounted
+      # rather than built in so a note is live without rebuilding the site.
+      #
+      # Read-only here and writable in the reports service below, which is the
+      # only thing that writes this file. gryt-changelog-notes.service drafts
+      # the notes and posts them to reports; reports holds each one until
+      # somebody has read it at /admin/changelog, and writes the file.
       #
       # Its own path, not /changelog.json at the root: the site router owns
       # /changelog, and a real file under a path the router also claims is a
@@ -171,8 +175,20 @@ services:
       REPORTS_OIDC_REDIRECT_URI: "${REPORTS_OIDC_REDIRECT_URI:-}"
       REPORTS_BOOTSTRAP_ADMIN: "${REPORTS_BOOTSTRAP_ADMIN:-}"
       REPORTS_SESSION_SECRET: "${REPORTS_SESSION_SECRET:-}"
+      # Reading a drafted release note before it is published (GRYT-635).
+      #
+      # gryt-changelog-notes.service on this box drafts a note after a release
+      # and posts it here rather than writing the file the site reads, so
+      # nothing a model wrote is public until somebody has read it. The key is
+      # what lets it post, and it is not one of the app keys above: those ship
+      # inside a public binary and this one writes to a page. Empty here and set
+      # in .env; without it those routes do not exist.
+      REPORTS_CHANGELOG_KEY: "${REPORTS_CHANGELOG_KEY:-}"
+      REPORTS_CHANGELOG_FILE: /release-notes/changelog.json
     volumes:
       - gryt-reports-data:/data
+      # The same directory the site mounts read-only above. One writer.
+      - ${GRYT_CHANGELOG_DIR:-/var/lib/gryt-changelog}:/release-notes
     restart: unless-stopped
 
 volumes:

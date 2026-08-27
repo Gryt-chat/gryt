@@ -933,9 +933,30 @@ async function reports(path, init = {}) {
 /* Versions reports has already been given a draft for, in any state. A
    rejected one is not in this list, so a note somebody refused is drafted
    again on the next tick — which is what rejecting it is for. */
+/**
+ * Versions reports has already been given a draft for.
+ *
+ * Told apart from a configuration problem on purpose. A refused key or a
+ * missing route means somebody has to go and fix something, and exiting 0 on
+ * that would hide it for as long as nobody looked. Anything else — the service
+ * restarting for a deploy, a connection refused for two seconds — is not this
+ * script's problem and not worth a failed unit every hour, because a unit that
+ * cries wolf hourly is a unit whose real failure nobody reads.
+ */
 async function alreadyDrafted() {
-  const { versions } = await reports('/v1/changelog/versions')
-  return new Set(Array.isArray(versions) ? versions : [])
+  let last
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const { versions } = await reports('/v1/changelog/versions')
+      return new Set(Array.isArray(versions) ? versions : [])
+    } catch (err) {
+      last = err
+      if (/reports 4\d\d/.test(err.message)) throw err
+      log(`! reports did not answer (${err.message}); attempt ${attempt} of 3`)
+      await new Promise((r) => setTimeout(r, attempt * 2000))
+    }
+  }
+  return { unreachable: last }
 }
 
 async function postDraft(entry) {
@@ -974,8 +995,23 @@ async function main() {
   fetchTags()
 
   const style = readFileSync(join(REPO, 'patch-notes-style.md'), 'utf8')
-  const all = releases()
+
+  /* `gh` reaches the network, and the network is allowed to be down for a
+     minute. Same reasoning as the reports call below: nothing here is urgent
+     and the next tick is an hour away. */
+  let all
+  try {
+    all = releases()
+  } catch (err) {
+    log(`! could not list releases (${String(err.message).split('\n')[0]}) — nothing to do this run`)
+    return
+  }
+
   const have = DRY_RUN || DUMP ? new Set() : await alreadyDrafted()
+  if (have.unreachable) {
+    log(`! reports is unreachable (${have.unreachable.message}) — nothing to do this run`)
+    return
+  }
   if (REDRAFT) {
     have.delete(REDRAFT)
     log(`drafting ${REDRAFT} again, replacing the draft reports already has`)

@@ -428,3 +428,36 @@ A run with nothing to do costs one `gh release list`. A run with something to do
 is minutes: roughly eight per release on qwen3:32b on the machine this was
 written for, three on qwen3:14b. `sudo journalctl -u gryt-changelog-notes -n 50`
 for what it did.
+
+### The backfill
+
+42 stable releases have shipped and three have notes written by hand, so the
+first real run has about 35 to draft. That is four and a half hours on qwen3:32b
+and under two on qwen3:14b, and the unit's `TimeoutStartSec` is two hours — so
+run it by hand on the smaller model rather than letting the timer discover it:
+
+```bash
+# Old manifests pin commits a --depth 1 clone cannot reach, and the script
+# skips a release rather than drafting from half a range. Once, on the box.
+git -C /opt/gryt submodule foreach git fetch --unshallow
+
+sudo systemctl stop gryt-changelog-notes.timer
+set -a; . /etc/default/gryt-changelog-notes; set +a
+OLLAMA_MODEL=qwen3:14b GRYT_CHANGELOG_LIMIT=50 \
+  node ops/internal/changelog-notes.mjs
+sudo systemctl start gryt-changelog-notes.timer
+```
+
+Idempotent, so an interrupted run picks up where it stopped: the script asks
+reports which versions already have a note and skips those.
+
+Nothing is published by any of that. All 35 land in the queue at
+`/admin/changelog` waiting to be read, which is the point — and reading 35 is a
+sitting or two, not an afternoon, because the queue advances to the next one
+still waiting after each decision.
+
+Expect to reject some. qwen3:14b reads flatter than the 32b and copies more:
+in one run it produced a headline word for word from one of the hand-written
+notes it had been shown as an example, for a release about something else
+entirely. Rejecting frees the version, so the next tick draws it again — on
+whichever model is configured then.

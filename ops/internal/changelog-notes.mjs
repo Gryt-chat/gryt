@@ -837,8 +837,19 @@ export function styleProblems(entry, parts) {
   }
 
   /* Two sections opening on the same word reads as a template rather than as
-     writing, and "Previously" is the one it always is. */
-  const firstWords = headings.map((h) => normalise(h).split(' ')[0]).filter(Boolean)
+     writing — but only when the word carries something. The reason the guide
+     gives is "Previously" in front of every contrast, not the definite article,
+     and two sections beginning "The" is ordinary English rather than a form
+     somebody filled in.
+
+     This blocked a draft twice before the distinction was made: the model
+     fixed the "Previously" it was told about and then had nowhere to go, which
+     is what a rule that is wrong looks like from the outside. 1.5.0 varies its
+     four openings — You, The, Somebody, Adding — so the rule matches the
+     writing; it just should not fire on the article. */
+  const firstWords = headings
+    .map((h) => normalise(h).split(' ')[0])
+    .filter((w) => w && !STOPWORDS.has(w))
   const repeated = firstWords.find((w, i) => firstWords.indexOf(w) !== i)
   if (repeated) problems.push(`more than one section starts with "${repeated}"`)
 

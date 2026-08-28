@@ -55,6 +55,11 @@
 //   OLLAMA_URL             Default http://127.0.0.1:11434
 //   OLLAMA_MODEL           Default llama3.1:8b
 //   OLLAMA_TIMEOUT_MS      Default 180000
+//   OLLAMA_NUM_CTX         The context window to ask Ollama for. Default
+//                          32768. Not optional in practice: Ollama's own
+//                          default is 4096 and this prompt is past that, so
+//                          leaving it unset silently drops part of the input.
+//                          See the comment on ask().
 
 import { execFileSync } from 'node:child_process'
 import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
@@ -68,6 +73,25 @@ const LIMIT = Number(process.env.GRYT_CHANGELOG_LIMIT ?? 12)
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://127.0.0.1:11434'
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'llama3.1:8b'
 const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS ?? 180_000)
+
+/* The context window to ask for.
+   Ollama does not use the model's window, it uses num_ctx, and num_ctx
+   defaults to 4096. Everything past that is dropped before the model reads a
+   word of it, with no error and nothing in the response to say so — which is
+   what a draft that quietly covers two commits out of five looks like from
+   the outside. qwen3:32b's own window is 40960, so 32768 leaves room for the
+   answer and still holds the largest range this has seen. */
+const OLLAMA_NUM_CTX = Number(process.env.OLLAMA_NUM_CTX ?? 32_768)
+
+/* How much commit body the prompt may carry, in characters.
+   Bodies in these repositories run past 4kB, and cutting them to a fixed few
+   lines cuts exactly the part that says what a person sees: GRYT-596 opens
+   "Four things wrong with the editor" and spends four headed sections on
+   them, and the draft written from its first eight lines named one.
+   Divided evenly, so a five-commit release gets a lot each and a
+   twenty-commit release still fits. */
+const COMMIT_BUDGET = Number(process.env.GRYT_CHANGELOG_COMMIT_BUDGET ?? 60_000)
+const COMMIT_BUDGET_MIN = 1_200
 const DRY_RUN = process.argv.includes('--dry-run')
 
 /* How many times to ask for one release before giving up on it.
@@ -389,8 +413,26 @@ const SCHEMA = {
         required: ['group', 'items'],
       },
     },
+    /* One line per commit the note deliberately says nothing about, naming
+       its number and why. Not part of the note — it is stripped before the
+       draft is posted — and it exists so that "this commit is not worth a
+       reader's time" is something the model has to write down rather than
+       something it can do by saying nothing. The coverage rule below reads
+       it, and the log prints it, so a release that quietly shrank is visible
+       to whoever reads the draft. */
+    omitted: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          commit: { type: 'number' },
+          why: { type: 'string' },
+        },
+        required: ['commit', 'why'],
+      },
+    },
   },
-  required: ['headline', 'intro', 'sections', 'recap'],
+  required: ['headline', 'intro', 'sections', 'recap', 'omitted'],
 }
 
 /* The three notes written by hand, as the target. A rule can say "a sentence,
@@ -432,16 +474,37 @@ function workedExample(repo) {
     .trim()
 }
 
+/* Every commit in the range, in one numbered list.
+   Numbered because the coverage rule below has to name the one that went
+   missing, and "the third commit under the app" is not something a refusal can
+   say back to a model usefully. */
+export function flatCommits(parts) {
+  const out = []
+  for (const part of parts) {
+    for (const c of part.commits) out.push({ ...c, component: part.component, n: out.length + 1 })
+  }
+  return out
+}
+
 function prompt(release, changes, style) {
+  const all = flatCommits(changes.parts)
+  /* Divided evenly rather than a fixed cut. The failure this replaces was a
+     fixed eight lines, which is fine for a one-paragraph commit and throws
+     away five sixths of the ones that are worth reading. */
+  const perCommit = Math.max(COMMIT_BUDGET_MIN, Math.floor(COMMIT_BUDGET / Math.max(1, all.length)))
   const lines = []
   for (const part of changes.parts) {
-    lines.push(`## ${part.component}`)
-    for (const c of part.commits) {
-      lines.push(`- ${c.subject}`)
-      if (c.body) {
-        for (const l of c.body.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 8)) {
-          lines.push(`    ${l}`)
-        }
+    lines.push(`## ${componentName(part.component)}`)
+    for (const c of all.filter((x) => x.component === part.component)) {
+      lines.push(`- [${c.n}] ${c.subject}`)
+      const body = c.body.split('\n').map((l) => l.trim()).filter(Boolean).join('\n')
+      if (!body) continue
+      const kept = body.slice(0, perCommit)
+      for (const l of kept.split('\n')) lines.push(`    ${l}`)
+      /* Said out loud rather than cut silently. A model that believes it has
+         the whole commit writes as if it does. */
+      if (kept.length < body.length) {
+        lines.push(`    [commit ${c.n} continues past what would fit here]`)
       }
     }
   }
@@ -520,6 +583,43 @@ function prompt(release, changes, style) {
     '            Accessibility, Under the hood. Skip a group with nothing in',
     '            it. One line per item, past tense, from the reader\'s side.',
     '',
+    '            Reach for one of those labels first. A release that genuinely',
+    '            does not fit any of them may have its own - the notes written',
+    '            by hand use Identity, Servers, Joining and Interface - but a',
+    '            new label is for a subject the list has no room for, not for',
+    '            rewording one it already covers. "Under the hood" goes last.',
+    '',
+    '  omitted   One entry per numbered commit you have written nothing about,',
+    '            with its number and one line saying why. Empty if you covered',
+    '            all of them. This is not part of the note and no reader sees',
+    '            it.',
+    '',
+    'EVERY COMMIT IS ACCOUNTED FOR',
+    '',
+    'The numbered list above is the whole release. Each commit either appears',
+    'in the note - a section, or a line in the recap - or is named in',
+    '"omitted" with a reason. Nothing may simply go unmentioned.',
+    '',
+    'This is the thing to get right. A note that reads well and covers three of',
+    'five commits is worse than a clumsy one that covers all five, because',
+    'nothing about it says a release was shrunk on the way through: the reader',
+    'gets a finished note about a smaller release and never learns there was',
+    'more. If a commit changes what somebody sees, hears, or has to do, it goes',
+    'in the note whether or not it fits the shape you had in mind.',
+    '',
+    'A commit that says four things went wrong owes the reader four things, not',
+    'the first one. Do not write "it had several issues" and then name one -',
+    'either name them or leave the count out.',
+    '',
+    'Say when a change only happens on one operating system. A control that',
+    'appears on Windows and nowhere else is a control most readers will go',
+    'looking for and not find, so the sentence has to carry the platform.',
+    '',
+    'A change to what the app collects, stores or sends about a person is a',
+    'privacy change, and privacy goes in Security. It gets its own section, it',
+    'is not folded into a list of fixes, and it is not softened into the app',
+    'respecting your privacy - say what it used to do and who could see it.',
+    '',
     'Plain sentences only. No markdown, no bold, no links, no headings inside a',
     'paragraph. The site renders the shape itself.',
     '',
@@ -579,6 +679,27 @@ function prompt(release, changes, style) {
     '',
     'Do not address the reader about the release itself. They are reading it;',
     'they know.',
+    '',
+    'HOW THE SENTENCES SHOULD READ',
+    '',
+    'Sivert keeps two editing skills for this, no-ai-slop and natural-writing,',
+    'and the parts of them a draft keeps breaking are these:',
+    '',
+    '- Say it the way you would say it out loud. Short sentences, ordinary',
+    '  words, contractions where they are natural.',
+    '- No binary contrasts. "It is no longer a picture, it is a live drawing"',
+    '  and "not X but Y" are one sentence pretending to be two. Write Y.',
+    '- No throat-clearing opener. "This release focuses on", "This update',
+    '  brings", "This release improves" - the reader knows what they opened.',
+    '  Start with what changed.',
+    '- Nothing that tells the reader how to feel about a fact: "this makes',
+    '  troubleshooting easier", "this ensures the message is read and',
+    '  understood", "which is particularly useful". State the fact.',
+    '- Never these words: delve, leverage, seamless, robust, streamline,',
+    '  elevate, harness, transformative, cutting-edge, game-changing,',
+    '  revolutionary, unlock, empower, foster, utilize, refactored.',
+    '- Every sentence must fail the portability test. If it would sit unchanged',
+    '  in another product\'s notes, it is filler standing where a fact should be.',
     '',
     'If nothing in this release is visible to a user, return an empty sections',
     'array, an empty recap, a one-sentence intro saying so, and a headline',
@@ -646,7 +767,14 @@ async function ask(text) {
            answer. Without this the content comes back with a think block
            wrapped round the JSON and the parse fails. */
         think: false,
-        options: { temperature: 0.4 },
+        /* num_ctx, and it is the important one.
+           Ollama does not read the model's own window: it allocates num_ctx,
+           which is 4096 unless asked otherwise, and quietly drops whatever
+           does not fit. Nothing in the response says it happened. A one-commit
+           release fits inside 4096 and a five-commit release does not, which
+           is why the drafts that read as finished notes about a smaller
+           release were all the large ones. */
+        options: { temperature: 0.4, num_ctx: OLLAMA_NUM_CTX },
         messages: [{ role: 'user', content: text }],
       }),
     })
@@ -815,7 +943,83 @@ const FILLER = [
   /under the hood improvements/i,
   /stay tuned/i,
   /and much more/i,
+  /* The openers. Every draft in the first batch began the same way, and the
+     sentence is the reader being told what they already know: they opened a
+     release note. */
+  /\bthis (release|update|version) (focuses on|brings|improves|adds more|introduces)\b/i,
+  /* Telling the reader what to make of a fact instead of giving them another
+     one. "This change makes troubleshooting easier for both users and
+     developers" was a whole sentence in the 1.6.36 draft. */
+  /\bthis (change|release|update) (makes|ensures|helps|improves|means)\b/i,
+  /\bwhich is particularly useful\b/i,
+  /\bfor both users and developers\b/i,
+  /* From natural-writing's banned list and no-ai-slop's. "Refactored" is the
+     one that turns up here, in a recap line nobody outside the repository can
+     act on. */
+  /\b(delve|leverage|seamless|robust|streamline[sd]?|elevate|harness|transformative|cutting-edge|game-changing|revolutionary|empower|foster|utilize|refactored)\b/i,
 ]
+
+/* Names only somebody with the checkout can use.
+   The prompt forbids these outside "Under the hood" and the model writes them
+   anyway - resolveAvatarSrc and skewMs both reached a draft as the subject of
+   a sentence, and public/logo.svg and `yarn icons:generate` were printed in
+   the middle of a paragraph about a logo.
+
+   The camel-case shapes that are ordinary English on a page about a chat app
+   are listed rather than guessed at, because "macOS" and "WebRTC" are the two
+   this would otherwise fire on constantly. */
+/* The recap groups the guide lists, in the order it lists them.
+   Where to start, not a closed set: the notes written by hand since have added
+   Identity, Servers, Joining and Interface. Shown to the model so it reaches
+   for one of these first, and not enforced, because enforcing it would have
+   refused two of the three notes it is meant to be imitating. */
+export const RECAP_GROUPS = [
+  'Voice',
+  'Avatars and images',
+  'Emoji',
+  'Updates',
+  'Hosting',
+  'Security',
+  'Accessibility',
+  'Under the hood',
+]
+
+/* How a commit says a change only happens on one operating system.
+   Narrow on purpose: this has to fire on the sentence that means it and not
+   on every commit that mentions Windows in passing. */
+const PLATFORM_ONLY = [
+  [/\b(windows[- ]only|only (on|where the OS can do this, which is) windows|only appears (on|where).{0,40}windows)\b/i, 'Windows'],
+  [/\b(macos[- ]only|only on macos)\b/i, 'macOS'],
+  [/\b(linux[- ]only|only on linux)\b/i, 'Linux'],
+]
+
+const NOT_IDENTIFIERS = new Set(
+  `macos ios ipados androidos webrtc websocket javascript typescript github gitlab
+   youtube postgresql sqlite openai iphone ipad javascriptcore webgl webgpu
+   nodejs npmjs`.split(/\s+/).filter(Boolean),
+)
+
+const IDENTIFIER_SHAPES = [
+  /* Backticks are not on this list. The hand-written notes put a hostname and
+     an environment variable in them, in the article, and both belong there -
+     somebody hosting a server has to type them. What the drafts got wrong was
+     the name of a function and the path of a file, which the three shapes
+     below catch on their own. */
+  [/\b[\w-]+\.(ts|tsx|js|mjs|cjs|jsx|json|svg|png|webp|html|css|scss|md|mdx|go|rs|py|yml|yaml|sh)\b/, 'a file name'],
+  [/\b(yarn|npm|pnpm|git|docker|curl)\s+[a-z][\w:-]*/, 'a command'],
+  [/\b[a-z]+[A-Z][A-Za-z]*\b/, 'a camel-case name'],
+]
+
+/* Prose a reader sees, which is everything except the "Under the hood" group.
+   That group is where the guide allows this vocabulary, and the hand-written
+   notes use it there. */
+function readerProse(entry) {
+  const recap = entry.recap
+    .filter((g) => !/under the hood/i.test(g.group))
+    .flatMap((g) => g.items)
+  const sections = entry.sections.flatMap((s) => [s.heading, ...s.body])
+  return [entry.headline, ...entry.intro, ...sections, ...recap]
+}
 
 /**
  * The rules that are about writing rather than about shape.
@@ -958,12 +1162,129 @@ export function styleProblems(entry, parts) {
     }
   }
 
+  /* Names only somebody with the checkout can use, anywhere a reader looks. */
+  for (const line of readerProse(entry)) {
+    let named = null
+    for (const [shape, what] of IDENTIFIER_SHAPES) {
+      const hit = line.match(shape)
+      if (!hit) continue
+      if (NOT_IDENTIFIERS.has(hit[0].toLowerCase())) continue
+      named = `${what}, "${hit[0]}", outside Under the hood`
+      break
+    }
+    if (named) { problems.push(named); break }
+  }
+
+  /* Under the hood is last when it is there at all.
+     Not the whole list, and not the whole order: the guide names eight groups
+     and the notes written since use Identity, Servers, Joining, Interface and
+     "Hosting from the app", none of which are on it. That list is where to
+     start rather than what is allowed, so the only part of it worth refusing a
+     draft over is the one every hand-written note agrees on - what a reader
+     cannot see goes at the end. A draft put it first. */
+  const hoodAt = entry.recap.findIndex((g) => /under the hood/i.test(g.group))
+  if (hoodAt >= 0 && hoodAt !== entry.recap.length - 1) {
+    problems.push('"Under the hood" is not the last recap group')
+  }
+
+  /* A control that exists on one platform and not the others.
+     The screen-share picker is Windows only, the note never said so, and a
+     reader on macOS is left looking for it. The commits say which platform;
+     the note has to repeat it. */
+  const commitText = parts
+    .flatMap((part) => part.commits.map((c) => `${c.subject}\n${c.body}`))
+    .join('\n')
+  for (const [pattern, platform] of PLATFORM_ONLY) {
+    if (!pattern.test(commitText)) continue
+    if (new RegExp(`\\b${platform}\\b`, 'i').test(prose.join(' '))) continue
+    problems.push(`the commits say this is ${platform} only and the note never says so`)
+    break
+  }
+
   /* A release of one commit is a short note. Padding it is how a one-line fix
      became two intro paragraphs and a section saying the same thing again. */
   const commits = parts.reduce((n, part) => n + part.commits.length, 0)
   if (commits <= 2) {
     if (entry.intro.length > 1) problems.push('more than one intro paragraph for a tiny release')
     if (entry.sections.length > 1) problems.push('more than one section for a tiny release')
+  }
+
+  return problems
+}
+
+/**
+ * Whether every commit in the range reached the note.
+ *
+ * The failure this exists for is the one none of the rules above can see: a
+ * draft that is well written, breaks no style rule, and is about three of the
+ * five commits it was given. Nothing in it says a release was shrunk on the
+ * way through, so it reads as a finished note about a smaller release, and the
+ * only way to notice is to have both in front of you.
+ *
+ * Asked by vocabulary rather than by meaning, which is crude and is the point:
+ * it takes the words that belong to one commit and to no other commit in the
+ * range, and asks whether any of them turn up in the note. A commit written
+ * about in the reader's own words still shares something with its own body -
+ * "wardrobe", "ping", "skew" - and a commit nobody wrote about shares nothing.
+ *
+ * Commits with nothing distinctive to say are skipped rather than guessed at.
+ * A three-word subject and an empty body gives this nothing to work with, and
+ * a rule that fires on no evidence is a rule that gets turned off.
+ */
+export function coverage(entry, parts) {
+  const all = flatCommits(parts)
+  if (all.length < 2) return []
+
+  const words = (c) =>
+    new Set(
+      [...contentWords(`${c.subject} ${c.body}`)].filter(
+        (w) => w.length >= 5 && !COMMON.has(w),
+      ),
+    )
+  const per = all.map((c) => ({ c, words: words(c) }))
+
+  /* A word that belongs to this commit and to no other one in the range.
+     Without this, two commits about the same subsystem cover for each other:
+     the note writes about one, and every word it uses is in the other's body
+     too, so the missing one scores as present. */
+  const own = per.map(({ c, words: mine }, i) => ({
+    c,
+    words: [...mine].filter((w) => !per.some((other, j) => j !== i && other.words.has(w))),
+  }))
+
+  const note = contentWords(
+    [
+      entry.headline,
+      ...entry.intro,
+      ...entry.sections.flatMap((s) => [s.heading, ...s.body]),
+      ...entry.recap.flatMap((g) => [g.group, ...g.items]),
+    ].join(' '),
+  )
+
+  const excused = new Set((entry.omitted ?? []).map((o) => Number(o.commit)))
+  const problems = []
+
+  for (const { c, words: distinctive } of own) {
+    /* Three, so that one word landing by chance is not a pass and a commit
+       with almost nothing of its own is not a failure. */
+    if (distinctive.length < 3) continue
+    if (distinctive.some((w) => note.has(w))) continue
+    if (excused.has(c.n)) continue
+    problems.push(
+      `commit ${c.n} is not in the note and not in omitted: "${c.subject}"`,
+    )
+  }
+
+  for (const o of entry.omitted ?? []) {
+    const n = Number(o.commit)
+    if (!all.some((c) => c.n === n)) problems.push(`omitted names commit ${n}, which is not in this release`)
+  }
+
+  /* Everything left out is the model deciding the release was not worth
+     writing about, which is a decision somebody should see rather than a
+     shortcut it can take quietly. */
+  if ((entry.omitted?.length ?? 0) === all.length) {
+    problems.push('every commit is in omitted, so there is no note here')
   }
 
   return problems
@@ -983,6 +1304,11 @@ function validate(entry) {
     if (s.body.some((p) => typeof p !== 'string')) return 'a section body is not all strings'
   }
   if (!Array.isArray(entry.recap)) return 'recap is not an array'
+  if (!Array.isArray(entry.omitted)) return 'omitted is missing or is not an array'
+  for (const o of entry.omitted) {
+    if (typeof o?.commit !== 'number') return 'an omitted entry has no commit number'
+    if (typeof o?.why !== 'string' || !o.why.trim()) return 'an omitted entry has no reason'
+  }
   for (const g of entry.recap) {
     if (typeof g?.group !== 'string' || !g.group.trim()) return 'a recap group has no label'
     if (!Array.isArray(g.items) || g.items.some((p) => typeof p !== 'string')) {
@@ -1129,7 +1455,11 @@ async function main() {
       const commitText = JSON.stringify(changes.parts)
       const judge = (draft) => {
         const shape = validate(draft) ?? contamination(draft, workedExample(REPO), commitText)
-        return shape ? [shape] : styleProblems(draft, changes.parts)
+        if (shape) return [shape]
+        /* Coverage first. A note that is missing a commit is missing it
+           whatever else is wrong with it, and it is the reason worth reading
+           at the top of a refusal. */
+        return [...coverage(draft, changes.parts), ...styleProblems(draft, changes.parts)]
       }
 
       /* Ask, check, and hand the reasons back rather than giving up on the
@@ -1185,6 +1515,17 @@ async function main() {
         continue
       }
 
+      /* What the model decided not to write about, said out loud in the log.
+         It is allowed to leave a commit out; it is not allowed to do it
+         quietly, and this is the line that makes the difference visible to
+         whoever reads the draft afterwards. */
+      for (const o of entry.omitted ?? []) {
+        const c = flatCommits(changes.parts).find((x) => x.n === Number(o.commit))
+        log(`    left out: ${c ? c.subject : `commit ${o.commit}`} - ${o.why}`)
+      }
+
+      /* `omitted` is working notes between this script and the model. It is
+         not part of the note and reports would refuse it, so it stops here. */
       const drafted = {
         version: release.version,
         date,

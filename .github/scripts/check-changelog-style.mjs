@@ -31,7 +31,7 @@ import { fileURLToPath } from 'node:url'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO = resolve(HERE, '..', '..')
 
-const { styleProblems } = await import(
+const { styleProblems, coverage } = await import(
   join(REPO, 'ops', 'internal', 'changelog-notes.mjs')
 )
 
@@ -74,6 +74,11 @@ function handWritten(dir) {
 
       const clean = (parts[2] ?? '')
         .replace(/^<(Image|Clip)[^>]*\/>\s*$/gm, '')
+        /* Markdown images too, not only the JSX ones. 1.4.0 illustrates the
+           voice panel with `![alt](/changelog/voice-split.webp)`, and reading
+           that line as a paragraph puts an asset filename into what is
+           supposed to be the note's prose. */
+        .replace(/^!\[[^\]]*\]\([^)]*\)\s*$/gm, '')
         .replace(/^import .*$/gm, '')
       const article = clean
       const recapRaw = parts.slice(3).join('\n')
@@ -200,6 +205,58 @@ const BAD_DRAFTS = [
     },
   },
   {
+    name: '1.6.38, which put a function name in the article',
+    expect: 'a camel-case name',
+    range: [
+      {
+        component: 'client',
+        commits: [
+          { subject: 'Draw the owl somebody designed', body: '' },
+          { subject: 'Keep the look beside the nickname', body: '' },
+          { subject: 'Ping each WebSocket', body: '' },
+        ],
+      },
+    ],
+    note: {
+      headline: 'Designed avatars now travel with you across devices and rooms',
+      intro: ['A designed owl is drawn wherever your avatar appears.'],
+      sections: [
+        {
+          heading: 'Your owl follows you between machines',
+          /* Real output. The prompt forbids this and the model wrote it
+             anyway, which is the argument for a rule rather than a sentence. */
+          body: ['The new system uses a single funnel, the resolveAvatarSrc function, to draw your owl.'],
+        },
+      ],
+      recap: [{ group: 'Avatars and images', items: ['Designed owls now follow you'] }],
+    },
+  },
+  {
+    name: '1.6.40, which put what a reader cannot see at the top of the recap',
+    expect: 'not the last recap group',
+    range: [
+      {
+        component: 'client',
+        commits: [
+          { subject: 'The plain name belongs to the round mark', body: '' },
+          { subject: 'Round the mark in the app', body: '' },
+          { subject: 'Send the download link to the download', body: '' },
+        ],
+      },
+    ],
+    note: {
+      headline: 'The Gryt owl is round now, everywhere you see it',
+      intro: ['The mark on the splash screen and in the browser tab is the round one.'],
+      sections: [
+        { heading: 'A round mark, in every place the app draws it', body: ['Including the splash.'] },
+      ],
+      recap: [
+        { group: 'Under the hood', items: ['The icon build reads the square artboard'] },
+        { group: 'Interface', items: ['The mark on the splash screen is the round one'] },
+      ],
+    },
+  },
+  {
     name: '1.6.39, which listed three things in the headline and hid a new logo under the hood',
     expect: 'lists three things',
     range: [
@@ -226,6 +283,58 @@ const BAD_DRAFTS = [
     },
   },
 ]
+
+/* Coverage is not a style rule and does not run against the hand-written
+   notes: those cover a whole minor line, and the range they were written from
+   is not in the repository any more. It is checked against the shape of the
+   failure it exists for - a note that is well written and about fewer commits
+   than it was given. */
+const COVERAGE_DRAFTS = [
+  {
+    name: '1.6.38, which dropped the media server commit entirely',
+    expect: 'commit 3 is not in the note',
+    range: [
+      {
+        component: 'client',
+        commits: [{ subject: 'Draw the owl somebody designed, instead of a picture of it', body: 'The editor produced a look and encoded it as a short string.' }],
+      },
+      {
+        component: 'server',
+        commits: [{ subject: 'Keep the look a member designed, beside their nickname', body: 'users.avatar_worn, added with the same guard as every other column.' }],
+      },
+      {
+        component: 'sfu',
+        commits: [{
+          subject: 'Ping each WebSocket, and give up on one that stops answering',
+          body: 'A peer that went away without a FIN left a socket that read forever. Thirty seconds between pings and ninety of silence before hanging up.',
+        }],
+      },
+    ],
+    note: {
+      headline: 'Designed avatars now travel with you across devices and rooms',
+      intro: ['The owl you designed is drawn wherever your avatar appears, and it follows your account.'],
+      sections: [
+        { heading: 'Your designed owl is drawn, not photographed', body: ['The editor sends a short string describing the look.'] },
+        { heading: 'A server keeps your look beside your nickname', body: ['So it reaches the room you join.'] },
+      ],
+      recap: [{ group: 'Avatars and images', items: ['A designed owl follows your account between machines'] }],
+      omitted: [],
+    },
+  },
+  {
+    /* The same draft, with the model saying so. Leaving a commit out is
+       allowed; leaving it out silently is what is not. */
+    name: 'the same draft, with the commit named in omitted',
+    expect: null,
+    range: null,
+    note: null,
+  },
+]
+COVERAGE_DRAFTS[1].range = COVERAGE_DRAFTS[0].range
+COVERAGE_DRAFTS[1].note = {
+  ...COVERAGE_DRAFTS[0].note,
+  omitted: [{ commit: 3, why: 'a timeout on a socket nobody sees' }],
+}
 
 let failed = 0
 
@@ -265,6 +374,20 @@ for (const { name, note, range, expect } of BAD_DRAFTS) {
     failed++
     console.error(`  ✗ ${name}`)
     console.error(`      expected a problem containing "${expect}"`)
+    console.error(`      got: ${problems.length ? problems.join('; ') : 'nothing at all'}`)
+  }
+}
+
+console.log('\nEvery commit accounted for:\n')
+for (const { name, note, range, expect } of COVERAGE_DRAFTS) {
+  const problems = coverage(note, range)
+  const ok = expect === null ? !problems.length : problems.some((p) => p.includes(expect))
+  if (ok) {
+    console.log(`  ✓ ${name}`)
+  } else {
+    failed++
+    console.error(`  ✗ ${name}`)
+    console.error(`      expected ${expect === null ? 'nothing' : `a problem containing "${expect}"`}`)
     console.error(`      got: ${problems.length ? problems.join('; ') : 'nothing at all'}`)
   }
 }

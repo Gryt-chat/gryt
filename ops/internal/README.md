@@ -398,6 +398,13 @@ Edit `/etc/default/gryt-changelog-notes` before the first run. `OLLAMA_URL` has
 no useful default — the model does not run on this box — and the port is not
 optional.
 
+`OLLAMA_NUM_CTX` matters more than it looks. Ollama allocates the window you
+ask for rather than the one the model has, and it asks for 4096 when nothing
+says otherwise; a prompt for a five-commit release is around 8,000 tokens, and
+the rest is dropped before the model reads it with nothing in the answer to say
+so. The default here is 32768. Lower it only if the card starts swapping, and
+expect drafts to start losing commits below about 16384.
+
 `GRYT_CHANGELOG_KEY` here has to match `REPORTS_CHANGELOG_KEY` in
 `ops/internal/.env`, which is what the reports service checks.
 

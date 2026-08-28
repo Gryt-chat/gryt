@@ -1,7 +1,7 @@
 # Working rules for Gryt
 
 Gryt is a WebRTC voice chat platform maintained by one person. It's a superproject with
-twelve git submodules under `packages/`. Read these rules before making changes.
+thirteen git submodules under `packages/`. Read these rules before making changes.
 
 ## Review-required paths
 

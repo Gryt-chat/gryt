@@ -378,6 +378,25 @@ for (const { name, note, range, expect } of BAD_DRAFTS) {
   }
 }
 
+/* The skills are read into every prompt, so a checkout without them drafts
+   against rules nobody wrote down. Not a style rule, but the prompt is wrong
+   without it and nothing else would say so.
+
+   They are not put through the contamination guard. That was tried: all three
+   hand-written notes scored as copied from them, on "voice", "reading",
+   "person" and "words", because a skill about writing and a note about a chat
+   app are both written in English. The reasoning is on the guard itself. */
+console.log('\nThe skills the prompt reads:\n')
+for (const f of ['no-ai-slop.md', 'natural-writing.md']) {
+  const path = join(REPO, 'ops', 'internal', 'writing', f)
+  if (existsSync(path) && readFileSync(path, 'utf8').trim()) {
+    console.log(`  ✓ ${f}`)
+  } else {
+    failed++
+    console.error(`  ✗ ops/internal/writing/${f} is missing, and the prompt reads it`)
+  }
+}
+
 console.log('\nEvery commit accounted for:\n')
 for (const { name, note, range, expect } of COVERAGE_DRAFTS) {
   const problems = coverage(note, range)

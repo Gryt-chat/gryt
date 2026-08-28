@@ -486,6 +486,33 @@ export function flatCommits(parts) {
   return out
 }
 
+/**
+ * The two editing skills, whole.
+ *
+ * `ops/internal/writing/` holds a copy of each, because the box the drafter
+ * runs on has no ~/.claude/skills and a rule the model is judged by should not
+ * come off a laptop that may be shut.
+ *
+ * Whole rather than summarised. The first version of this was fifteen lines of
+ * the patterns these drafts kept producing, which is somebody deciding in
+ * advance which of the rules matter — and the openers and the binary contrasts
+ * were only two of the things the drafts got wrong.
+ *
+ * They cost about 4,000 tokens together. That is affordable now and was not
+ * before: with num_ctx at its default this would have pushed the commits out
+ * of the window, which is the bug directly above.
+ */
+function writingSkills(repo) {
+  const dir = join(repo, 'ops/internal/writing')
+  return ['no-ai-slop.md', 'natural-writing.md']
+    .map((f) => {
+      const path = join(dir, f)
+      if (!existsSync(path)) { log(`  ! ${f} is not in this checkout`); return null }
+      return readFileSync(path, 'utf8').trim()
+    })
+    .filter(Boolean)
+}
+
 function prompt(release, changes, style) {
   const all = flatCommits(changes.parts)
   /* Divided evenly rather than a fixed cut. The failure this replaces was a
@@ -521,6 +548,21 @@ function prompt(release, changes, style) {
     '',
     style,
     '',
+    '─────────────────────────────────────────────────────────────────────',
+    'HOW THE SENTENCES SHOULD READ',
+    '',
+    'Two editing skills, in full. Sivert runs both over prose before it ships,',
+    'and a draft is held to the same thing. Read them the way an editor would:',
+    'they are about the sentences, and everything above is about the shape.',
+    '',
+    'Both were written for somebody working with a person, and two parts of',
+    'that do not apply to you. They describe a choice between editing a draft',
+    'and auditing one - you are doing neither, you are writing the note. And',
+    'they ask for a note afterwards saying what changed - do not write one.',
+    'You return the JSON shape described at the end of this prompt and nothing',
+    'else. Everything else in them applies.',
+    '',
+    ...writingSkills(REPO).flatMap((text) => [text, '']),
     '─────────────────────────────────────────────────────────────────────',
     `THE RELEASE YOU ARE WRITING ABOUT: Gryt ${release.version}, ${release.date}`,
     '',
@@ -680,26 +722,20 @@ function prompt(release, changes, style) {
     'Do not address the reader about the release itself. They are reading it;',
     'they know.',
     '',
-    'HOW THE SENTENCES SHOULD READ',
+    'FROM THE TWO EDITING SKILLS ABOVE, THE FOUR A DRAFT KEEPS BREAKING',
     '',
-    'Sivert keeps two editing skills for this, no-ai-slop and natural-writing,',
-    'and the parts of them a draft keeps breaking are these:',
+    'All of both applies. These four are the ones that have actually come back',
+    'refused, so check them last before you answer:',
     '',
-    '- Say it the way you would say it out loud. Short sentences, ordinary',
-    '  words, contractions where they are natural.',
-    '- No binary contrasts. "It is no longer a picture, it is a live drawing"',
-    '  and "not X but Y" are one sentence pretending to be two. Write Y.',
-    '- No throat-clearing opener. "This release focuses on", "This update',
-    '  brings", "This release improves" - the reader knows what they opened.',
-    '  Start with what changed.',
-    '- Nothing that tells the reader how to feel about a fact: "this makes',
-    '  troubleshooting easier", "this ensures the message is read and',
-    '  understood", "which is particularly useful". State the fact.',
-    '- Never these words: delve, leverage, seamless, robust, streamline,',
-    '  elevate, harness, transformative, cutting-edge, game-changing,',
-    '  revolutionary, unlock, empower, foster, utilize, refactored.',
-    '- Every sentence must fail the portability test. If it would sit unchanged',
-    '  in another product\'s notes, it is filler standing where a fact should be.',
+    '- The throat-clearing opener. "This release focuses on", "This update',
+    '  brings", "This release improves". The reader knows what they opened.',
+    '- The binary contrast. "It is no longer a picture, it is a live drawing".',
+    '  Write the second half and drop the first.',
+    '- Telling the reader what to make of a fact: "this makes troubleshooting',
+    '  easier", "this ensures the message is read and understood". Give them',
+    '  another fact instead.',
+    '- The portability test, on every sentence. If it would sit unchanged in',
+    '  another product\'s notes, it is filler standing where a fact should be.',
     '',
     'If nothing in this release is visible to a user, return an empty sections',
     'array, an empty recap, a one-sentence intro saying so, and a headline',
@@ -802,13 +838,30 @@ async function ask(text) {
   }
 }
 
-/* Words that belong to the example and to nothing in this release.
+/* Words that belong to the material shown to the model and to nothing in this
+   release.
    The example is there to show the shape, and a model that has just read a
    finished note is very willing to write that note again — the 1.6.43 draft
    came back describing 24-word backups and certificate authorities, none of
    which appear anywhere in its commit range. Telling it not to is not enough,
-   so this checks. */
-function contamination(entry, exampleText, commitText) {
+   so this checks.
+
+   The two editing skills are deliberately not put through it, and the reason
+   is worth keeping. They are the same hazard on paper — fifteen kilobytes of
+   worked sentences about deploy times and sponsor trackers, none of which has
+   ever been in a Gryt release — so they were, and all three hand-written
+   notes came back scoring 40 to 46. The borrowed words were "voice",
+   "reading", "person", "words": ordinary English about writing, which is what
+   a skill about writing is made of and what a release note is written in. The
+   threshold underneath this is calibrated against one short note, and there
+   is no version of it that separates a 15kB corpus of general prose from a
+   note that happens to be written in English.
+
+   What is left instead is that the skills are rules rather than a finished
+   note. The failure this guard exists for was a model retelling an example
+   note wholesale, and an instruction to cut adverbs is not something there is
+   a wrong way to copy. */
+export function contamination(entry, exampleText, commitText) {
   if (!exampleText) return null
   const words = (t) => new Set((t.toLowerCase().match(/[a-z][a-z-]{4,}/g) ?? []))
   const inCommits = words(commitText)
@@ -1450,6 +1503,20 @@ async function main() {
 
       log(`${release.version}: ${count} commits since ${prev.version}`)
       const text = prompt(release, changes, style)
+
+      /* Say how big the prompt is, every time.
+         The whole of this release was one silent overflow: num_ctx defaulted
+         to 4096, the prompt was past it, and what came back was a well
+         written note about the commits that happened to fit. Nothing in the
+         answer says that happened, so the only defence is knowing the number
+         before it is sent. Four characters to the token is rough and is on
+         the safe side for English prose. */
+      const estimate = Math.ceil(text.length / 4)
+      log(`  prompt ${(text.length / 1024).toFixed(1)} kB, about ${estimate} tokens of ${OLLAMA_NUM_CTX}`)
+      if (estimate > OLLAMA_NUM_CTX * 0.85) {
+        log(`  ! this is close enough to num_ctx that part of it may be dropped before the model reads it`)
+        log(`    raise OLLAMA_NUM_CTX, or lower GRYT_CHANGELOG_COMMIT_BUDGET (${COMMIT_BUDGET})`)
+      }
       if (DRY_RUN) { console.log(`\n───── prompt for ${release.version} ─────\n${text}\n`); continue }
 
       const commitText = JSON.stringify(changes.parts)

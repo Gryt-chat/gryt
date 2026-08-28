@@ -62,7 +62,7 @@
 //                          See the comment on ask().
 
 import { execFileSync } from 'node:child_process'
-import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync, realpathSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -1657,8 +1657,33 @@ async function main() {
 /* Only when run, not when imported.
    The style rules below are exported so CI can check them against the notes
    written by hand, and a module that drafts a changelog as a side effect of
-   being imported is a module nobody can test. */
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+   being imported is a module nobody can test.
+
+   Both sides resolved, because one of them already was. Node resolves an ES
+   module to its real path, so `import.meta.url` is the file in the checkout
+   while `process.argv[1]` is whatever name it was invoked as — and the README
+   tells you to invoke it as a symlink in /usr/local/lib, so that a git pull
+   updates the script without reinstalling anything. The two never matched, so
+   the unit loaded this file, defined everything in it, and exited 0 without
+   drafting.
+
+   It ran hourly for a week like that. Nothing failed: one second, success, no
+   output, which is indistinguishable from a run with nothing to do. Every note
+   in the queue came from somebody running the backfill by hand from the real
+   path.
+
+   realpathSync throws on a path that is not there, which argv[1] can be under
+   a shell that made it up, so the comparison falls back to the raw value
+   rather than taking the process down on its last line. */
+function invokedDirectly() {
+  const argv = process.argv[1]
+  if (!argv) return false
+  let resolved = argv
+  try { resolved = realpathSync(argv) } catch { /* use it as given */ }
+  return import.meta.url === pathToFileURL(resolved).href
+}
+
+if (invokedDirectly()) {
   main().catch((err) => {
     console.error('[changelog] failed:', err)
     process.exit(1)

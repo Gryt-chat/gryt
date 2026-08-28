@@ -398,12 +398,35 @@ Edit `/etc/default/gryt-changelog-notes` before the first run. `OLLAMA_URL` has
 no useful default — the model does not run on this box — and the port is not
 optional.
 
-`OLLAMA_NUM_CTX` matters more than it looks. Ollama allocates the window you
-ask for rather than the one the model has, and it asks for 4096 when nothing
-says otherwise; a prompt for a five-commit release is around 8,000 tokens, and
-the rest is dropped before the model reads it with nothing in the answer to say
-so. The default here is 32768. Lower it only if the card starts swapping, and
-expect drafts to start losing commits below about 16384.
+`OLLAMA_NUM_CTX` matters more than it looks, and it is a memory decision
+rather than a size one.
+
+Ollama allocates the window you ask for rather than the one the model has, and
+it asks for 4096 when nothing says otherwise. A prompt for a five-commit
+release is around 12,000 tokens, so the rest was being dropped before the model
+read it, with nothing in the answer to say so.
+
+What it costs is on the card. qwen3:32b keeps 256 KiB of KV cache per token —
+6 GiB at 24576, 8 at 32768, 10 at the model's own 40960 — and the box drafting
+these has a 12 GiB 3060 with Frigate on it. The weights are 20 GB either way,
+so the card was never holding the whole model; what changes is how much of it
+runs on the CPU, and every GiB of cache is a GiB of weights that does.
+
+24576 is the default. The largest prompt drafted so far is 16,300 tokens and
+the script prints the size on every run, so a release that outgrows it says so
+rather than losing commits quietly.
+
+Two variables on the **Ollama container**, not in this unit's env file, halve
+the cache:
+
+```
+OLLAMA_FLASH_ATTENTION=1
+OLLAMA_KV_CACHE_TYPE=q8_0
+```
+
+q8_0 is hard to tell from f16 in the output and gives back 3 GiB, which is
+3 GiB of weights off the CPU. Do that before reaching for a bigger model: on
+12 GiB there is no bigger model that fits, only a slower one.
 
 `GRYT_CHANGELOG_KEY` here has to match `REPORTS_CHANGELOG_KEY` in
 `ops/internal/.env`, which is what the reports service checks.

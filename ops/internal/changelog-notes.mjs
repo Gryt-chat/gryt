@@ -79,9 +79,16 @@ const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS ?? 180_000)
    defaults to 4096. Everything past that is dropped before the model reads a
    word of it, with no error and nothing in the response to say so — which is
    what a draft that quietly covers two commits out of five looks like from
-   the outside. qwen3:32b's own window is 40960, so 32768 leaves room for the
-   answer and still holds the largest range this has seen. */
-const OLLAMA_NUM_CTX = Number(process.env.OLLAMA_NUM_CTX ?? 32_768)
+   the outside.
+
+   Not simply set to the model's own 40960, because this is memory on a card
+   rather than a number. qwen3:32b keeps 256 KiB of KV cache per token, so
+   40960 is 10 GiB of a 12 GiB card before a single layer of the model is on
+   it — and the weights are 20 GB, so every GiB the cache takes is a GiB of
+   them left on the CPU. The largest prompt this has produced is 16,300
+   tokens; 24576 covers it with the answer and costs 6 GiB, or 3 with a
+   quantised cache. See ops/internal/README.md. */
+const OLLAMA_NUM_CTX = Number(process.env.OLLAMA_NUM_CTX ?? 24_576)
 
 /* How much commit body the prompt may carry, in characters.
    Bodies in these repositories run past 4kB, and cutting them to a fixed few

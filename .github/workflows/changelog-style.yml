@@ -24,6 +24,9 @@ on:
       - .github/scripts/check-changelog-style.mjs
       - .github/workflows/changelog-style.yml
       - ops/internal/changelog-notes.mjs
+      # The prompt reads both of these in full, so removing or renaming one
+      # changes what a draft is judged by.
+      - ops/internal/writing/**
 
   # The notes live in a submodule, so editing one of them does not touch this
   # repository at all. The gitlink bump that brings it in carries [skip ci],

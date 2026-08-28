@@ -250,28 +250,31 @@ the starch out.
 `packages/site/design.md` has a Voice section carrying the same rules for the site
 specifically, with worked before-and-after examples from the pass that produced them.
 
-**On anything a person reads in the product, running them is not optional.** Run them on
-the copy before you commit, not as a later pass — the draft is what ships. In scope:
+**Run them on any text you write that is not a code comment.** That is the rule, and it
+is deliberately blunt so there is nothing to weigh up. Sentences in a docs page, a UI
+string, a README, a PR body, a commit message, a task description, a release note, alt
+text, a meta description, a message to somebody outside the repository. If it is prose and
+a person will read it, it goes through both skills before you hand it over.
 
-- UI strings in the client and the mobile app: labels, empty states, error messages,
-  onboarding, settings hints, anything rendered on screen
-- `packages/docs` and `packages/site`
-- `README.md` files, package descriptions, the server and channel descriptions shipped as
-  defaults, invite and share text, release notes and patch notes
-- anything that reaches somebody outside the repository — emails, store listings, meta
-  descriptions, alt text
+Run them on the copy **before you commit**, not as a later pass. The draft is what ships.
 
-**Not on text that is never rendered.** Code comments, log lines, test names, variable and
-function names. Those want to be plain and direct, and a copy skill spends a turn on prose
-nobody browses. Comments here are load-bearing and long on purpose — leave them alone.
+**The one exception is code comments**, along with log lines, test names, and variable and
+function names. Those want to be plain and direct, a copy skill spends a turn on prose
+nobody browses, and the comments in this repository are load-bearing and long on purpose.
+Leave them alone.
 
-PR bodies, commit messages and task descriptions are in between. The style rule above
-applies to them, and they are the longest prose in the repository and the least edited —
-but they are work records rather than product surface, so write them carefully instead of
-running the skill over each one.
+This used to carve out PR bodies, commit messages and task descriptions as "in between",
+on the argument that they are work records rather than product surface. That carve-out is
+gone. They are the longest prose in the repository and the least edited, which is an
+argument for running the skills over them rather than against it.
 
-If you cannot tell which side something is on: could a person read it without opening an
-editor or a terminal? If yes, run the skill.
+Both skills, and in order: `no-ai-slop` first, then `natural-writing`. One takes out the
+AI tells, the other takes out the starch, and running only the second leaves antithesis
+pairs and aphorisms behind. That is not hypothetical — on 2026-08-28 the backups page was
+written without either, and the slop pass found an aphorism ("a backup nobody has restored
+is a guess"), a sentence announcing its own importance, two negative-listing pairs and
+eight em dashes. The natural-writing pass then found the whole page had been written
+without a single contraction.
 
 This file also named a `humanizer` skill until 2026-08-22. It was never on the Windows
 machine and is not in the catalog, so nothing was running it.

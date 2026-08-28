@@ -24,7 +24,9 @@
 // Run by .github/workflows/changelog-style.yml on any pull request touching the
 // rules, the notes or this file.
 
-import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync, mkdtempSync, symlinkSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -386,6 +388,39 @@ for (const { name, note, range, expect } of BAD_DRAFTS) {
    hand-written notes scored as copied from them, on "voice", "reading",
    "person" and "words", because a skill about writing and a note about a chat
    app are both written in English. The reasoning is on the guard itself. */
+/* The unit invokes this script through a symlink, and for a week that meant it
+   did nothing at all: Node resolves a module to its real path, the guard on the
+   last line compared that against the name it was invoked as, and the two never
+   matched. It exited 0 in one second every hour, which is what a run with
+   nothing to do looks like.
+
+   Checked by invoking it the way the unit does, against a directory that is not
+   a checkout. main() gets as far as reading patch-notes-style.md and fails,
+   which is fine — the assertion is that it got that far at all. A script whose
+   entry point is broken prints nothing. */
+console.log('\nThe entry point, reached the way the unit reaches it:\n')
+{
+  const link = join(mkdtempSync(join(tmpdir(), 'gryt-entry-')), 'changelog-notes.mjs')
+  symlinkSync(join(REPO, 'ops', 'internal', 'changelog-notes.mjs'), link)
+  let output = ''
+  try {
+    output = execFileSync(process.execPath, [link, '--dry-run'], {
+      encoding: 'utf8',
+      env: { ...process.env, GRYT_CHANGELOG_REPO: mkdtempSync(join(tmpdir(), 'gryt-norepo-')) },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 60_000,
+    })
+  } catch (err) {
+    output = `${err.stdout ?? ''}${err.stderr ?? ''}`
+  }
+  if (output.includes('[changelog]')) {
+    console.log('  ✓ main() runs when the script is a symlink')
+  } else {
+    failed++
+    console.error('  ✗ nothing happened — the guard on the last line is comparing the wrong paths')
+  }
+}
+
 console.log('\nThe skills the prompt reads:\n')
 for (const f of ['no-ai-slop.md', 'natural-writing.md']) {
   const path = join(REPO, 'ops', 'internal', 'writing', f)

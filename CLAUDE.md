@@ -230,13 +230,28 @@ state the thing. A test that catches most of it: if a sentence could move to ano
 project unchanged, it is filler, and it should be a fact, a number or a consequence
 specific to this one instead.
 
-`no-ai-slop` is installed for this, at `~/.claude/skills/no-ai-slop/`. Run it over prose
-rather than trying to hold the list in your head; that is the failure mode. On 2026-08-21
-it was installed, used once on a Discord message, and the docs written an hour later still
+**Two skills for this, and they do different jobs.** Run them over prose rather than
+trying to hold the lists in your head; that is the failure mode. On 2026-08-21 `no-ai-slop`
+was installed, used once on a Discord message, and the docs written an hour later still
 went out saying "Worth doing rather than skipping past".
 
-**On anything a person reads in the product, running it is not optional.** Run it on the
-copy before you commit, not as a later pass — the draft is what ships. In scope:
+- `no-ai-slop`, at `~/.claude/skills/no-ai-slop/`. For writing that sounds **generated** —
+  binary contrasts, faux-insight openers, importance puffery, fake-profound kickers. It
+  protects a distinctive voice while removing the tells.
+- `natural-writing`, at `~/.claude/skills/natural-writing/`. For writing that sounds
+  **stiff** — long sentences carrying three clauses, no contractions, "the operator" where
+  a person would say "whoever runs the server". Sivert's own rules, given on 2026-08-28
+  after the site's pages read like an essay rather than like somebody talking. His summary
+  of the test: would you say it out loud?
+
+On product copy, run both, slop first. They compose: one gets the AI out, the other gets
+the starch out.
+
+`packages/site/design.md` has a Voice section carrying the same rules for the site
+specifically, with worked before-and-after examples from the pass that produced them.
+
+**On anything a person reads in the product, running them is not optional.** Run them on
+the copy before you commit, not as a later pass — the draft is what ships. In scope:
 
 - UI strings in the client and the mobile app: labels, empty states, error messages,
   onboarding, settings hints, anything rendered on screen

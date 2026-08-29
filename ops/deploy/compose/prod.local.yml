@@ -40,7 +40,7 @@ services:
       JWT_SECRET: ${NT_JWT_SECRET:?Set NT_JWT_SECRET in .env.prod}
       SFU_WS_HOST: ws://sfu:5005
       SFU_PUBLIC_HOST: ${SFU_PUBLIC_HOST:-ws://localhost:5005}
-      STUN_SERVERS: ${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
+      STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
       VOICE_MAX_USERS: ${VOICE_MAX_USERS:-}
       GRYT_SERVER_ENABLED: ${GRYT_SERVER_ENABLED:-${GRYT_AUTH_MODE:-true}}
       GRYT_OIDC_ISSUER: ${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}

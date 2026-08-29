@@ -64,7 +64,7 @@ services:
       - "${ICE_UDP_MUX_PORT:-3478}:${ICE_UDP_MUX_PORT:-3478}/udp"
     environment:
       PORT: "5005"
-      STUN_SERVERS: ${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
+      STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
       ICE_UDP_MUX_PORT: ${ICE_UDP_MUX_PORT:-3478}
       ICE_ADVERTISE_IP: ${ICE_ADVERTISE_IP:-}
       DISABLE_STUN: ${DISABLE_STUN:-false}
@@ -112,7 +112,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       SFU_WS_HOST: ws://sfu:${SFU_PORT:-5005}
       SFU_PUBLIC_HOST: ${SFU_PUBLIC_HOST:-ws://localhost:5005}
-      STUN_SERVERS: ${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
+      STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
       VOICE_MAX_USERS: ${VOICE_MAX_USERS:-}
       GRYT_SERVER_ENABLED: ${GRYT_SERVER_ENABLED:-${GRYT_AUTH_MODE:-true}}
       GRYT_OIDC_ISSUER: ${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}
@@ -265,7 +265,7 @@ services:
   #     # The same SFU as the first server, on purpose.
   #     SFU_WS_HOST: ws://sfu:${SFU_PORT:-5005}
   #     SFU_PUBLIC_HOST: ${SFU_PUBLIC_HOST:-ws://localhost:5005}
-  #     STUN_SERVERS: ${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
+  #     STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
   #     GRYT_SERVER_ENABLED: ${GRYT_SERVER_ENABLED:-${GRYT_AUTH_MODE:-true}}
   #     GRYT_OIDC_ISSUER: ${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}
   #     GRYT_OIDC_AUDIENCE: ${GRYT_OIDC_AUDIENCE:-gryt-web}

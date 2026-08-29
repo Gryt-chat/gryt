@@ -41,7 +41,7 @@ LAN_IP="${LAN_IP:-$(detect_lan_ip || true)}"
 
 SFU_WS_HOST="${SFU_WS_HOST:-ws://127.0.0.1:5005}"
 SFU_PUBLIC_HOST="${SFU_PUBLIC_HOST:-ws://${LAN_IP:-127.0.0.1}:5005}"
-STUN_SERVERS="${STUN_SERVERS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}"
+STUN_SERVERS="${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}"
 # 3666 is the Vite dev server port (packages/client/vite.config.ts); the server
 # matches Origin exactly, so it must be listed verbatim.
 CORS_ORIGIN="${CORS_ORIGIN:-http://127.0.0.1:15738,http://localhost:3666,http://127.0.0.1:3666,https://app.gryt.chat}"

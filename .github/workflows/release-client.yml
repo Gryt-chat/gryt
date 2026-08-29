@@ -149,20 +149,45 @@ jobs:
           # that installing could never clear, because the next build was
           # untagged too. GRYT-306.
           #
-          # Stable tags only, deliberately, on every channel. A beta client is a
-          # beta of the client; embedding a prerelease of the media plane in it
-          # is a separate decision, and versionCheck resolves `latest` from the
-          # newest non-prerelease release, so a prerelease here would put the
-          # nag straight back.
+          # Which tag depends on the channel being released (GRYT-724). This
+          # used to be stable-only on every channel, so a beta of the client
+          # carried the newest stable server — and a feature whose halves land
+          # in the client and the server shipped a release apart. 1.7.0-beta.1
+          # went out with the role-gated call button from GRYT-712 and an
+          # embedded server that did not publish the permission it asks about.
+          #
+          # The comment here used to say a prerelease "would put the nag
+          # straight back", because versionCheck resolved `latest` from the
+          # newest non-prerelease release. GRYT-722 changed that: a server on a
+          # beta now places itself on the beta channel and compares against the
+          # newest beta, so the reason no longer holds.
+          if [[ "${{ github.event.inputs.channel }}" == "beta" ]]; then
+            # Plain releases too, so a stable newer than the last beta wins.
+            tag_pattern='v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?'
+          else
+            tag_pattern='v[0-9]+\.[0-9]+\.[0-9]+'
+          fi
+
           for path in packages/server packages/sfu packages/image-worker; do
             git -C "$path" fetch origin main --tags --force
 
-            tag=$(git -C "$path" tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname \
-              | grep -Ex 'v[0-9]+\.[0-9]+\.[0-9]+' \
-              | head -1)
+            # versionsort.suffix is what makes -v:refname semver precedence
+            # rather than string order. Measured on git 2.50.1: without it
+            # v1.6.15-beta.1 sorts above v1.6.15, so the beta would be picked
+            # over the release it led to. The stable-only filter used to hide
+            # that; it does not any more.
+            tag=$(git -C "$path" \
+                -c versionsort.suffix=-alpha \
+                -c versionsort.suffix=-beta \
+                -c versionsort.suffix=-rc \
+                tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname \
+              | grep -Ex "$tag_pattern" \
+              | head -1 || true)
 
+            # `|| true` above because grep exits 1 on no match and pipefail is
+            # on, which killed the step before this guard could say why.
             if [[ -z "$tag" ]]; then
-              echo "::error::No stable release tag in $path. Release it before releasing the client."
+              echo "::error::No release tag in $path for the ${{ github.event.inputs.channel }} channel. Release it before releasing the client."
               exit 1
             fi
 

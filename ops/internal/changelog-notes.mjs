@@ -96,19 +96,27 @@ const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS ?? 3_600_000)
    quantised cache. See ops/internal/README.md. */
 const OLLAMA_NUM_CTX = Number(process.env.OLLAMA_NUM_CTX ?? 24_576)
 
-/* How much commit body the prompt may carry, in characters.
-   Bodies in these repositories run past 4kB, and cutting them to a fixed few
-   lines cuts exactly the part that says what a person sees: GRYT-596 opens
-   "Four things wrong with the editor" and spends four headed sections on
-   them, and the draft written from its first eight lines named one.
+/* Four characters to the token. Rough, and on the safe side for English prose
+   with code in it, which is what these prompts are. The same estimator is used
+   for the budget and for the size printed in the log, so the two agree. */
+const TOKENS = (text) => Math.ceil(text.length / 4)
 
-   A ceiling and nothing under it. There was a 1,200-character floor per commit
-   and it beat the ceiling: 1.6.22 is 89 commits, 60,000/89 is 674, the floor
-   won, and the prompt came to 23,734 tokens against a window of 24,576. The
-   size warning fired and the generation then ran out of time. A floor is the
-   wrong shape for a budget — what a long range needs is less of each commit,
-   not a guarantee it cannot keep. */
-const COMMIT_BUDGET = Number(process.env.GRYT_CHANGELOG_COMMIT_BUDGET ?? 60_000)
+/* What the answer needs, in tokens, kept back from the prompt's share of the
+   window. A finished note measured 200 to 830 tokens across the ten drafts on
+   disk; 2,048 is comfortably over the longest and costs nothing when the
+   prompt is smaller than the window anyway. */
+const ANSWER_RESERVE = 2_048
+
+/* How much of the prompt may be commits, as a share of what is left after
+   everything that is always there. Not a fixed number of characters: that was
+   what this was, and a fixed number budgets one component while the total
+   floats. 1.5.5 is 164 commits, the 60,000-character body cap did its job and
+   shortened 161 of them, and the prompt still came to 30,130 tokens against a
+   window of 24,576 — because the cap never covered the style guide, the two
+   skills, the rules, 164 subject lines, or the 161 notes saying a body had
+   been shortened. The budget is the whole prompt now, and the commits get
+   what is left of it. */
+const COMMIT_SHARE = Number(process.env.GRYT_CHANGELOG_COMMIT_SHARE ?? 0.95)
 const DRY_RUN = process.argv.includes('--dry-run')
 
 /* How many times to ask for one release before giving up on it.
@@ -530,17 +538,52 @@ function writingSkills(repo) {
     .filter(Boolean)
 }
 
-function prompt(release, changes, style) {
-  const all = flatCommits(changes.parts)
-  /* Shared out rather than divided evenly, walking shortest first.
-     An even split wastes whatever a two-line commit does not use, and the long
-     bodies are the ones worth reading. Handing each commit the smaller of what
-     it needs and its share of what is left means a range of one long commit
-     and twenty short ones spends the budget on the long one. */
+/**
+ * The commits, as much of them as the window has room for.
+ *
+ * Given a character allowance rather than deciding one. Everything else in the
+ * prompt — the style guide, both editing skills, the rules — is a fixed cost
+ * that has to be paid before a single commit is shown, so the caller measures
+ * that first and hands over what is left.
+ *
+ * Three things get shortened, in this order, because they are worth different
+ * amounts to a reader of the finished note:
+ *
+ *   1. Bodies, shared out shortest-first. A two-line commit does not need its
+ *      share, and giving it away means the long bodies keep theirs.
+ *   2. Bodies dropped entirely, oldest first, leaving the subject.
+ *   3. Commits dropped entirely, oldest first.
+ *
+ * Every step says so in the prompt and in the log. A range this cannot show in
+ * full is a range where the note will be thin, and that is worth knowing when
+ * the note is read rather than being discovered from the note itself.
+ */
+function commitBlock(parts, allowance) {
+  const all = flatCommits(parts)
+  const overhead = (c) => `- [${c.n}] ${c.subject}\n`.length + 12
+  const subjects = all.reduce((n, c) => n + overhead(c), 0)
+
+  /* Not even the subjects fit. Newest first is the honest order to keep: they
+     are the changes closest to what somebody is running. */
+  let shown = all
+  let dropped = 0
+  if (subjects > allowance) {
+    shown = []
+    let used = 0
+    for (const c of [...all].reverse()) {
+      if (used + overhead(c) > allowance) break
+      shown.push(c)
+      used += overhead(c)
+    }
+    shown.reverse()
+    dropped = all.length - shown.length
+  }
+
+  const forBodies = Math.max(0, allowance - shown.reduce((n, c) => n + overhead(c), 0))
   const budget = new Map()
   {
-    let left = COMMIT_BUDGET
-    const order = [...all].sort((a, b) => a.body.length - b.body.length)
+    let left = forBodies
+    const order = [...shown].sort((a, b) => a.body.length - b.body.length)
     order.forEach((c, i) => {
       const share = Math.floor(left / (order.length - i))
       const take = Math.min(c.body.length, share)
@@ -548,11 +591,14 @@ function prompt(release, changes, style) {
       left -= take
     })
   }
+
   let shortened = 0
   const lines = []
-  for (const part of changes.parts) {
+  for (const part of parts) {
+    const mine = shown.filter((x) => x.component === part.component)
+    if (!mine.length) continue
     lines.push(`## ${componentName(part.component)}`)
-    for (const c of all.filter((x) => x.component === part.component)) {
+    for (const c of mine) {
       lines.push(`- [${c.n}] ${c.subject}`)
       const body = c.body.split('\n').map((l) => l.trim()).filter(Boolean).join('\n')
       if (!body) continue
@@ -566,9 +612,19 @@ function prompt(release, changes, style) {
       }
     }
   }
-  if (shortened) {
-    log(`  ${shortened} of ${all.length} commit bodies shortened to fit the budget`)
+  if (dropped) {
+    lines.push('')
+    lines.push(
+      `[${dropped} older commits in this range are not shown at all — the range is too long for one prompt, and the note can only be about what is above]`,
+    )
   }
+  return { text: lines.join('\n'), total: all.length, shown: shown.length, shortened, dropped }
+}
+
+/* A placeholder so the prompt can be measured before the commits go into it. */
+const COMMITS = '\u0000commits\u0000'
+
+function prompt(release, changes, style) {
   return [
     'You are writing the release notes for one version of Gryt. The style guide',
     'comes first, then the commits this release actually contains, then the',
@@ -604,7 +660,7 @@ function prompt(release, changes, style) {
     'only source for what this release changed. Commit bodies are included where',
     'the author wrote one, and are usually the best source for why.',
     '',
-    lines.join('\n'),
+    COMMITS,
     '─────────────────────────────────────────────────────────────────────',
     'WHAT APPLIES TO THIS DRAFT',
     '',
@@ -788,6 +844,47 @@ function prompt(release, changes, style) {
     'saying it is a maintenance release.',
     '',
   ].join('\n')
+}
+
+/**
+ * The prompt, with the commits cut to whatever the window has left for them.
+ *
+ * The fixed part is measured rather than estimated. It is the style guide,
+ * both editing skills in full and the rules — about 31 kB, and every character
+ * of it is paid before a single commit is shown. Budgeting the commits alone
+ * is what let 1.5.5 reach 30,130 tokens against a window of 24,576 with its
+ * body cap working exactly as written.
+ */
+function promptFor(release, changes, style) {
+  const skeleton = prompt(release, changes, style)
+  const room = (OLLAMA_NUM_CTX - ANSWER_RESERVE) * 4
+  const allowance = Math.max(0, Math.floor((room - (skeleton.length - COMMITS.length)) * COMMIT_SHARE))
+
+  /* Built and measured rather than predicted. The allowance is spent on
+     subjects, indented body lines, component headings and a note wherever a
+     body was cut, and an arithmetic guess at all of that was wrong by 6 kB on
+     a 164-commit range — which is the difference between fitting and not. So:
+     build it, measure it, and if it came out over, ask for proportionally
+     less. Two rounds is enough in practice and four is the backstop. */
+  let asked = allowance
+  let block = commitBlock(changes.parts, asked)
+  for (let i = 0; i < 6 && block.text.length > allowance; i++) {
+    /* Scaled from what was last asked for, not from the original allowance.
+       Asking again from the original oscillates: the overshoot shrinks the
+       request, the smaller request undershoots, the next round asks for nearly
+       the original again, and it never settles. This only ever goes down. */
+    asked = Math.floor(asked * (allowance / block.text.length)) - 1
+    if (asked <= 0) break
+    block = commitBlock(changes.parts, asked)
+  }
+  if (block.shortened) {
+    log(`  ${block.shortened} of ${block.shown} commit bodies shortened to fit`)
+  }
+  if (block.dropped) {
+    log(`  ! ${block.dropped} of ${block.total} commits are not in the prompt at all`)
+    log('    the range is too long for one note; the draft can only cover what was shown')
+  }
+  return skeleton.replace(COMMITS, block.text)
 }
 
 /**
@@ -1628,7 +1725,7 @@ async function main() {
       if (!count) { log(`${release.version}: nothing user-visible since ${prev.version}, skipping`); continue }
 
       log(`${release.version}: ${count} commits since ${prev.version}`)
-      const text = prompt(release, changes, style)
+      const text = promptFor(release, changes, style)
 
       /* Say how big the prompt is, every time.
          The whole of this release was one silent overflow: num_ctx defaulted
@@ -1637,11 +1734,17 @@ async function main() {
          answer says that happened, so the only defence is knowing the number
          before it is sent. Four characters to the token is rough and is on
          the safe side for English prose. */
-      const estimate = Math.ceil(text.length / 4)
+      const estimate = TOKENS(text)
       log(`  prompt ${(text.length / 1024).toFixed(1)} kB, about ${estimate} tokens of ${OLLAMA_NUM_CTX}`)
-      if (estimate > OLLAMA_NUM_CTX * 0.85) {
-        log(`  ! this is close enough to num_ctx that part of it may be dropped before the model reads it`)
-        log(`    raise OLLAMA_NUM_CTX, or lower GRYT_CHANGELOG_COMMIT_BUDGET (${COMMIT_BUDGET})`)
+      /* Only when the budget failed to do its job.
+         It used to warn at 85% of the window, which fires on every long range
+         now that the commits are sized to fill what is left — the budget
+         working is not news. What is news is a prompt past what was reserved
+         for it, because that means something is in here the budget cannot
+         see. */
+      if (estimate > OLLAMA_NUM_CTX - ANSWER_RESERVE) {
+        log(`  ! past the ${OLLAMA_NUM_CTX - ANSWER_RESERVE} tokens budgeted, so part of it may be dropped before the model reads it`)
+        log(`    raise OLLAMA_NUM_CTX, or lower GRYT_CHANGELOG_COMMIT_SHARE (${COMMIT_SHARE})`)
       }
       if (DRY_RUN) { console.log(`\n───── prompt for ${release.version} ─────\n${text}\n`); continue }
 

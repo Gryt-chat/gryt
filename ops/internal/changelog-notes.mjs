@@ -656,6 +656,12 @@ function prompt(release, changes, style) {
     'This is the house style guide, in full. Follow it. The voice section and',
     'the bullet rules matter most.',
     '',
+    'Its examples are illustrations of a shape, never sentences to reuse. A',
+    'draft was rejected for heading a section about importing themes with',
+    '"Everyone has a face, and you can give it a name" — the guide\'s own',
+    'example, and about avatars. Take the shape and write your own sentence',
+    'about the commits in front of you.',
+    '',
     style,
     '',
     '─────────────────────────────────────────────────────────────────────',
@@ -679,6 +685,15 @@ function prompt(release, changes, style) {
     'These are the commits it contains, grouped by component, and they are the',
     'only source for what this release changed. Commit bodies are included where',
     'the author wrote one, and are usually the best source for why.',
+    '',
+    'A commit with no body gives you its subject and nothing else. It does not',
+    'give you a symptom, a cause, a scope, or who it affected. Three drafts were',
+    'rejected for taking one: "fix themed titlebar and identity settings" became',
+    'a titlebar that showed the wrong colour "especially on systems with dark',
+    'mode enabled", and a second section about names reverting and avatars',
+    'disappearing when the app reopened. The range said none of that. Where the',
+    'body is missing, write the subject in a reader\'s words and stop, or put the',
+    'commit in "omitted" — a short honest note beats a full one that is invented.',
     '',
     COMMITS,
     '─────────────────────────────────────────────────────────────────────',
@@ -795,6 +810,10 @@ function prompt(release, changes, style) {
     'privacy change, and privacy goes in Security. It gets its own section, it',
     'is not folded into a list of fixes, and it is not softened into the app',
     'respecting your privacy - say what it used to do and who could see it.',
+    '',
+    'British English. Colour, minimise, recognise, behaviour, organise. Gryt is',
+    'written in it everywhere else, and a note in American spelling reads as',
+    'coming from somewhere other than the rest of the site.',
     '',
     'Plain sentences only. No markdown, no bold, no links, no headings inside a',
     'paragraph. The site renders the shape itself.',
@@ -1040,6 +1059,44 @@ async function ask(text) {
    note. The failure this guard exists for was a model retelling an example
    note wholesale, and an instruction to cut adverbs is not something there is
    a wrong way to copy. */
+/* A heading lifted out of the style guide.
+
+   The guide is pasted into the prompt in full so the model can follow it, which
+   also puts its illustrations in reach. A draft headed a section about importing
+   themes with "Everyone has a face, and you can give it a name" — the guide's own
+   example of a heading that is a sentence rather than a label, and about avatars.
+
+   `contamination` above will not see this: it counts distinctive words across the
+   whole note against a threshold of twenty, and a borrowed heading is nine words
+   of ordinary English. This is the exact-match case, which is cheap to ask about
+   and has no false positive worth worrying about — a heading that appears verbatim
+   in the guide came from the guide. */
+export function borrowedHeading(entry, styleText) {
+  if (!styleText) return null
+  const flat = (t) =>
+    t.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
+
+  /* The guide's examples are quoted, which is what makes them findable. Three
+     words up, because shorter quotes in it are single terms like "Avatars" and
+     a heading is allowed to contain those. */
+  const quoted = [...styleText.matchAll(/[“"]([^”"]{12,120})[”"]/g)]
+    .map((m) => flat(m[1]))
+    .filter((q) => q.split(' ').length >= 3)
+
+  for (const heading of [entry.headline, ...entry.sections.map((s) => s.heading)]) {
+    const h = flat(heading ?? '')
+    if (!h) continue
+    /* `includes` both ways: the draft that prompted this took "Everyone has a
+       face" and added ", and you can give it a name", so neither string
+       contains the other whole. */
+    const lifted = quoted.find((q) => h.includes(q) || q.includes(h))
+    if (lifted) {
+      return `the heading "${heading}" is an example out of the style guide, not a sentence about these commits`
+    }
+  }
+  return null
+}
+
 export function contamination(entry, exampleText, commitText) {
   if (!exampleText) return null
   const words = (t) => new Set((t.toLowerCase().match(/[a-z][a-z-]{4,}/g) ?? []))
@@ -1215,6 +1272,25 @@ export function claimsSecurityIn(text) {
 /* Sentences that would sit unchanged in any other project's release notes.
    The style guide calls this the portability test; this is the short version
    of it, drawn from what the drafts actually produced. */
+/* Spellings that say the note came from somewhere other than the rest of the
+   site. Gryt is written in British English throughout — the style guide, the
+   hand-written notes, the UI strings — and four drafts running came back with
+   the American ones. A hard problem rather than a soft one: it is not a matter
+   of taste, and it reaches the page. Only the pairs a release note actually
+   reaches for; this is not a dictionary. */
+const AMERICAN = [
+  [/\bcolors?\b/i, 'colour'],
+  [/\bminimiz(e|ed|es|ing)\b/i, 'minimise'],
+  [/\brecogniz(e|ed|es|ing)\b/i, 'recognise'],
+  [/\bbehaviors?\b/i, 'behaviour'],
+  [/\borganiz(e|ed|es|ing|ation)\b/i, 'organise'],
+  [/\bcustomiz(e|ed|es|ing)\b/i, 'customise'],
+  [/\binitializ(e|ed|es|ing)\b/i, 'initialise'],
+  [/\banaly(z|zed|zes|zing)\b/i, 'analyse'],
+  [/\bcanceled\b/i, 'cancelled'],
+  [/\bcentered?\b/i, 'centred'],
+]
+
 const FILLER = [
   /this change is for you/i,
   /we('| a)re (excited|pleased|happy)/i,
@@ -1445,6 +1521,46 @@ export function styleProblems(entry, parts) {
     if (hit) {
       problems.push(soft(`filler: "${hit.match(pattern)[0]}"`))
       break
+    }
+  }
+
+  /* British English, everywhere a reader looks. */
+  for (const line of readerProse(entry)) {
+    const wrong = AMERICAN.find(([shape]) => shape.test(line))
+    if (wrong) {
+      problems.push(hard(`American spelling, "${line.match(wrong[0])[0]}" — Gryt writes "${wrong[1]}"`))
+      break
+    }
+  }
+
+  /* A release of subject lines cannot support a note that explains anything.
+
+     Three drafts running were written from ranges where every commit was a
+     subject and nothing else, and every one of them invented the part a body
+     would have carried. 1.6.10's only commit was "fix themed titlebar and
+     identity settings"; the draft gave it a dark-mode symptom and a second
+     section about names reverting and avatars disappearing on restart.
+
+     Structural rather than a word list: if nothing in the range says why, a
+     paragraph explaining why came from somewhere else. One sentence per
+     section is the most a subject line can honestly carry, so more than that
+     is the tell. The count is of sentences across the whole note rather than
+     per section, because the invention shows up as volume. */
+  const anyBody = (parts ?? []).some((part) =>
+    (part.commits ?? []).some((c) => (c.body ?? '').trim()),
+  )
+  if (!anyBody && entry.sections.length) {
+    const sentences = entry.sections
+      .flatMap((s) => s.body)
+      .join(' ')
+      .split(/[.!?]+\s/)
+      .filter((x) => x.trim().length > 20).length
+    if (sentences > entry.sections.length) {
+      problems.push(
+        hard(
+          `no commit in this release has a body, and the note explains it in ${sentences} sentences across ${entry.sections.length} section(s) — there is nothing in the range to explain it from`,
+        ),
+      )
     }
   }
 
@@ -1809,7 +1925,10 @@ async function main() {
 
       const commitText = JSON.stringify(changes.parts)
       const judge = (draft) => {
-        const shape = validate(draft) ?? contamination(draft, workedExample(REPO), commitText)
+        const shape =
+          validate(draft) ??
+          borrowedHeading(draft, style) ??
+          contamination(draft, workedExample(REPO), commitText)
         /* A draft of the wrong shape, or one retelling the example, is not a
            draft. Nothing below is worth reading about it. */
         if (shape) return [hard(shape)]

@@ -72,7 +72,13 @@ const CHANNELS = (process.env.GRYT_CHANGELOG_CHANNELS ?? 'latest').split(/\s+/).
 const LIMIT = Number(process.env.GRYT_CHANGELOG_LIMIT ?? 12)
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://127.0.0.1:11434'
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'llama3.1:8b'
-const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS ?? 180_000)
+/* Long, because generation here is slow and a half-written note is not
+   written at all. Measured on the box on 2026-08-29: qwen3:32b at num_ctx
+   24576 runs 58% on the CPU and streams about half a token a second, so a note
+   of fifteen hundred tokens is the better part of an hour. Three minutes, which
+   this used to be, aborted six of eighteen releases — every one of them a range
+   big enough to be worth reading. */
+const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS ?? 3_600_000)
 
 /* The context window to ask for.
    Ollama does not use the model's window, it uses num_ctx, and num_ctx
@@ -95,10 +101,14 @@ const OLLAMA_NUM_CTX = Number(process.env.OLLAMA_NUM_CTX ?? 24_576)
    lines cuts exactly the part that says what a person sees: GRYT-596 opens
    "Four things wrong with the editor" and spends four headed sections on
    them, and the draft written from its first eight lines named one.
-   Divided evenly, so a five-commit release gets a lot each and a
-   twenty-commit release still fits. */
+
+   A ceiling and nothing under it. There was a 1,200-character floor per commit
+   and it beat the ceiling: 1.6.22 is 89 commits, 60,000/89 is 674, the floor
+   won, and the prompt came to 23,734 tokens against a window of 24,576. The
+   size warning fired and the generation then ran out of time. A floor is the
+   wrong shape for a budget — what a long range needs is less of each commit,
+   not a guarantee it cannot keep. */
 const COMMIT_BUDGET = Number(process.env.GRYT_CHANGELOG_COMMIT_BUDGET ?? 60_000)
-const COMMIT_BUDGET_MIN = 1_200
 const DRY_RUN = process.argv.includes('--dry-run')
 
 /* How many times to ask for one release before giving up on it.
@@ -522,10 +532,23 @@ function writingSkills(repo) {
 
 function prompt(release, changes, style) {
   const all = flatCommits(changes.parts)
-  /* Divided evenly rather than a fixed cut. The failure this replaces was a
-     fixed eight lines, which is fine for a one-paragraph commit and throws
-     away five sixths of the ones that are worth reading. */
-  const perCommit = Math.max(COMMIT_BUDGET_MIN, Math.floor(COMMIT_BUDGET / Math.max(1, all.length)))
+  /* Shared out rather than divided evenly, walking shortest first.
+     An even split wastes whatever a two-line commit does not use, and the long
+     bodies are the ones worth reading. Handing each commit the smaller of what
+     it needs and its share of what is left means a range of one long commit
+     and twenty short ones spends the budget on the long one. */
+  const budget = new Map()
+  {
+    let left = COMMIT_BUDGET
+    const order = [...all].sort((a, b) => a.body.length - b.body.length)
+    order.forEach((c, i) => {
+      const share = Math.floor(left / (order.length - i))
+      const take = Math.min(c.body.length, share)
+      budget.set(c.n, take)
+      left -= take
+    })
+  }
+  let shortened = 0
   const lines = []
   for (const part of changes.parts) {
     lines.push(`## ${componentName(part.component)}`)
@@ -533,14 +556,18 @@ function prompt(release, changes, style) {
       lines.push(`- [${c.n}] ${c.subject}`)
       const body = c.body.split('\n').map((l) => l.trim()).filter(Boolean).join('\n')
       if (!body) continue
-      const kept = body.slice(0, perCommit)
-      for (const l of kept.split('\n')) lines.push(`    ${l}`)
+      const kept = body.slice(0, budget.get(c.n) ?? 0)
+      for (const l of kept.split('\n')) if (l) lines.push(`    ${l}`)
       /* Said out loud rather than cut silently. A model that believes it has
          the whole commit writes as if it does. */
       if (kept.length < body.length) {
+        shortened++
         lines.push(`    [commit ${c.n} continues past what would fit here]`)
       }
     }
+  }
+  if (shortened) {
+    log(`  ${shortened} of ${all.length} commit bodies shortened to fit the budget`)
   }
   return [
     'You are writing the release notes for one version of Gryt. The style guide',
@@ -660,6 +687,14 @@ function prompt(release, changes, style) {
     'the first one. Do not write "it had several issues" and then name one -',
     'either name them or leave the count out.',
     '',
+    'Some commits have nothing in them for a reader, and those are what',
+    '"omitted" is for. A version number put back, a directory added to',
+    '.gitignore, a workflow that closes a task when a pull request merges - a',
+    'person using Gryt cannot see any of it and should not be made to read',
+    'about it. Put the number in "omitted" with a short reason and move on. Do',
+    'not write a section about it, and do not leave it unmentioned either: a',
+    'commit you decided against is a decision, and it goes in the list.',
+    '',
     'Say when a change only happens on one operating system. A control that',
     'appears on Windows and nowhere else is a control most readers will go',
     'looking for and not find, so the sentence has to carry the platform.',
@@ -741,6 +776,10 @@ function prompt(release, changes, style) {
     '- Telling the reader what to make of a fact: "this makes troubleshooting',
     '  easier", "this ensures the message is read and understood". Give them',
     '  another fact instead.',
+    '- Opening a sentence with the release rather than the thing. "This change',
+    '  makes the narrow dialogs easier to read" is "The narrow dialogs are',
+    '  easier to read now". Nothing refuses this, and none of the three notes',
+    '  written by hand does it.',
     '- The portability test, on every sentence. If it would sit unchanged in',
     '  another product\'s notes, it is filler standing where a fact should be.',
     '',
@@ -914,6 +953,32 @@ const COMMON = new Set(`about after again against along already also although al
    A rule the model can ignore is a suggestion. A rule here is a rule: a draft
    that breaks one is not written and the next run tries again. */
 
+/**
+ * The two kinds of problem, and why a draft is only thrown away for one.
+ *
+ * Every rule used to be fatal. `styleProblems` returned a flat list and any
+ * entry in it meant the release got no note at all, so a clumsy sentence
+ * opener cost exactly what a fabricated security section cost. That was
+ * tolerable while there were four rules and the model saw eight lines of each
+ * commit. On the first real run afterwards it attempted eighteen releases in
+ * eight hours and posted one: five of the ten refusals were a weak opener or a
+ * section count, on notes that were otherwise correct.
+ *
+ * A note nobody publishes helps nobody, and every note goes to somebody who
+ * reads it before it is published — that is what the queue is for. So:
+ *
+ * **hard** is a note that is wrong. A commit missing with nothing saying so, a
+ * security claim the commits do not support, a function name in the article,
+ * the example retold. These never ship, on any attempt.
+ *
+ * **soft** is a note that is worse. "Previously" twice, a recap line echoing
+ * its heading, one section too many. Sent back while there are attempts left,
+ * because the model usually fixes them — and let through on the last attempt,
+ * because a person is about to read it anyway.
+ */
+const hard = (text) => ({ text, hard: true })
+const soft = (text) => ({ text, hard: false })
+
 /** Comparable form, so "the same sentence" survives punctuation and case. */
 export function normalise(text) {
   return String(text).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -991,6 +1056,29 @@ export function hasSecurityChange(parts) {
   return distinct.size >= 2
 }
 
+/**
+ * Whether a piece of prose claims this release did something about security.
+ *
+ * Not "does the word appear". 1.6.14 was a maintenance release and its intro
+ * ended "There are no new features, no visible changes to how the app behaves,
+ * and no security fixes in this release" — which is the note being careful,
+ * and which this refused three times for claiming security. Eighty minutes on
+ * a rule that could not read a negation.
+ *
+ * So the clause is what is tested, not the paragraph, and a clause that denies
+ * it does not count. Clause-level rather than sentence-level because these
+ * arrive as lists: the sentence above claims nothing, and only its third
+ * comma-separated piece is about security at all.
+ */
+const SECURITY_CLAIM = /\b(security|insecure|vulnerab)/i
+const DENIES = /\b(no|not|nothing|none|never|without)\b[^,.;]{0,40}\b(security|insecure|vulnerab)/i
+
+export function claimsSecurityIn(text) {
+  return String(text)
+    .split(/[,.;]/)
+    .some((clause) => SECURITY_CLAIM.test(clause) && !DENIES.test(clause))
+}
+
 /* Sentences that would sit unchanged in any other project's release notes.
    The style guide calls this the portability test; this is the short version
    of it, drawn from what the drafts actually produced. */
@@ -1007,10 +1095,15 @@ const FILLER = [
      sentence is the reader being told what they already know: they opened a
      release note. */
   /\bthis (release|update|version) (focuses on|brings|improves|adds more|introduces)\b/i,
-  /* Telling the reader what to make of a fact instead of giving them another
-     one. "This change makes troubleshooting easier for both users and
-     developers" was a whole sentence in the 1.6.36 draft. */
-  /\bthis (change|release|update) (makes|ensures|helps|improves|means)\b/i,
+  /* Not "this change makes …". That was here and it was wrong: it matches a
+     construction rather than an empty sentence, and the sentences it caught
+     were "This release ensures the webcam card is always shown, and it keeps
+     trying until the stream is ready" and "This change makes it easier to
+     leave a server without leftover data blocking your next steps". Both name
+     something specific and neither would survive a find-and-replace of the
+     word Gryt, which is the test the guide actually gives. The construction is
+     still not house style — none of the three written by hand use it — so the
+     prompt discourages it and nothing here refuses it. */
   /\bwhich is particularly useful\b/i,
   /\bfor both users and developers\b/i,
   /* From natural-writing's banned list and no-ai-slop's. "Refactored" is the
@@ -1097,13 +1190,13 @@ export function styleProblems(entry, parts) {
   /* At most once in the whole note. It is the obvious way to write a contrast
      and it reads as a form somebody filled in when every paragraph has it. */
   const previously = prose.join(' ').match(/\bpreviously\b/gi)?.length ?? 0
-  if (previously > 1) problems.push(`"Previously" ${previously} times, and once is the limit`)
+  if (previously > 1) problems.push(soft(`"Previously" ${previously} times, and once is the limit`))
 
   /* The headline is already on the page, directly above. A section that
      repeats it spends the reader's first heading saying nothing new. */
   for (const heading of headings) {
     if (overlap(entry.headline, heading) > 0.6) {
-      problems.push(`the heading "${heading}" is the headline again`)
+      problems.push(soft(`the heading "${heading}" is the headline again`))
     }
   }
 
@@ -1122,14 +1215,14 @@ export function styleProblems(entry, parts) {
     .map((h) => normalise(h).split(' ')[0])
     .filter((w) => w && !STOPWORDS.has(w))
   const repeated = firstWords.find((w, i) => firstWords.indexOf(w) !== i)
-  if (repeated) problems.push(`more than one section starts with "${repeated}"`)
+  if (repeated) problems.push(soft(`more than one section starts with "${repeated}"`))
 
   /* The recap is the short version, not the headings again. Somebody who read
      the article should still find something in it. */
   const items = entry.recap.flatMap((g) => g.items)
   const echoes = items.filter((item) => headings.some((h) => overlap(item, h) > 0.7))
   if (items.length && echoes.length === items.length) {
-    problems.push('every recap line is one of the section headings again')
+    problems.push(soft('every recap line is one of the section headings again'))
   }
 
   /* Security is its own section when there is security in the release, and no
@@ -1141,16 +1234,16 @@ export function styleProblems(entry, parts) {
      "this change improves security" in the body would have gone straight
      through — the claim is what matters, not where it is made. */
   const claimsSecurity = [...headings, ...entry.recap.map((g) => g.group), ...prose].some(
-    (text) => /\b(security|insecure|vulnerab)/i.test(text),
+    (text) => claimsSecurityIn(text),
   )
   if (claimsSecurity && !hasSecurityChange(parts)) {
-    problems.push('the note claims security, and nothing in the commits is about security')
+    problems.push(hard('the note claims security, and nothing in the commits is about security'))
   }
 
   /* A heading is a sentence. "Security:" and "Performance:" are labels with a
      sentence stapled on. */
   const labelled = headings.find((h) => /^[A-Z][A-Za-z ]{0,20}:/.test(h))
-  if (labelled) problems.push(`the heading "${labelled}" is a label, not a sentence`)
+  if (labelled) problems.push(soft(`the heading "${labelled}" is a label, not a sentence`))
 
   /* "A, B, and C" in the headline. The guide says pick what matters and say
      it, and a list of three is the model sounding complete instead of
@@ -1168,7 +1261,7 @@ export function styleProblems(entry, parts) {
     /^and\b/i.test(segments[segments.length - 1]) &&
     !segments.slice(1, -1).some((seg) => subordinator.test(seg))
   ) {
-    problems.push('the headline lists three things rather than naming the one that matters')
+    problems.push(soft('the headline lists three things rather than naming the one that matters'))
   }
 
   /* Under the hood is for what a user cannot see. A release that got a whole
@@ -1196,7 +1289,7 @@ export function styleProblems(entry, parts) {
       return words.filter((w) => article.has(w)).length / words.length > 0.7
     })
     if (visible) {
-      problems.push(`"${visible}" is under the hood, and the note explains it above`)
+      problems.push(soft(`"${visible}" is under the hood, and the note explains it above`))
     }
   }
 
@@ -1211,13 +1304,13 @@ export function styleProblems(entry, parts) {
      and nothing for a change of wording to slip past. The hand-written notes
      have eight, five and four recap groups. */
   if (entry.sections.length && entry.recap.length === 1 && underHood) {
-    problems.push('every recap line is under the hood, for a release with sections in it')
+    problems.push(soft('every recap line is under the hood, for a release with sections in it'))
   }
 
   for (const pattern of FILLER) {
     const hit = prose.find((paragraph) => pattern.test(paragraph))
     if (hit) {
-      problems.push(`filler: "${hit.match(pattern)[0]}"`)
+      problems.push(soft(`filler: "${hit.match(pattern)[0]}"`))
       break
     }
   }
@@ -1232,7 +1325,7 @@ export function styleProblems(entry, parts) {
       named = `${what}, "${hit[0]}", outside Under the hood`
       break
     }
-    if (named) { problems.push(named); break }
+    if (named) { problems.push(hard(named)); break }
   }
 
   /* Under the hood is last when it is there at all.
@@ -1244,7 +1337,7 @@ export function styleProblems(entry, parts) {
      cannot see goes at the end. A draft put it first. */
   const hoodAt = entry.recap.findIndex((g) => /under the hood/i.test(g.group))
   if (hoodAt >= 0 && hoodAt !== entry.recap.length - 1) {
-    problems.push('"Under the hood" is not the last recap group')
+    problems.push(soft('"Under the hood" is not the last recap group'))
   }
 
   /* A control that exists on one platform and not the others.
@@ -1257,16 +1350,29 @@ export function styleProblems(entry, parts) {
   for (const [pattern, platform] of PLATFORM_ONLY) {
     if (!pattern.test(commitText)) continue
     if (new RegExp(`\\b${platform}\\b`, 'i').test(prose.join(' '))) continue
-    problems.push(`the commits say this is ${platform} only and the note never says so`)
+    problems.push(hard(`the commits say this is ${platform} only and the note never says so`))
     break
   }
 
   /* A release of one commit is a short note. Padding it is how a one-line fix
-     became two intro paragraphs and a section saying the same thing again. */
+     became two intro paragraphs and a section saying the same thing again.
+
+     One section per commit, not one section. The cap used to be flat, and once
+     coverage started asking for every commit the two rules could not both be
+     satisfied: 1.6.18 is two commits — dropdowns invisible in a modal, and the
+     camera not stopping when you leave a voice channel — and there is no
+     honest way to write one section about both. It spent three attempts and
+     eighty minutes being told to do the impossible. What the rule is actually
+     for is a one-line fix wearing three headings, and a count per commit says
+     that without forbidding two changes from being two changes. */
   const commits = parts.reduce((n, part) => n + part.commits.length, 0)
   if (commits <= 2) {
-    if (entry.intro.length > 1) problems.push('more than one intro paragraph for a tiny release')
-    if (entry.sections.length > 1) problems.push('more than one section for a tiny release')
+    if (entry.intro.length > 1) {
+      problems.push(soft('more than one intro paragraph for a tiny release'))
+    }
+    if (entry.sections.length > commits) {
+      problems.push(soft(`${entry.sections.length} sections for a release of ${commits}`))
+    }
   }
 
   return problems
@@ -1330,21 +1436,34 @@ export function coverage(entry, parts) {
     if (distinctive.length < 3) continue
     if (distinctive.some((w) => note.has(w))) continue
     if (excused.has(c.n)) continue
+    /* Soft, and the reasoning matters because this rule is the whole point of
+       GRYT-659. What was wrong before was never that a commit got left out —
+       it was that nothing said so, and a note about three of five commits read
+       as a finished note about a smaller release. A soft problem is printed in
+       the run log and kept on the draft, so the omission is on the record and
+       the person reading the note knows to look. That is the thing that was
+       missing, and it does not need a release thrown away to work.
+
+       Hard would cost more than it buys. 1.3.1 was refused for not writing
+       about "Restore package.json to 1.3.1-beta.1" and "Ignore local runtime
+       data directory" — housekeeping nobody using Gryt can see. The prompt now
+       tells the model to put those in `omitted`, and when it forgets, a line
+       in the log is the right price. */
     problems.push(
-      `commit ${c.n} is not in the note and not in omitted: "${c.subject}"`,
+      soft(`commit ${c.n} is not in the note and not in omitted: "${c.subject}"`),
     )
   }
 
   for (const o of entry.omitted ?? []) {
     const n = Number(o.commit)
-    if (!all.some((c) => c.n === n)) problems.push(`omitted names commit ${n}, which is not in this release`)
+    if (!all.some((c) => c.n === n)) problems.push(hard(`omitted names commit ${n}, which is not in this release`))
   }
 
   /* Everything left out is the model deciding the release was not worth
      writing about, which is a decision somebody should see rather than a
      shortcut it can take quietly. */
   if ((entry.omitted?.length ?? 0) === all.length) {
-    problems.push('every commit is in omitted, so there is no note here')
+    problems.push(hard('every commit is in omitted, so there is no note here'))
   }
 
   return problems
@@ -1529,7 +1648,9 @@ async function main() {
       const commitText = JSON.stringify(changes.parts)
       const judge = (draft) => {
         const shape = validate(draft) ?? contamination(draft, workedExample(REPO), commitText)
-        if (shape) return [shape]
+        /* A draft of the wrong shape, or one retelling the example, is not a
+           draft. Nothing below is worth reading about it. */
+        if (shape) return [hard(shape)]
         /* Coverage first. A note that is missing a commit is missing it
            whatever else is wrong with it, and it is the reason worth reading
            at the top of a refusal. */
@@ -1550,7 +1671,9 @@ async function main() {
       const history = []
       for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
         try {
-          entry = await ask(attempt === 1 ? text : text + retryPrompt(entry, problems))
+          entry = await ask(
+            attempt === 1 ? text : text + retryPrompt(entry, problems.map((p) => p.text)),
+          )
         } catch (err) {
           log(`  ! model failed: ${err.message}`)
           history.push({ attempt, error: err.message })
@@ -1558,16 +1681,27 @@ async function main() {
           break
         }
         problems = judge(entry)
-        history.push({ attempt, problems })
+        history.push({ attempt, problems: problems.map((p) => p.text) })
         if (!problems.length) break
-        log(`  · attempt ${attempt} sent back: ${problems.join('; ')}`)
+        /* The last attempt is judged differently. Everything gets sent back
+           while there is a round left to fix it in, because the model usually
+           does; but when the rounds run out, only a note that is wrong is
+           worth throwing away. */
+        if (attempt === ATTEMPTS && !problems.some((p) => p.hard)) break
+        log(`  · attempt ${attempt} sent back: ${problems.map((p) => p.text).join('; ')}`)
       }
       if (!entry) continue
-      if (history.length > 1 && !problems.length) {
+
+      const blocking = problems.filter((p) => p.hard)
+      const nits = problems.filter((p) => !p.hard)
+      if (history.length > 1 && !blocking.length) {
         log(`    accepted on attempt ${history.length}`)
       }
+      /* Said out loud, because it is the difference between a note somebody
+         should look twice at and one they can skim. */
+      for (const n of nits) log(`    left as it is: ${n.text}`)
 
-      const bad = problems.length ? problems.join('; ') : null
+      const bad = blocking.length ? blocking.map((p) => p.text).join('; ') : null
       if (bad) {
         log(`  ! rejected: ${bad}`)
         /* Kept, because a refusal nobody can read is a refusal nobody can
@@ -1579,7 +1713,13 @@ async function main() {
           writeFileSync(
             join(dir, `${release.version}.json`),
             `${JSON.stringify(
-              { version: release.version, reason: bad, attempts: history, entry },
+              /* The range as well as the draft. Checking a claim against the
+                 commits it came from is the whole review, and a refusal saved
+                 without them cannot be re-judged — which is exactly what was
+                 wanted after the run of 2026-08-29, when ten of these had to
+                 have their ranges rebuilt from git before the rules could be
+                 tested against them. */
+              { version: release.version, reason: bad, attempts: history, entry, commits: changes.parts },
               null,
               2,
             )}\n`,

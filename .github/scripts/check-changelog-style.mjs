@@ -353,7 +353,7 @@ for (const note of handWritten(notes)) {
   if (problems.length) {
     failed++
     console.error(`  ✗ ${note.name} (${shape}) was refused by its own house style:`)
-    for (const p of problems) console.error(`      ${p}`)
+    for (const p of problems) console.error(`      ${p.text}`)
   } else {
     console.log(`  ✓ ${note.name} (${shape})`)
   }
@@ -369,7 +369,7 @@ for (const note of handWritten(notes)) {
 console.log('\nDrafts that were wrong, which must still be caught:\n')
 for (const { name, note, range, expect } of BAD_DRAFTS) {
   const problems = styleProblems(note, range)
-  const caught = problems.some((p) => p.includes(expect))
+  const caught = problems.some((p) => p.text.includes(expect))
   if (caught) {
     console.log(`  ✓ ${name}`)
   } else {
@@ -398,6 +398,60 @@ for (const { name, note, range, expect } of BAD_DRAFTS) {
    a checkout. main() gets as far as reading patch-notes-style.md and fails,
    which is fine — the assertion is that it got that far at all. A script whose
    entry point is broken prints nothing. */
+/* Which problems are worth throwing a release away for.
+   Before this split every rule was fatal, and the first real run posted one
+   note out of eighteen: five of the ten refusals were a weak sentence opener
+   or a section count, on notes that were otherwise correct. A note nobody
+   publishes helps nobody, and everything here goes to somebody who reads it
+   before it is published.
+
+   So the fixtures are pinned in both directions. A fabricated security section
+   and a function name in the article are wrong and must stay fatal. The rest
+   are worse rather than wrong, and must not be. */
+const MUST_BE_FATAL = new Set([
+  '1.6.41, which invented a security section',
+  '1.6.38, which put a function name in the article',
+])
+
+console.log('\nWhat is still worth throwing a release away for:\n')
+for (const { name, note, range } of BAD_DRAFTS) {
+  const problems = styleProblems(note, range)
+  const fatal = problems.some((p) => p.hard)
+  const wanted = MUST_BE_FATAL.has(name)
+  if (fatal === wanted) {
+    console.log(`  ✓ ${wanted ? 'refused' : 'posts with a note on it'} — ${name}`)
+  } else {
+    failed++
+    console.error(`  ✗ ${name}`)
+    console.error(`      expected it to ${wanted ? 'be refused' : 'post'}, and it ${fatal ? 'was refused' : 'posted'}`)
+    console.error(`      ${problems.map((p) => `${p.hard ? 'hard' : 'soft'}: ${p.text}`).join('; ')}`)
+  }
+}
+
+/* A maintenance note saying there is no security in the release.
+   The rule read the word rather than the claim, and refused 1.6.14 three times
+   for the sentence "There are no new features, no visible changes to how the
+   app behaves, and no security fixes in this release" — the note being careful
+   about exactly the thing the rule exists to catch. */
+console.log('\nA note that says it has no security in it:\n')
+{
+  const note = {
+    headline: 'Gryt 1.6.14 tidies up leftover code and fixes an updater issue',
+    intro: ['This release contains only internal fixes. There are no new features, no visible changes to how the app behaves, and no security fixes in this release.'],
+    sections: [],
+    recap: [{ group: 'Under the hood', items: ['Removed a corrupted uninstaller from 1.5.10'] }],
+    omitted: [],
+  }
+  const range = [{ component: 'client', commits: [{ subject: 'Remove the 1.5.10 uninstaller', body: 'leftover' }] }]
+  const hit = styleProblems(note, range).find((p) => p.text.includes('claims security'))
+  if (hit) {
+    failed++
+    console.error(`  ✗ refused for saying it has none: ${hit.text}`)
+  } else {
+    console.log('  ✓ saying "no security fixes" is not claiming a security fix')
+  }
+}
+
 console.log('\nThe entry point, reached the way the unit reaches it:\n')
 {
   const link = join(mkdtempSync(join(tmpdir(), 'gryt-entry-')), 'changelog-notes.mjs')
@@ -435,7 +489,7 @@ for (const f of ['no-ai-slop.md', 'natural-writing.md']) {
 console.log('\nEvery commit accounted for:\n')
 for (const { name, note, range, expect } of COVERAGE_DRAFTS) {
   const problems = coverage(note, range)
-  const ok = expect === null ? !problems.length : problems.some((p) => p.includes(expect))
+  const ok = expect === null ? !problems.length : problems.some((p) => p.text.includes(expect))
   if (ok) {
     console.log(`  ✓ ${name}`)
   } else {

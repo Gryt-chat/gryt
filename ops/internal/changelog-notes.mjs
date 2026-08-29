@@ -286,9 +286,29 @@ function fetchTags() {
   }
 }
 
+/**
+ * The manifest a tag shipped with, or null for a tag from before there was one.
+ *
+ * Quiet on the way out. The manifest starts at v1.2.12, so every older tag
+ * fails this, and git writes its own complaint to stderr before the catch
+ * here ever sees it:
+ *
+ *   fatal: path '.release/manifest.json' exists on disk, but not in 'v1.1.4'
+ *
+ * Two of those per tag, ahead of the line that says it was handled, which
+ * makes the first screen of every run read like something broke. Nothing did —
+ * those six releases predate the record and can never have notes. `stderr`
+ * ignored rather than captured, since the only thing said about the failure is
+ * the "skipping" line the caller already prints.
+ */
 function manifestAt(tag) {
   try {
-    return JSON.parse(sh('git', ['show', `${tag}:.release/manifest.json`], { cwd: REPO }))
+    return JSON.parse(
+      sh('git', ['show', `${tag}:.release/manifest.json`], {
+        cwd: REPO,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }),
+    )
   } catch {
     return null
   }

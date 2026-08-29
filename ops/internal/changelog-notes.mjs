@@ -735,6 +735,16 @@ function prompt(release, changes, style) {
     '            Accessibility, Under the hood. Skip a group with nothing in',
     '            it. One line per item, past tense, from the reader\'s side.',
     '',
+    '            What the ones that get misused actually mean. "Updates" is',
+    '            Gryt updating itself — the installer, the version check, the',
+    '            restart-to-update toast. It is not where a change goes when',
+    '            nothing else fits: three drafts running put themes, identity',
+    '            and a crash on device switch under it, and a group that means',
+    '            anything means nothing. "Under the hood" is for what a reader',
+    '            cannot see and still deserves an answer about; something they',
+    '            can see is never under the hood however internal it felt to',
+    '            write.',
+    '',
     '            Reach for one of those labels first. A release that genuinely',
     '            does not fit any of them may have its own - the notes written',
     '            by hand use Identity, Servers, Joining and Interface - but a',
@@ -762,6 +772,12 @@ function prompt(release, changes, style) {
     'A commit that says four things went wrong owes the reader four things, not',
     'the first one. Do not write "it had several issues" and then name one -',
     'either name them or leave the count out.',
+    '',
+    'A commit in "omitted" is a commit the note does not mention. Not in a',
+    'section, not in the recap, not in the intro. Putting one in the list and',
+    'then writing about it anyway is the worst of both: the reader gets the',
+    'housekeeping you had already decided to spare them, and the list says you',
+    'spared them. Decide once.',
     '',
     'Some commits have nothing in them for a reader, and those are what',
     '"omitted" is for. A version number put back, a directory added to',
@@ -1574,6 +1590,29 @@ export function coverage(entry, parts) {
   for (const o of entry.omitted ?? []) {
     const n = Number(o.commit)
     if (!all.some((c) => c.n === n)) problems.push(hard(`omitted names commit ${n}, which is not in this release`))
+  }
+
+  /* A commit named in `omitted` should not then be in the note.
+
+     1.3.1 declared six commits as not worth a reader's time and wrote three of
+     them into the recap anyway — "Local runtime data is now ignored by git",
+     "PRs now close Vikunja tasks automatically", "CI failures now report to
+     Discord" — plus an intro paragraph narrating the list. That is the escape
+     hatch being used and then contradicted: the reader gets exactly the
+     housekeeping the model had already decided they should not have to read.
+
+     The same vocabulary test coverage uses, inverted. Two distinctive words
+     rather than one, because a single word in common is how any two sentences
+     about the same app overlap. Soft for the same reason coverage is: it is a
+     judgement about wording, and somebody reads the note before it ships. */
+  for (const o of entry.omitted ?? []) {
+    const match = own.find((entry_) => entry_.c.n === Number(o.commit))
+    if (match === undefined || match.words.length < 3) continue
+    if (match.words.filter((w) => note.has(w)).length >= 2) {
+      problems.push(
+        soft(`commit ${match.c.n} is in omitted and in the note anyway: "${match.c.subject}"`),
+      )
+    }
   }
 
   /* Everything left out is the model deciding the release was not worth

@@ -165,6 +165,31 @@ for (const [wrong, right] of [
   );
 }
 
+/* An American spelling in Under the hood is still an American spelling.
+
+   `readerProse` drops that group so identifiers can live in it, and the check
+   reused it at first. The 1.6.18 draft got through with "consistent behavior"
+   as an Under the hood recap line (GRYT-755). */
+assert.ok(
+  said(
+    styleProblems(
+      {
+        headline: "Popups now appear above dialogs",
+        intro: ["Two fixes to the interface."],
+        sections: [{ heading: "Dropdowns inside modals are visible again", body: ["They were behind the dialog."] }],
+        recap: [
+          { group: "Interface", items: ["Dropdowns inside modals are visible again"] },
+          { group: "Under the hood", items: ["Moved camera cleanup into a single function to ensure consistent behavior"] },
+        ],
+        omitted: [],
+      },
+      withBody,
+    ),
+    /American spelling/,
+  ),
+  "Under the hood is read by the same reader as everything else",
+);
+
 assert.ok(
   !said(
     styleProblems(

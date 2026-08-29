@@ -1524,8 +1524,19 @@ export function styleProblems(entry, parts) {
     }
   }
 
-  /* British English, everywhere a reader looks. */
-  for (const line of readerProse(entry)) {
+  /* British English, everywhere — including Under the hood.
+
+     `readerProse` drops that recap group because identifiers are allowed in it,
+     and this check reused it at first. A spelling is not an identifier: a reader
+     reads Under the hood, and "consistent behavior" in it is as wrong as it
+     would be anywhere else. A draft got through with exactly that (GRYT-755). */
+  const everyLine = [
+    entry.headline,
+    ...entry.intro,
+    ...entry.sections.flatMap((s) => [s.heading, ...s.body]),
+    ...entry.recap.flatMap((g) => [g.group, ...g.items]),
+  ]
+  for (const line of everyLine) {
     const wrong = AMERICAN.find(([shape]) => shape.test(line))
     if (wrong) {
       problems.push(hard(`American spelling, "${line.match(wrong[0])[0]}" — Gryt writes "${wrong[1]}"`))

@@ -1041,6 +1041,7 @@ jobs:
           password: ${{ github.token }}
 
       - name: Build and push Docker image
+        id: docker
         if: runner.os == 'Linux'
         working-directory: packages/client
         shell: bash
@@ -1081,6 +1082,12 @@ jobs:
           # release and not just the tag — this job failing skips Publish
           # release, and the release then sits as a draft nobody can install.
           # Layer cache makes a second attempt cheap.
+          # The digest is written out so the image can be attested by it
+          # (GRYT-760). GRYT-723 attested the installers on the release and left
+          # this, which is the version of the client anybody self-hosting the
+          # web build actually runs.
+          METADATA="${RUNNER_TEMP}/buildx-metadata.json"
+
           pushed=""
           for attempt in 1 2 3 4 5; do
             if docker buildx build \
@@ -1088,6 +1095,7 @@ jobs:
               --cache-from type=registry,ref=${IMAGE}:buildcache \
               --cache-to type=registry,ref=${IMAGE}:buildcache,mode=max \
               "${ARGS[@]}" \
+              --metadata-file "$METADATA" \
               --push \
               .
             then
@@ -1103,6 +1111,26 @@ jobs:
             echo "Could not build and push the image after 5 attempts." >&2
             exit 1
           fi
+
+          DIGEST="$(jq -r '."containerimage.digest" // empty' "$METADATA")"
+          if [[ -z "$DIGEST" ]]; then
+            echo "::error::buildx wrote no containerimage.digest — nothing to attest."
+            exit 1
+          fi
+
+          echo "Image digest: $DIGEST"
+          echo "image_digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Attest the client image
+        if: runner.os == 'Linux'
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.DOCKER_IMAGE }}
+          subject-digest: ${{ steps.docker.outputs.image_digest }}
+          # Stored alongside the image in GHCR as well as in the log, so
+          # `gh attestation verify oci://...` works without knowing which
+          # repository built it.
+          push-to-registry: true
 
       - name: Package and publish Electron app
         if: runner.os != 'macOS'
@@ -1416,6 +1444,13 @@ jobs:
             "" \
             '```' \
             "gh attestation verify <file> --repo $OWNER/$REPO" \
+            '```' \
+            "" \
+            "So is the web client image, which is what you get if you host Gryt" \
+            "yourself rather than installing the app:" \
+            "" \
+            '```' \
+            "gh attestation verify oci://$DOCKER_IMAGE:$VERSION --repo $OWNER/$REPO" \
             '```' \
             >> notes.md
 

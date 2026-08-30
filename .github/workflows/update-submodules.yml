@@ -40,6 +40,7 @@ on:
           - mobile
           - bot
           - reports
+          - crypto
 
 permissions:
   contents: write
@@ -93,7 +94,28 @@ jobs:
         run: |
           set -euo pipefail
 
-          SUBMODULES="packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth packages/ui packages/cli packages/voice packages/mobile packages/bot packages/reports"
+          # Read out of `.gitmodules` rather than written down here, and shared
+          # with the commit step through `$GITHUB_ENV` rather than written down
+          # there as well.
+          #
+          # There used to be two hand-kept copies of this list, and they drifted
+          # twice by the same route: a submodule added to one and not the other.
+          # `mobile` first, then `reports`. The symptom is nasty — the list in
+          # the commit step is only used when a push is rejected and the commit
+          # is rebuilt, so the missing submodule's bump is silently dropped on
+          # exactly the runs nobody is watching, and everything looks fine
+          # otherwise. `.gitmodules` is the file that already decides what a
+          # submodule is.
+          SUBMODULES="$(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' \
+            | awk '{ print $2 }' | sort | tr '\n' ' ')"
+
+          if [[ -z "${SUBMODULES// /}" ]]; then
+            echo "::error::No submodules found in .gitmodules."
+            exit 1
+          fi
+
+          echo "Submodules: $SUBMODULES"
+          echo "SUBMODULES=$SUBMODULES" >> "$GITHUB_ENV"
 
           # Clone straight from the URL rather than `git submodule update`,
           # which insists on the recorded gitlink and so fails on a broken one.
@@ -210,6 +232,10 @@ jobs:
             update_submodule "packages/reports" "$DEFAULT_SUBMODULE_BRANCH"
           fi
 
+          if [[ "$SELECTED" == "all" || "$SELECTED" == "crypto" ]]; then
+            update_submodule "packages/crypto" "$DEFAULT_SUBMODULE_BRANCH"
+          fi
+
       - name: Commit changes
         shell: bash
         run: |
@@ -240,10 +266,11 @@ jobs:
             git fetch origin "$TARGET_BRANCH"
             git reset --hard "origin/$TARGET_BRANCH"
 
-            # Every submodule, not most of them. mobile was missing, so a
-            # rejected push rebuilt the commit without it and silently dropped
-            # whatever bump had just been made.
-            for path in packages/client packages/server packages/sfu packages/image-worker packages/docs packages/site packages/auth packages/ui packages/cli packages/voice packages/mobile packages/bot; do
+            # `$SUBMODULES` comes from `.gitmodules` by way of `$GITHUB_ENV`,
+            # set in "Initialize top-level submodules". It was a second
+            # hand-kept copy of that list until GRYT-732, and it had already
+            # drifted twice — see the note where it is built.
+            for path in $SUBMODULES; do
               [[ -d "$path" ]] || continue
               git -C "$path" fetch origin main
               git -C "$path" checkout -B main origin/main

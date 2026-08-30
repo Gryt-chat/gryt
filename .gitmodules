@@ -50,3 +50,7 @@
 	path = packages/reports
 	url = https://github.com/Gryt-chat/reports.git
 	branch = main
+[submodule "packages/crypto"]
+	path = packages/crypto
+	url = https://github.com/Gryt-chat/crypto.git
+	branch = main

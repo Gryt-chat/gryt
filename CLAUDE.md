@@ -11,6 +11,7 @@ these paths, but they never merge without Sivert reading the whole diff:
 ```
 packages/sfu/**                                    # WebRTC media plane, RTP, ICE, SVC
 packages/auth/**                                   # identity certificate authority
+packages/crypto/**                                 # message encryption, published to npm
 packages/image-worker/**                           # decodes untrusted uploads
 packages/reports/**                                # public POST endpoint, stranger-written input
 packages/server/src/auth/**                        # challenge-response, JWT validation
@@ -37,6 +38,12 @@ Rules for these paths:
 - **Don't bundle *unrelated* edits.** A change here shouldn't carry along a docs typo or a
   CI tweak. The other half of the same fix is not unrelated — that belongs with it, or in
   its own PR opened at the same time and cross-linked. Don't drop it.
+
+`packages/crypto` is published to npm, which none of the others are. A change there
+becomes what the desktop app and the phone both do the next time either pins a new version,
+and a published version cannot be taken back the way a commit can. It is also the only
+place where getting the bytes wrong makes messages already sent unreadable rather than
+making the next one fail.
 
 Three of these look like exceptions but aren't:
 

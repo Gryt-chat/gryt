@@ -18,7 +18,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { borrowedHeading, styleProblems } from "./changelog-notes.mjs";
+import { askWithRetry, borrowedHeading, neverReachedTheModel, styleProblems } from "./changelog-notes.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const style = readFileSync(join(REPO, "patch-notes-style.md"), "utf8");
@@ -206,5 +206,65 @@ assert.ok(
   ),
   "British spelling must pass",
 );
+
+/* ── One retry when the request never reached the model (GRYT-763) ────── */
+
+// Undici throws a bare TypeError for a request that got no reply, including
+// the five-minute headersTimeout that skipped 1.6.43 on 2026-08-30. An error
+// the model sent back is a different thing and must not be retried: asking the
+// same question again unchanged will get the same answer.
+assert.equal(neverReachedTheModel(new TypeError("fetch failed")), true, "a transport failure is one");
+assert.equal(neverReachedTheModel(new Error("ollama 500 boom")), false, "a status from the model is not");
+assert.equal(
+  neverReachedTheModel(Object.assign(new Error("aborted"), { name: "AbortError" })),
+  false,
+  "our own OLLAMA_TIMEOUT_MS abort is not — the model had its time and used it",
+);
+
+// Nothing here should sleep for the real minute.
+process.env.OLLAMA_RETRY_DELAY_MS = "0";
+
+const answering = () => ({
+  ok: true,
+  body: (async function* () {
+    yield Buffer.from(`${JSON.stringify({ message: { content: '{"ok":true}' } })}\n`);
+  })(),
+});
+
+const realFetch = globalThis.fetch;
+const countingFetch = (behaviour) => {
+  const state = { calls: 0 };
+  globalThis.fetch = async () => {
+    state.calls += 1;
+    return behaviour(state.calls);
+  };
+  return state;
+};
+
+try {
+  // Fails once, then answers. Two calls, and the answer comes back.
+  let state = countingFetch((n) => {
+    if (n === 1) throw new TypeError("fetch failed");
+    return answering();
+  });
+  assert.deepEqual(await askWithRetry("hello"), { ok: true }, "the retry's answer is returned");
+  assert.equal(state.calls, 2, "one retry, so two calls");
+
+  // Fails twice. One retry, not a spiral: the next timer run is a better place
+  // to discover the model is gone.
+  state = countingFetch(() => {
+    throw new TypeError("fetch failed");
+  });
+  await assert.rejects(askWithRetry("hello"), TypeError, "the transport error is rethrown");
+  assert.equal(state.calls, 2, "it gives up after one retry");
+
+  // A model-side error is passed straight out, untouched.
+  state = countingFetch(() => ({ ok: false, status: 500, text: async () => "boom" }));
+  await assert.rejects(askWithRetry("hello"), /ollama 500/, "a model error is rethrown as it was");
+  assert.equal(state.calls, 1, "and is not retried");
+} finally {
+  globalThis.fetch = realFetch;
+  delete process.env.OLLAMA_RETRY_DELAY_MS;
+}
 
 console.log("changelog-notes checks: ok");

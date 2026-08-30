@@ -54,7 +54,10 @@
 //                          reads what is written there.
 //   OLLAMA_URL             Default http://127.0.0.1:11434
 //   OLLAMA_MODEL           Default llama3.1:8b
-//   OLLAMA_TIMEOUT_MS      Default 180000
+//   OLLAMA_TIMEOUT_MS      Default 3600000
+//   OLLAMA_RETRY_DELAY_MS  How long to wait before the one retry of a
+//                          request that never reached the model. Default
+//                          60000.
 //   OLLAMA_NUM_CTX         The context window to ask Ollama for. Default
 //                          32768. Not optional in practice: Ollama's own
 //                          default is 4096 and this prompt is past that, so
@@ -1036,6 +1039,47 @@ async function ask(text) {
   }
 }
 
+/* Read when it is used rather than at load, unlike the other settings here.
+   A minute of real sleeping in a test is a test nobody runs, and the file is
+   imported once per process, so a module-level const cannot be turned down
+   afterwards. */
+const retryDelayMs = () => Number(process.env.OLLAMA_RETRY_DELAY_MS ?? 60_000)
+
+/* Whether the request never reached the model at all.
+   Undici throws a bare `TypeError: fetch failed` for this, which is the same
+   shape whether the host is down, the connection dropped, or — the case that
+   actually happens here — no response headers arrived within five minutes.
+   That five minutes is undici's own `headersTimeout`, not OLLAMA_TIMEOUT_MS,
+   and the comment above `ask` is right that streaming avoids it for
+   generation: Ollama sends headers before the first token. It does not send
+   them while the request is queued behind somebody else's, and this box shares
+   its model.
+   An error that came back *from* the model — a non-2xx, or an `error` field in
+   the stream — is not this. Those mean the model answered, and answered badly,
+   and asking again unchanged is not going to help. */
+export function neverReachedTheModel(err) {
+  return err instanceof TypeError && /fetch failed/i.test(err.message ?? '')
+}
+
+/* One retry, because losing the release costs an hour and the retry costs a
+   minute.
+   Before this, a thrown error broke out of the attempt loop and `continue`d to
+   the next release, so a five-minute queue meant that release got no note for
+   the whole cycle. On 2026-08-30 that skipped 1.6.43 outright. Once, not in a
+   loop: if the model is genuinely unreachable, the next timer run is a better
+   place to find that out than a retry spiral inside one. */
+export async function askWithRetry(text) {
+  try {
+    return await ask(text)
+  } catch (err) {
+    if (!neverReachedTheModel(err)) throw err
+    const delay = retryDelayMs()
+    log(`  · ${err.message} — never reached the model, retrying once in ${Math.round(delay / 1000)}s`)
+    await new Promise((resolve) => setTimeout(resolve, delay))
+    return ask(text)
+  }
+}
+
 /* Words that belong to the material shown to the model and to nothing in this
    release.
    The example is there to show the shape, and a model that has just read a
@@ -1963,7 +2007,7 @@ async function main() {
       const history = []
       for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
         try {
-          entry = await ask(
+          entry = await askWithRetry(
             attempt === 1 ? text : text + retryPrompt(entry, problems.map((p) => p.text)),
           )
         } catch (err) {

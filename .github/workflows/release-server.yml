@@ -51,6 +51,13 @@ on:
 permissions:
   contents: write
   packages: write
+  # Both for `actions/attest-build-provenance`, which signs a statement about
+  # this build into sigstore's public transparency log (GRYT-760, after
+  # GRYT-723 did the same for the client). `id-token` is how the runner proves
+  # to sigstore which workflow it is, and `attestations` is what lets it store
+  # the result against this repository.
+  id-token: write
+  attestations: write
 
 concurrency:
   # Shared with release-client.yml on purpose. Both workflows commit to the same
@@ -445,6 +452,7 @@ jobs:
           password: ${{ github.token }}
 
       - name: Build and push server Docker image
+        id: docker
         if: github.event.inputs.push_docker == 'true'
         working-directory: packages/server
         shell: bash
@@ -480,12 +488,19 @@ jobs:
           # push is usually GitHub's secondary rate limit, and this job failing
           # costs the whole release rather than the one tag that was refused.
           # See v1.5.0-beta.1, where the client image went up half published.
+          # The digest is written out so the image can be attested by it
+          # (GRYT-760). `subject-path` is for files; a registry image is named
+          # by its digest, and this build does not go through
+          # `docker/build-push-action`, which would have emitted one.
+          METADATA="${RUNNER_TEMP}/buildx-metadata.json"
+
           pushed=""
           for attempt in 1 2 3 4 5; do
             if docker buildx build \
               --platform linux/amd64,linux/arm64 \
               --build-arg VERSION="$VERSION" \
               "${ARGS[@]}" \
+              --metadata-file "$METADATA" \
               --push \
               .
             then
@@ -501,6 +516,32 @@ jobs:
             echo "Could not build and push the image after 5 attempts." >&2
             exit 1
           fi
+
+          DIGEST="$(jq -r '."containerimage.digest" // empty' "$METADATA")"
+          if [[ -z "$DIGEST" ]]; then
+            echo "::error::buildx wrote no containerimage.digest — nothing to attest."
+            exit 1
+          fi
+
+          echo "Image digest: $DIGEST"
+          echo "image_digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
+      # Says, in a log run by somebody who is not us, that this image came out
+      # of this workflow at this commit. An operator can check it before pulling
+      # something onto a machine they run:
+      #
+      #   gh attestation verify oci://ghcr.io/gryt-chat/server:1.6.4 \
+      #     --repo Gryt-chat/gryt
+      - name: Attest the server image
+        if: github.event.inputs.push_docker == 'true'
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.SERVER_IMAGE }}
+          subject-digest: ${{ steps.docker.outputs.image_digest }}
+          # Stored alongside the image in GHCR as well as in the log, so
+          # `gh attestation verify oci://...` works without knowing which
+          # repository built it.
+          push-to-registry: true
 
       - name: Build Windows self-hosted server bundle
         if: github.event.inputs.build_windows == 'true'
@@ -637,6 +678,8 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}
           BUILD_WINDOWS: ${{ github.event.inputs.build_windows }}
           BUILD_LINUX: ${{ github.event.inputs.build_linux }}
+          PUSH_DOCKER: ${{ github.event.inputs.push_docker }}
+          SERVER_IMAGE: ${{ env.SERVER_IMAGE }}
         shell: bash
         run: |
           set -euo pipefail
@@ -701,6 +744,48 @@ jobs:
           fi
 
           node .github/scripts/release-notes.mjs "${ARGS[@]}" > "${RUNNER_TEMP}/release-notes.md"
+
+          # How to check what you just downloaded, or what you are about to pull
+          # onto a machine you run (GRYT-760).
+          #
+          # `printf` with one argument per line rather than a heredoc.
+          # Everything here is indented to sit inside a YAML block scalar, and a
+          # heredoc terminator has to start at column zero — an indented one is
+          # not a terminator, the block runs to end of file, and the word itself
+          # lands in the release notes. That is not hypothetical; it happened
+          # while writing the client's half of this.
+          {
+            printf '%s\n' \
+              "" \
+              "---" \
+              "" \
+              "### Checking this release" \
+              "" \
+              "\`SHA256SUMS.txt\` has a hash for every file here." \
+              "" \
+              '```' \
+              "sha256sum --check --ignore-missing SHA256SUMS.txt" \
+              '```' \
+              "" \
+              "Every file is attested as well, so you can check it came out of this" \
+              "repository rather than only that it matches a hash we published" \
+              "ourselves." \
+              "" \
+              '```' \
+              "gh attestation verify <file> --repo ${RELEASE_OWNER}/gryt" \
+              '```'
+
+            if [[ "$PUSH_DOCKER" == "true" ]]; then
+              printf '%s\n' \
+                "" \
+                "So is the image:" \
+                "" \
+                '```' \
+                "gh attestation verify oci://${SERVER_IMAGE}:${VERSION} --repo ${RELEASE_OWNER}/gryt" \
+                '```'
+            fi
+          } >> "${RUNNER_TEMP}/release-notes.md"
+
           cat "${RUNNER_TEMP}/release-notes.md"
 
       - name: Commit monorepo release state
@@ -830,6 +915,32 @@ jobs:
             ASSETS+=("packages/server/dist-selfhosted/gryt-server-linux-x64-v${VERSION}.zip")
           fi
 
+          # Something to check a download against (GRYT-760, after GRYT-723 did
+          # the same for the client). A self-hosted bundle is a file somebody
+          # downloads and runs on a machine they own, so it gets what the
+          # desktop app gets.
+          #
+          # The assets are staged into one directory first, because the sums
+          # have to name the files the way somebody who downloaded them has
+          # them — bare, in whatever folder they landed in. Written with the
+          # paths they have here, `sha256sum --check` would look for
+          # `packages/server/dist-selfhosted/` and find nothing.
+          STAGE="${RUNNER_TEMP}/assets"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          cp -- "${ASSETS[@]}" "$STAGE/"
+
+          # `--` and a glob rather than `ls`, so a filename with a space in it
+          # stays one argument. Globs come out sorted, which keeps the file
+          # stable between runs.
+          ( cd "$STAGE" && sha256sum -- * > "${RUNNER_TEMP}/SHA256SUMS.txt" )
+          cp "${RUNNER_TEMP}/SHA256SUMS.txt" "$STAGE/"
+
+          echo "Sums:"
+          sed 's/^/  /' "${RUNNER_TEMP}/SHA256SUMS.txt"
+
+          ASSETS+=("${RUNNER_TEMP}/SHA256SUMS.txt")
+
           FLAGS=()
           if [[ "$CHANNEL" == "beta" ]]; then
             FLAGS+=(--prerelease)
@@ -843,6 +954,15 @@ jobs:
             --notes-file "${RUNNER_TEMP}/release-notes.md" \
             "${FLAGS[@]}" \
             "${ASSETS[@]}"
+
+      # Attesting the sums file covers `manifest.json` transitively: it is a
+      # line in it, so a statement about the sums is a statement about it.
+      - name: Attest the self-hosted bundles
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            packages/server/dist-selfhosted/*.zip
+            ${{ runner.temp }}/SHA256SUMS.txt
 
       - name: Notify Discord
         shell: bash

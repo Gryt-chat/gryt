@@ -33,6 +33,12 @@ on:
 permissions:
   contents: write
   packages: write
+  # Both for `actions/attest-build-provenance`, which signs a statement about
+  # this build into sigstore's public transparency log (GRYT-723). `id-token`
+  # is how the runner proves to sigstore which workflow it is, and
+  # `attestations` is what lets it store the result against this repository.
+  id-token: write
+  attestations: write
 
 concurrency:
   # Shared with release-server.yml on purpose. Both workflows commit to the same
@@ -1298,6 +1304,122 @@ jobs:
           fi
 
           echo "All expected assets present."
+
+      # Something to check a download against, and something that is not just
+      # Sivert saying so (GRYT-723).
+      #
+      # The desktop app is signed and notarised, which stops a chat server
+      # reaching it, and until now that was the whole of the story: no hashes
+      # were published anywhere, so there was nothing to compare a download to
+      # even for somebody who wanted to.
+      #
+      # Here rather than in each build leg, because the sums have to cover the
+      # assets as they are on the release — after `electron-builder` has
+      # uploaded them and after the macOS leg has clobbered its own. A hash
+      # taken before the upload describes a file nobody downloads.
+      - name: Download the assets and write SHA256SUMS
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          TAG="v$VERSION"
+          mkdir -p dist
+
+          gh release download "$TAG" --repo "$OWNER/$REPO" --dir dist --clobber
+
+          # Removed rather than skipped. A re-run of this job would otherwise
+          # hash the previous run's sums into the new file, and the line would
+          # be wrong the moment the file is rewritten.
+          rm -f dist/SHA256SUMS.txt
+
+          cd dist
+          # A glob rather than `ls`, so a filename with a space in it stays one
+          # argument. Globs come out sorted, which keeps the file stable between
+          # runs and makes a diff between two releases only the lines that moved.
+          sha256sum -- * > ../SHA256SUMS.txt
+          mv ../SHA256SUMS.txt .
+
+          echo "Sums:"
+          sed 's/^/  /' SHA256SUMS.txt
+
+      # An attestation is the part that is not a promise. It says, in a public
+      # append-only log run by somebody who is not us, that these exact bytes
+      # came out of this workflow at this commit. A self-published hash next to
+      # a self-published binary proves only that the two were made by the same
+      # person; this is what a reader can check without trusting that person.
+      #
+      # `@gryt/voice` has done this on npm since GRYT-344, so the mechanism is
+      # already proven in this org. It was simply never on the client, which is
+      # the artifact anybody actually runs.
+      - name: Attest the release artifacts
+        uses: actions/attest-build-provenance@v4
+        with:
+          # Every installer, plus the sums file. Attesting the sums covers the
+          # blockmaps and the three channel `.yml` files transitively — they are
+          # listed in it, so a statement about it is a statement about them.
+          subject-path: |
+            dist/*.exe
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.snap
+            dist/*.dmg
+            dist/*.zip
+            dist/SHA256SUMS.txt
+
+      - name: Upload SHA256SUMS
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          gh release upload "v$VERSION" dist/SHA256SUMS.txt \
+            --repo "$OWNER/$REPO" --clobber
+
+      - name: Say how to check a download
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          TAG="v$VERSION"
+
+          # Appended to whatever the notes already say rather than replacing
+          # them. They are generated from the manifest earlier in the release
+          # and this runs after that.
+          gh release view "$TAG" --repo "$OWNER/$REPO" --json body --jq .body > notes.md
+
+          # `printf` rather than a heredoc. Everything in this file is indented
+          # to sit inside a YAML block scalar, and a heredoc terminator has to
+          # start at column zero — `NOTES` at this indentation is not a
+          # terminator, so the whole block runs to end of file and the word
+          # itself lands in the release notes. One argument per line has no
+          # such rule.
+          printf '%s\n' \
+            "" \
+            "---" \
+            "" \
+            "### Checking this download" \
+            "" \
+            "\`SHA256SUMS.txt\` on this release has a hash for every file here." \
+            "" \
+            '```' \
+            "sha256sum --check --ignore-missing SHA256SUMS.txt" \
+            '```' \
+            "" \
+            "Every artifact is attested too, so you can check it came out of this" \
+            "repository rather than only that it matches a hash we published" \
+            "ourselves." \
+            "" \
+            '```' \
+            "gh attestation verify <file> --repo $OWNER/$REPO" \
+            '```' \
+            >> notes.md
+
+          gh release edit "$TAG" --repo "$OWNER/$REPO" --notes-file notes.md
 
       - name: Publish the release
         shell: bash

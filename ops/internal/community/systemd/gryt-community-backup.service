@@ -1,0 +1,9 @@
+[Unit]
+Description=Back up the community.gryt.chat database and uploads
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/opt/gryt-community/.env
+ExecStart=/opt/gryt-community/backup.sh

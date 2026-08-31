@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly backup of community.gryt.chat
+
+[Timer]
+OnCalendar=*-*-* 04:17:00
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

@@ -4,26 +4,34 @@
 # standing up your own server, use `gryt` (get.gryt.chat) or the files under
 # ops/deploy — they are written for that and this one is not.
 #
-# It runs on the public VPS rather than beside prod and beta, for two reasons.
+# It runs on `gryt-community`, a VM under Astro that is deliberately cut off
+# from everything else here. It reaches the public internet and nothing on any
+# private network: not the LAN, not another VM, not Astro itself, not the other
+# WireGuard peers. A public server invites strangers, and this is the one
+# machine here somebody might get a shell on.
 #
-# ICE. The SFU has to advertise an address the outside world can reach. On the
-# VPS that address is the machine's own, so ICE_ADVERTISE_IP is a fact about the
-# box instead of a value that has to stay in step with a tunnel. GRYT-768 was
-# the other arrangement drifting out of step and nobody noticing for weeks:
-# calls kept connecting, on a candidate we had not chosen.
+# Isolation is enforced in three places, none of them this file:
 #
-# Blast radius. A public server invites strangers. The Docker daemon at home
-# runs prod, beta, the auth stack and several unrelated projects with no off-box
-# backups; this one should not be able to fill that disk or share that database.
+#   Astro   /boot/config/gryt-community-isolation.sh — FORWARD and INPUT rules
+#           scoped to 192.168.122.0/24. This is the one that counts.
+#   VPS     wg0 -> wg0 DROP, plus INPUT rules so the peer cannot reach the hub
+#           itself. Peer isolation is a FORWARD rule and misses that on its own.
+#   Guest   /etc/nftables.conf — defence in depth. A rooted guest can flush it.
+#
+# All of the VM's egress goes through the VPS (AllowedIPs 0.0.0.0/0), which is
+# what makes ICE_ADVERTISE_IP a single true value and what lets media replies
+# leave by the address they arrived on.
 #
 # Differences from ops/deploy/compose/prod.yml, all deliberate:
 #
 #   bridge, not host networking   prod uses host networking for mDNS on the LAN.
-#                                 A VPS has no LAN to be discovered on, and host
-#                                 networking would put the metrics port and
-#                                 MinIO back on the public interface.
-#   nothing published outward     except the media port. The HTTP surfaces are
-#                                 on loopback and reached through cloudflared.
+#                                 This VM has no LAN it should be seen on, and
+#                                 host networking would put the metrics port and
+#                                 MinIO on an interface.
+#   nothing published outward     except the media port. cloudflared runs on the
+#                                 compose network and reaches the services by
+#                                 name; the loopback publishes are for debugging
+#                                 from inside the VM.
 #   no minioadmin                 MINIO_ROOT_PASSWORD has no default here. The
 #                                 stack refuses to start without one.
 #   no web client                 app.gryt.chat serves it.
@@ -106,14 +114,16 @@ services:
     logging: *logging
     ports:
       - "127.0.0.1:${SFU_WS_PORT:-5025}:5005"
-      - "${ICE_UDP_MUX_PORT:-3478}:${ICE_UDP_MUX_PORT:-3478}/udp"
+      - "${ICE_UDP_MUX_PORT:-10000}:${ICE_UDP_MUX_PORT:-10000}/udp"
     environment:
       PORT: "5005"
-      ICE_UDP_MUX_PORT: ${ICE_UDP_MUX_PORT:-3478}
-      # The VPS holds this address on its own interface, so it is a fact rather
-      # than a guess, and DISABLE_STUN defaults to true once it is set. Docker
-      # preserves the port on a 1:1 mapping, so the candidate names a port
-      # something is really listening on.
+      ICE_UDP_MUX_PORT: ${ICE_UDP_MUX_PORT:-10000}
+      # The VPS's address, not this machine's. Media arrives DNATd from there
+      # over the tunnel, and every packet this VM sends leaves the same way, so
+      # this is the only address a client can reach it on. DISABLE_STUN defaults
+      # to true once it is set, which is what stops GRYT-768 happening again:
+      # STUN would answer the same question and give a different answer whenever
+      # the path changed underneath.
       ICE_ADVERTISE_IP: ${ICE_ADVERTISE_IP:?Set ICE_ADVERTISE_IP to this machine's public IP}
       STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302}
       MAX_PEERS: ${MAX_PEERS:-100}
@@ -248,6 +258,39 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
+
+  # ── Cloudflare tunnel ─────────────────────────────────────────────────────
+  # On the compose network rather than the host, so the tunnel's ingress points
+  # at http://server:5000 and http://sfu:5005 and no HTTP port has to be
+  # published anywhere. The loopback publishes above are for debugging from
+  # inside the VM.
+  #
+  # Started only once a token exists: `docker compose --profile tunnel up -d`.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: gryt-community-cloudflared
+    logging: *logging
+    profiles: ["tunnel"]
+    # The token goes in the environment rather than on the command line: an
+    # argument is visible in `ps` and in `docker inspect` output to anyone on
+    # the box, and it is the whole credential for the tunnel.
+    #
+    # No :? guard, because a required variable is checked even for a service
+    # behind a profile, and that would stop the whole stack starting before
+    # there is a tunnel to start.
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - gryt-community
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
 networks:
   gryt-community:

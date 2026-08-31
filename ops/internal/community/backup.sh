@@ -11,8 +11,8 @@
 # many minutes — and it restores cleanly, which is the part that hurts.
 #
 # This writes to a directory on the same box. That is a backup of the volume,
-# not a backup of the machine: if the VPS goes, so does this. Copying
-# BACKUP_DIR somewhere else is a separate job and it is the one that matters.
+# not a backup of the machine: if the VM's disk goes, so does this. Copying
+# BACKUP_DIR off the VM is a separate job and nothing does it yet.
 set -euo pipefail
 
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/gryt-community}"

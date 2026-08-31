@@ -10,7 +10,8 @@ This folder contains **internal** infrastructure used to run:
 - `community.gryt.chat` (the one Gryt server we run — see [`community/`](community/))
 
 The first five run together from `docker-compose.yml` here, on the Docker host at home.
-`community.gryt.chat` is its own stack on the public VPS, for reasons written up in
+`community.gryt.chat` is its own stack on an isolated VM under Astro, with its own
+Cloudflare tunnel rather than the one on this host. Written up in
 [`community/README.md`](community/README.md).
 
 It’s **not** intended for self-hosters. Self-hosting docs live under `ops/deploy/*` (Docker Compose) and `ops/helm/*` (Kubernetes).
@@ -74,8 +75,6 @@ Use Fider’s **Test** button before enabling the provider.
 - `ui.gryt.chat` → `http://127.0.0.1:<INTERNAL_UI_HTTP_PORT>`
 - `feedback.gryt.chat` → `http://127.0.0.1:<FIDER_HTTP_PORT>`
 - `reports.gryt.chat` → `http://127.0.0.1:<INTERNAL_REPORTS_HTTP_PORT>`
-- `community.gryt.chat` → `http://127.0.0.1:5020` (on the VPS, not this host)
-- `community-sfu.gryt.chat` → `http://127.0.0.1:5025` (on the VPS, not this host)
 
 All five should be **proxied** and routed through the same Cloudflare Tunnel.
 

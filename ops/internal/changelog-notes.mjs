@@ -190,6 +190,37 @@ const RUNUSER = (() => {
   return null
 })()
 
+/**
+ * The commit this drafter is running from, short.
+ *
+ * `ExecStartPre` pulls the checkout before every run and is allowed to fail —
+ * a network blip should not cost a release its note. The cost is that a
+ * checkout which quietly stops updating writes notes judged by rules that are
+ * no longer the rules, and nothing about the note says so. Three times in
+ * three days: a read-only filesystem, DNS, and a local edit the pull was right
+ * to refuse, which left it eleven commits behind.
+ *
+ * Worked out once per run and put on every draft, so "was this written by the
+ * rules that are on main?" is answerable from the review page rather than from
+ * the journal.
+ *
+ * Undefined rather than a guess when git cannot answer. A tarball with no
+ * `.git` is a legitimate way to run this, and refusing to draft over a missing
+ * label would trade a note for nothing.
+ */
+export function drafterRevision() {
+  try {
+    return sh('git', ['-C', REPO, 'rev-parse', '--short', 'HEAD'], { stdio: 'pipe' }) || undefined
+  } catch {
+    return undefined
+  }
+}
+
+/* Once per process. The checkout cannot move under a run: `ExecStartPre` has
+   already finished by the time this file is read, and a run that took six
+   hours still wrote every one of its notes from this commit. */
+const REVISION = drafterRevision()
+
 function sh(cmd, args, opts = {}) {
   const [run, argv] = owner && RUNUSER
     ? [RUNUSER, ['-u', owner.name, '--', 'env', `HOME=${owner.home}`, cmd, ...args]]
@@ -2182,6 +2213,7 @@ async function main() {
           since: prev.version,
           commits: count,
           model: OLLAMA_MODEL,
+          revision: REVISION,
           /* Which parts of Gryt moved, in the order the manifest lists them.
              Straight off the diff, so there is nothing here for a model to get
              wrong, and the page can answer "is this just the app?" without the

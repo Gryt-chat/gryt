@@ -18,7 +18,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { askWithRetry, borrowedHeading, neverReachedTheModel, styleProblems } from "./changelog-notes.mjs";
+import { askWithRetry, borrowedHeading, neverReachedTheModel, refusalBlock, styleProblems } from "./changelog-notes.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const style = readFileSync(join(REPO, "patch-notes-style.md"), "utf8");
@@ -337,5 +337,23 @@ assert.ok(
   ),
   "a caveat repeated on purpose is not a copied paragraph",
 );
+
+/* ── The reason a person refused the last draft (GRYT-781) ────────────── */
+
+// Rejecting a draft has always meant "write it again". Until this it did not
+// mean "and here is what was wrong": the reason sat in reports and reached
+// nobody, so 1.6.41 was refused for its recap group and came back with the
+// same group, and "The fixes are subtle but important" was refused on one
+// release and reappeared verbatim on the next.
+const refused = refusalBlock("The recap files a proxy fix under Updates.");
+assert.match(refused, /REFUSED/, "the block says the last note was refused");
+assert.match(refused, /The recap files a proxy fix under Updates\./, "and carries the reason verbatim");
+
+// A version nobody has refused adds nothing at all. The block is concatenated
+// onto every prompt, so an empty one has to be genuinely empty rather than a
+// heading with nothing under it.
+assert.equal(refusalBlock(undefined), "", "no refusal is no block");
+assert.equal(refusalBlock(null), "", "null is no block");
+assert.equal(refusalBlock("   "), "", "a refusal with nothing typed in it is no block");
 
 console.log("changelog-notes checks: ok");

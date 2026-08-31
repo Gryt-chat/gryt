@@ -1,0 +1,261 @@
+# The official Gryt server: community.gryt.chat
+#
+# This is Gryt-operated infrastructure, not a self-hosting example. If you are
+# standing up your own server, use `gryt` (get.gryt.chat) or the files under
+# ops/deploy — they are written for that and this one is not.
+#
+# It runs on the public VPS rather than beside prod and beta, for two reasons.
+#
+# ICE. The SFU has to advertise an address the outside world can reach. On the
+# VPS that address is the machine's own, so ICE_ADVERTISE_IP is a fact about the
+# box instead of a value that has to stay in step with a tunnel. GRYT-768 was
+# the other arrangement drifting out of step and nobody noticing for weeks:
+# calls kept connecting, on a candidate we had not chosen.
+#
+# Blast radius. A public server invites strangers. The Docker daemon at home
+# runs prod, beta, the auth stack and several unrelated projects with no off-box
+# backups; this one should not be able to fill that disk or share that database.
+#
+# Differences from ops/deploy/compose/prod.yml, all deliberate:
+#
+#   bridge, not host networking   prod uses host networking for mDNS on the LAN.
+#                                 A VPS has no LAN to be discovered on, and host
+#                                 networking would put the metrics port and
+#                                 MinIO back on the public interface.
+#   nothing published outward     except the media port. The HTTP surfaces are
+#                                 on loopback and reached through cloudflared.
+#   no minioadmin                 MINIO_ROOT_PASSWORD has no default here. The
+#                                 stack refuses to start without one.
+#   no web client                 app.gryt.chat serves it.
+name: gryt-community
+
+# Log retention, because the privacy statement on gryt.chat has to be able to
+# say a number. The server prints the full rate-limit key, client address
+# included, on every ban (rateLimiter.ts), so container logs hold IP addresses
+# and the Docker default of keeping every line forever is not a policy anybody
+# would write down. 20 MB per service across three files is a few days on a
+# quiet server and a hard ceiling on a loud one.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+services:
+  # ── Object storage ────────────────────────────────────────────────────────
+  # Not published at all. The server and the worker reach it over the compose
+  # network by name, which is the only thing that needs to.
+  minio:
+    image: minio/minio:latest
+    container_name: gryt-community-minio
+    logging: *logging
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+    volumes:
+      - gryt-community-minio-data:/data
+    networks:
+      - gryt-community
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: gryt-community-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+      S3_BUCKET: ${S3_BUCKET:-gryt-community}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb -p "local/$$S3_BUCKET" 2>/dev/null || true
+        echo "Bucket ready: $$S3_BUCKET"
+    networks:
+      - gryt-community
+    restart: "no"
+
+  server-data-init:
+    image: alpine:3
+    container_name: gryt-community-server-data-init
+    command: ["/bin/sh", "-c", "mkdir -p /data && chown -R 1001:1001 /data"]
+    volumes:
+      - gryt-community-server-data:/data
+    networks:
+      - gryt-community
+    restart: "no"
+
+  # ── SFU ───────────────────────────────────────────────────────────────────
+  # The signalling port is on loopback and served as wss:// through the tunnel.
+  # The media port is the one thing here that faces the internet directly: the
+  # tunnel does not carry UDP, and Gryt has no TURN relay to fall back on.
+  sfu:
+    image: ghcr.io/gryt-chat/sfu:${SFU_VERSION:-latest}
+    container_name: gryt-community-sfu
+    logging: *logging
+    ports:
+      - "127.0.0.1:${SFU_WS_PORT:-5025}:5005"
+      - "${ICE_UDP_MUX_PORT:-3478}:${ICE_UDP_MUX_PORT:-3478}/udp"
+    environment:
+      PORT: "5005"
+      ICE_UDP_MUX_PORT: ${ICE_UDP_MUX_PORT:-3478}
+      # The VPS holds this address on its own interface, so it is a fact rather
+      # than a guess, and DISABLE_STUN defaults to true once it is set. Docker
+      # preserves the port on a 1:1 mapping, so the candidate names a port
+      # something is really listening on.
+      ICE_ADVERTISE_IP: ${ICE_ADVERTISE_IP:?Set ICE_ADVERTISE_IP to this machine's public IP}
+      STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302}
+      MAX_PEERS: ${MAX_PEERS:-100}
+      # Signed per-user tokens only. The shared password was never a secret
+      # from anybody who had been in a call.
+      SFU_REQUIRE_CLIENT_TOKEN: "true"
+    networks:
+      - gryt-community
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ── Server ────────────────────────────────────────────────────────────────
+  server:
+    image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest}
+    container_name: gryt-community-server
+    logging: *logging
+    ports:
+      - "127.0.0.1:${SERVER_PORT:-5020}:5000"
+    environment:
+      PORT: "5000"
+      HOST: "0.0.0.0"
+      NODE_ENV: production
+      SERVER_NAME: ${SERVER_NAME:-Gryt Community}
+      SERVER_DESCRIPTION: ${SERVER_DESCRIPTION:-The Gryt community server}
+      # Not a join gate here — join_policy is. This is the HMAC key the server
+      # signs SFU client tokens with, and the secret it registers with the SFU
+      # under. An empty value would mean the empty string as a signing key, so
+      # it is required rather than defaulted.
+      SERVER_PASSWORD: ${SERVER_PASSWORD:?Set SERVER_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      IMAGE_WORKER_URL: http://image-worker:8080
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://127.0.0.1:15738,https://app.gryt.chat,https://beta.gryt.chat}
+      SFU_WS_HOST: ws://sfu:5005
+      SFU_PUBLIC_HOST: ${SFU_PUBLIC_HOST:?Set SFU_PUBLIC_HOST to the public wss:// address of the SFU}
+      STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302}
+      VOICE_MAX_USERS: ${VOICE_MAX_USERS:-}
+      GRYT_SERVER_ENABLED: "true"
+      GRYT_OIDC_ISSUER: ${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}
+      GRYT_OIDC_AUDIENCE: ${GRYT_OIDC_AUDIENCE:-gryt-web}
+      # Accounts only. A local identity is a name and a keypair, which is the
+      # cheapest thing on the internet to make a hundred of; an account at least
+      # costs an email address and whatever Keycloak asks for on top.
+      GRYT_IDENTITY_TIERS: ${GRYT_IDENTITY_TIERS:-account}
+      GRYT_TRUSTED_CERT_ISSUERS: ${GRYT_TRUSTED_CERT_ISSUERS:-https://id.gryt.chat}
+      GRYT_INVITE_MAX_JOINS_PER_HOUR: ${GRYT_INVITE_MAX_JOINS_PER_HOUR:-20}
+      # One hop: cloudflared appends the visitor's address to the right of
+      # x-forwarded-for and nothing else in the path touches the header.
+      # Leaving it unset would put every visitor on earth in one rate-limit
+      # bucket, so the first spammer rate-limits everyone else.
+      GRYT_TRUSTED_PROXY_HOPS: ${GRYT_TRUSTED_PROXY_HOPS:-1}
+      # Nothing to discover on a VPS, and the avahi mount prod needs would be
+      # writing service files for a LAN that does not exist.
+      MDNS_INTERFACE: ""
+      # Bridge networking, so 9091 inside the container is reachable from
+      # Prometheus on this network and from nowhere else. Do not publish it.
+      METRICS_PORT: "9091"
+      DATA_DIR: /data
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: auto
+      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+      S3_BUCKET: ${S3_BUCKET:-gryt-community}
+      S3_FORCE_PATH_STYLE: "true"
+    volumes:
+      - gryt-community-server-data:/data
+    depends_on:
+      sfu:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      server-data-init:
+        condition: service_completed_successfully
+    networks:
+      - gryt-community
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch(`http://localhost:$${process.env.PORT}/health`).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ── Image worker ──────────────────────────────────────────────────────────
+  # Reads the job queue out of the server's SQLite database, so it mounts the
+  # same data volume. Nothing published: the server reaches it by name.
+  image-worker:
+    image: ghcr.io/gryt-chat/image-worker:${IMAGE_WORKER_VERSION:-latest}
+    container_name: gryt-community-image-worker
+    logging: *logging
+    environment:
+      DATA_DIR: /data
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: auto
+      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+      S3_BUCKET: ${S3_BUCKET:-gryt-community}
+      S3_FORCE_PATH_STYLE: "true"
+    volumes:
+      - gryt-community-server-data:/data
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - gryt-community
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+networks:
+  gryt-community:
+    # Named, so a one-off container (backup.sh) can join it without having to
+    # know that compose would otherwise call it gryt-community_gryt-community.
+    name: gryt-community
+    driver: bridge
+
+volumes:
+  gryt-community-server-data:
+  gryt-community-minio-data:

@@ -267,4 +267,75 @@ try {
   delete process.env.OLLAMA_RETRY_DELAY_MS;
 }
 
+/* ── A body paragraph copied out of the intro (GRYT-778) ─────────────── */
+
+// 1.6.42 opened its only section with its own intro paragraph, two words
+// changed. The threshold is measured, not guessed: 0.607 is the highest any
+// hand-written note scores (1.7.0 restating that DMs are not encrypted, which
+// is deliberate), and that copy scored 0.810.
+const copied = {
+  headline: "Voice tiles take their colour from the owl on them",
+  intro: [
+    "Before this release there was a mismatch between how you saw your avatar and how everyone else saw it, because the app used two different ways to pick the colour of your tile.",
+  ],
+  sections: [
+    {
+      heading: "The tile and the owl agree now",
+      body: [
+        "Before this release there was a mismatch between how you saw your avatar and how everyone else saw it, because the app picked the colour of your tile two different ways.",
+        "Both now read the same nickname and the same worn look, so the tile is the colour of the owl sitting on it.",
+      ],
+    },
+  ],
+  recap: [{ group: "Avatars and images", items: ["Voice tiles take their colour from the owl on them"] }],
+  omitted: [],
+};
+
+assert.ok(
+  said(styleProblems(copied, withBody), /repeats the intro/),
+  "a section paragraph that restates the intro is caught",
+);
+
+// The same note with the second copy replaced by something that says
+// anything new must pass. This is the half that stops the rule being a
+// blanket ban on mentioning a subject twice.
+assert.ok(
+  !said(
+    styleProblems(
+      { ...copied, sections: [{ ...copied.sections[0], body: copied.sections[0].body.slice(1) }] },
+      withBody,
+    ),
+    /repeats the intro/,
+  ),
+  "a section that does not restate the intro passes",
+);
+
+// 1.7.0 repeats the not-encrypted warning between intro and body on purpose,
+// and scores 0.607. Deliberate repetition of a caveat has to stay allowed.
+assert.ok(
+  !said(
+    styleProblems(
+      {
+        headline: "You can message one person instead of a channel",
+        intro: [
+          "Direct messages are not encrypted yet. Whoever runs the server can read them, the same as any channel, and Gryt says so above the box you type into rather than letting a conversation that looks private stand in for a private one.",
+        ],
+        sections: [
+          {
+            heading: "What this does not do",
+            body: [
+              "Direct messages are not encrypted. They are stored on the server like any other message and whoever runs it can read them. The notice above the composer says so and links to the documentation.",
+            ],
+          },
+        ],
+        recap: [{ group: "Voice", items: ["Ring somebody from a direct message"] }],
+        omitted: [],
+      },
+      withBody,
+    ),
+    /repeats the intro/,
+  ),
+  "a caveat repeated on purpose is not a copied paragraph",
+);
+
 console.log("changelog-notes checks: ok");

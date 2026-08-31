@@ -1478,6 +1478,33 @@ export function styleProblems(entry, parts) {
     problems.push(soft('every recap line is one of the section headings again'))
   }
 
+  /* A body paragraph that is already in the intro.
+
+     1.6.42 opened its only section with a word-for-word copy of its own intro
+     paragraph, and 1.6.41 did the same with two words changed. It reads as a
+     note twice as long as it is, and the second copy is always the one that
+     could have said something new.
+
+     `overlap` is content-word based, so a verbatim copy scores 1.0 and a
+     reworded one still scores high. The threshold is measured rather than
+     guessed: across the four notes written by hand the highest any intro
+     paragraph scores against any body paragraph is 0.607 — 1.7.0 restating
+     that direct messages are not encrypted, which is repetition on purpose
+     and must stay allowed. 1.6.42's copy scored 0.810. 0.75 sits between
+     them with room either side.
+
+     Short paragraphs are skipped: two eight-word sentences about the same
+     feature will legitimately share most of their words. */
+  const paragraphs = entry.sections.flatMap((s) => s.body)
+  for (const intro of entry.intro) {
+    if (contentWords(intro).size < 12) continue
+    const copy = paragraphs.find((body) => overlap(intro, body) >= 0.75)
+    if (copy) {
+      problems.push(soft(`a paragraph repeats the intro: "${copy.slice(0, 60)}"`))
+      break
+    }
+  }
+
   /* Security is its own section when there is security in the release, and no
      section at all when there is not. The prompt used to say "always", which
      is a shape to fill rather than a fact to report. */

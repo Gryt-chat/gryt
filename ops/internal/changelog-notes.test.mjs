@@ -19,7 +19,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { askWithRetry, borrowedHeading, drafterRevision, neverReachedTheModel, refusalBlock, styleProblems } from "./changelog-notes.mjs";
+import { askWithRetry, borrowedHeading, drafterRevision, liftedParagraph, neverReachedTheModel, refusalBlock, styleProblems } from "./changelog-notes.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const style = readFileSync(join(REPO, "patch-notes-style.md"), "utf8");
@@ -379,5 +379,91 @@ assert.ok(
   drafterRevision() === undefined || /^[0-9a-f]{7,}$/.test(drafterRevision()),
   "a revision is a commit or nothing at all",
 );
+
+/* ── A paragraph taken from another release's note (GRYT-787) ─────────── */
+
+// The real one: a draft for 1.6.38 opened with 1.6.0's first paragraph, about
+// guest identity and owning a server, for a release whose commits are avatar
+// storage and websocket pings. It scored 11 on contamination's word count —
+// well under the 20 that catches wholesale retelling — and reached the queue
+// twice, the second time after being refused for exactly that.
+const oneSixZero = {
+  version: "1.6.0",
+  text: [
+    "Using Gryt without an account has always had one sharp edge: whatever you were on",
+    "a server lived in one browser on one machine. Clear your site data and it was gone,",
+    "along with any roles you had and any server you owned. This release takes that apart.",
+  ].join(" "),
+};
+
+const lifted = {
+  headline: "Your avatar follows you between devices",
+  intro: [
+    "Using Gryt without an account has always had one sharp edge: whatever you were on a server lived in one browser on one machine. Clear your site data and it was gone, along with any roles you had and any server you owned. This release takes that apart.",
+  ],
+  sections: [{ heading: "The look is stored beside the nickname", body: ["The server keeps the short string the editor produced."] }],
+  recap: [{ group: "Avatars and images", items: ["A designed owl follows you between devices"] }],
+  omitted: [],
+};
+
+assert.match(
+  liftedParagraph(lifted, [oneSixZero]) ?? "",
+  /taken from the 1\.6\.0 note/,
+  "a paragraph copied out of another release's note is caught, and named",
+);
+
+// The measurement that set the threshold: 0.625 for the copied paragraph
+// against 0.313 for the worst honest draft in the same batch. A note that
+// merely shares a subject with an older one has to pass.
+assert.equal(
+  liftedParagraph(
+    {
+      ...lifted,
+      intro: [
+        "A designed owl used to be a picture, so it stayed on the machine that made it and never followed anybody anywhere.",
+      ],
+    },
+    [oneSixZero],
+  ),
+  null,
+  "writing about the same subject in your own words is not lifting",
+);
+
+assert.equal(liftedParagraph(lifted, []), null, "no notes to compare against is not a finding");
+
+// Short paragraphs are skipped: two brief sentences about one feature share
+// most of their words honestly.
+assert.equal(
+  liftedParagraph({ ...lifted, intro: ["Clear your site data and it was gone."] }, [oneSixZero]),
+  null,
+  "a short paragraph is not enough to call it lifted",
+);
+
+/* ── The spelling list stops guessing at suffixes (GRYT-787) ──────────── */
+
+// "customizable" passed a clean run on 2026-08-31 because the pattern was
+// customiz(e|ed|es|ing) and -able was not one of the four.
+const withWord = (word) => ({
+  headline: "A release",
+  intro: [`The editor is ${word} in every way that matters to somebody setting one up.`],
+  sections: [{ heading: "The editor changed", body: ["It did."] }],
+  recap: [],
+  omitted: [],
+});
+const parts = [{ component: "The app", commits: [{ subject: "x", body: "y" }] }];
+
+for (const word of ["customizable", "organizational", "minimizer", "recognizable"]) {
+  assert.ok(
+    said(styleProblems(withWord(word), parts), /American spelling/),
+    `"${word}" is caught whatever its ending`,
+  );
+}
+
+for (const word of ["customisable", "recognisable", "colourful"]) {
+  assert.ok(
+    !said(styleProblems(withWord(word), parts), /American spelling/),
+    `"${word}" is British and must pass`,
+  );
+}
 
 console.log("changelog-notes checks: ok");

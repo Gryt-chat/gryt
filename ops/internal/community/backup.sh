@@ -28,21 +28,38 @@ stamp="$(date -u +%Y%m%d-%H%M%S)"
 dest="$BACKUP_DIR/$stamp"
 mkdir -p "$dest/objects"
 
-# Read-write on the volume on purpose: an online backup of a WAL database has
-# to take a shared lock, which means writing to the -shm file.
-docker run --rm \
-  -v "$DATA_VOLUME:/data" \
-  -v "$dest:/backup" \
-  alpine:3 sh -c '
-    set -e
-    apk add --no-cache sqlite >/dev/null
-    sqlite3 /data/gryt.db ".backup /backup/gryt.db"
-    gzip -9 /backup/gryt.db
-  '
+# Through the server's own node rather than a throwaway container.
+#
+# The first version of this ran `alpine:3` and `apk add sqlite`, which needs a
+# package mirror — so the backup depended on the network being up and on
+# Alpine's CDN being reachable. On this VM it simply hung: containers on the
+# default bridge could not get out, the service sat in `activating` for five
+# minutes with an empty backup directory, and nothing said why. A backup that
+# fails when the network is down is a backup that fails on exactly the day you
+# needed it.
+#
+# VACUUM INTO rather than `.backup`: it is one SQL statement, it takes a
+# consistent snapshot of a live WAL database including whatever is still in the
+# log, and it needs nothing that is not already in the image. It also refuses
+# rather than overwriting, so a stale file cannot be mistaken for a fresh one.
+# The script goes in on stdin rather than through -e. VACUUM INTO needs a
+# single-quoted SQL literal, and a shell cannot put one of those inside a
+# single-quoted argument at all.
+docker exec -i gryt-community-server node <<'NODE'
+const { DatabaseSync } = require("node:sqlite");
+const db = new DatabaseSync(process.env.DATA_DIR + "/gryt.db");
+db.exec("VACUUM INTO '/tmp/gryt-backup.db'");
+NODE
+docker cp gryt-community-server:/tmp/gryt-backup.db "$dest/gryt.db"
+docker exec gryt-community-server rm -f /tmp/gryt-backup.db
+gzip -9 "$dest/gryt.db"
 
 # mc mirror rather than a tarball of the volume: it goes through MinIO, so it
 # sees a consistent view of the bucket instead of files caught mid-write.
-docker run --rm \
+#
+# This one does need an image, but only one already pulled by the stack itself,
+# and it talks to MinIO over the compose network rather than to the internet.
+docker run --rm --pull=never \
   --network "$NETWORK" \
   -e MINIO_ROOT_USER -e MINIO_ROOT_PASSWORD -e S3_BUCKET \
   -v "$dest/objects:/backup" \

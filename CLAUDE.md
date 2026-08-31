@@ -223,6 +223,52 @@ unrelated projects on **one Docker daemon**. There are no off-box backups.
 Keycloak is dumped every 6 hours to `packages/auth/backups` (31-day rolling window), but
 those dumps sit on the same disk as the database they back up.
 
+### A realm import deletes every Gryt account
+
+`keycloak-import` runs `kc.sh import --override true`, which **deletes the realm first**.
+Every registered user goes with it, and the only way back is a dump from
+`packages/auth/backups`. It is armed by `GRYT_IMPORT_REALM=1` in `packages/auth/.env` and
+does nothing at `0`, which is where it normally sits. Check it before any `up` on the auth
+project, and set it back to `0` afterwards.
+
+`import_realm.sh` refuses to run while Keycloak is listening, which catches the obvious
+mistake. It does not catch the flag being left on.
+
+**Three settings live only in the running realm and are wiped with it.** None is in
+`gryt-realm.json`, because realm-level configuration in the import file is what took the
+whole stack down in GRYT-136:
+
+| What | Applied by | Symptom when missing |
+|------|-----------|----------------------|
+| Declarative user profile | `keycloak-user-profile` | Registration silently rejects inputs the theme hides |
+| Brute-force protection, password policy | `keycloak-security-policy` | Unlimited login attempts, any password accepted |
+| Registration captcha | nobody — console only, needs keys | An email address is all a script needs to make accounts |
+
+The first two are one-shots and re-running them is the fix. **Both failed silently from
+mid-August to 2026-08-31** because they authenticate as the master-realm `admin`, which is
+normally disabled on purpose — the containers exited 1 and nothing else said anything. So
+after an import, or after anything that touches the auth stack, check they actually ran
+rather than assuming:
+
+```bash
+docker ps -a --filter name=gryt-auth-keycloak- --format '{{.Names}}	{{.Status}}'
+```
+
+`Exited (0)` is success. `Exited (1)` means the realm is running without whatever that
+one-shot was meant to apply.
+
+To run one without storing a password, enable `admin` briefly and pass the credentials at
+run time rather than putting them in `.env`:
+
+```bash
+docker compose -f docker-compose.keycloak.yml -p auth run --rm --no-deps \
+  -e GRYT_KEYCLOAK_ADMIN_USERNAME=... -e GRYT_KEYCLOAK_ADMIN_PASSWORD=... \
+  keycloak-security-policy
+```
+
+`--no-deps` matters: without it Compose starts what the service depends on, and that is how
+an import gets triggered by accident.
+
 ## Style
 
 Match the surrounding code. Sivert's prose — docs, blog posts, comments — is plain and

@@ -553,6 +553,37 @@ function workedExample(repo) {
     .trim()
 }
 
+/* Every hand-written note in full, newest last.
+ *
+ * `workedExample` returns only the newest, and the contamination guard has
+ * been checking against that one alone. On 2026-08-31 a draft for 1.6.38
+ * opened with 1.6.0's first paragraph word for word — "one sharp edge",
+ * "lived in one browser on one machine", roles and owning a server — for a
+ * release whose three commits are about avatar storage and websocket pings.
+ * 1.6.0 is not the newest note, so nothing looked at it. Twice: it came back
+ * unchanged after being refused for exactly that.
+ *
+ * These are not in the prompt. The model has them anyway — the changelog is a
+ * public page — which is the argument for checking against all of them rather
+ * than only the one the prompt happens to show.
+ */
+function examplesInFull(repo) {
+  const dir = join(repo, 'packages/site/content/changelog')
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.mdx'))
+    .sort()
+    .map((f) => {
+      const raw = readFileSync(join(dir, f), 'utf8')
+      const body = raw.split('---').slice(2).join('---').trim()
+      return {
+        version: f.replace(/\.mdx$/, ''),
+        text: body.replace(/^<(Image|Clip)[^>]*\/>\s*$/gm, '').replace(/\n{3,}/g, '\n\n').trim(),
+      }
+    })
+    .filter((e) => e.text)
+}
+
 /* Every commit in the range, in one numbered list.
    Numbered because the coverage rule below has to name the one that went
    missing, and "the third commit under the app" is not something a refusal can
@@ -1212,22 +1243,87 @@ export function borrowedHeading(entry, styleText) {
   return null
 }
 
-export function contamination(entry, exampleText, commitText) {
-  if (!exampleText) return null
+/* A paragraph taken out of a note about a different release.
+ *
+ * `contamination` is tuned for wholesale retelling — the draft that scored 59
+ * against a correct one's 8 — and a single borrowed paragraph goes straight
+ * under it. On 2026-08-31 a draft for 1.6.38 opened with 1.6.0's first
+ * paragraph, about guest identity, roles and owning a server, for a release
+ * whose three commits are avatar storage and websocket pings. It scored 11 on
+ * the word count and sailed through, twice, the second time after being
+ * refused for exactly that.
+ *
+ * Measured rather than guessed. Against the four notes written by hand, that
+ * paragraph scores 0.625; the worst any honest draft in the same batch scores
+ * against any of their paragraphs is 0.313. 0.45 sits between with room on
+ * both sides.
+ *
+ * Only paragraphs of twelve content words or more. Two short sentences about
+ * the same feature legitimately share most of their words, and a rule that
+ * fires on those is a rule that gets turned off.
+ *
+ * Not run over the hand-written notes themselves, for the obvious reason.
+ */
+export function liftedParagraph(entry, examples) {
+  const notes = Array.isArray(examples) ? examples.filter((e) => e && e.text) : []
+  if (!notes.length) return null
+
+  const paragraphs = [...(entry.intro ?? []), ...(entry.sections ?? []).flatMap((s) => s.body ?? [])]
+  for (const note of notes) {
+    /* Headings and list items are short and formulaic; a heading matching a
+       heading is what `borrowedHeading` is for and it says something else. */
+    const theirs = note.text
+      .split(/\n\n+/)
+      .map((t) => t.trim())
+      .filter((t) => t && !/^[#!\-<|]/.test(t) && contentWords(t).size >= 12)
+    for (const mine of paragraphs) {
+      if (contentWords(mine).size < 12) continue
+      for (const other of theirs) {
+        if (overlap(mine, other) >= 0.45) {
+          return `a paragraph is taken from the ${note.version} note: "${mine.slice(0, 70)}"`
+        }
+      }
+    }
+  }
+  return null
+}
+
+export function contamination(entry, examples, commitText) {
+  if (!examples) return null
+  /* A string is one note, an array is all of them. Kept accepting a string so
+     the older callers and their tests still mean what they meant. */
+  const notes = typeof examples === 'string'
+    ? [{ version: 'the example', text: examples }]
+    : examples.filter((e) => e && e.text)
+  if (!notes.length) return null
+
   const words = (t) => new Set((t.toLowerCase().match(/[a-z][a-z-]{4,}/g) ?? []))
   const inCommits = words(commitText)
-  const distinctive = [...words(exampleText)].filter(
-    (w) => !inCommits.has(w) && !COMMON.has(w),
-  )
   const draft = words(JSON.stringify(entry))
-  const borrowed = distinctive.filter((w) => draft.has(w))
+
+  /* Each note on its own rather than all of them pooled. Pooled, the set of
+     words that are "in some hand-written note and not in this range" is large
+     enough that an honest draft collects a score from four notes at once and
+     the number stops meaning what it means against one. This way a hit still
+     says the same thing it always did: this draft is retelling *that* note. */
+  let worst = null
+  for (const note of notes) {
+    const distinctive = [...words(note.text)].filter(
+      (w) => !inCommits.has(w) && !COMMON.has(w),
+    )
+    const shared = distinctive.filter((w) => draft.has(w))
+    if (!worst || shared.length > worst.borrowed.length) {
+      worst = { version: note.version, borrowed: shared }
+    }
+  }
+  const borrowed = worst.borrowed
   /* A handful is coincidence. A pile of it is the example being retold. The
      contaminated 1.6.43 draft scored 59 against a correct one's 8, so there is
      a lot of room between them; the ordinary English filtered out by COMMON is
      what keeps a short commit range from making that gap look narrower than it
      is. */
   return borrowed.length > 20
-    ? `looks copied from the example (${borrowed.length} of its words, none in the commits: ${borrowed.slice(0, 6).join(', ')})`
+    ? `looks copied from ${worst.version} (${borrowed.length} of its words, none in the commits: ${borrowed.slice(0, 6).join(', ')})`
     : null
 }
 
@@ -1393,17 +1489,30 @@ export function claimsSecurityIn(text) {
    the American ones. A hard problem rather than a soft one: it is not a matter
    of taste, and it reaches the page. Only the pairs a release note actually
    reaches for; this is not a dictionary. */
+/* The suffix is open on purpose.
+ *
+ * Each of these listed the forms somebody had seen — customiz(e|ed|es|ing) —
+ * which meant the word had to end there. "customizable" walked through a
+ * clean run on 2026-08-31 because -able was not one of the four. So does
+ * "organizational", "minimizer", "recognizable". The stems below do not occur
+ * in British English at all, so anything built on one is wrong whatever the
+ * ending, and listing endings is a game that only ever loses. */
 const AMERICAN = [
   [/\bcolors?\b/i, 'colour'],
-  [/\bminimiz(e|ed|es|ing)\b/i, 'minimise'],
-  [/\brecogniz(e|ed|es|ing)\b/i, 'recognise'],
+  [/\bminimiz[a-z]*\b/i, 'minimise'],
+  [/\brecogniz[a-z]*\b/i, 'recognise'],
   [/\bbehaviors?\b/i, 'behaviour'],
-  [/\borganiz(e|ed|es|ing|ation)\b/i, 'organise'],
-  [/\bcustomiz(e|ed|es|ing)\b/i, 'customise'],
-  [/\binitializ(e|ed|es|ing)\b/i, 'initialise'],
-  [/\banaly(z|zed|zes|zing)\b/i, 'analyse'],
+  [/\borganiz[a-z]*\b/i, 'organise'],
+  [/\bcustomiz[a-z]*\b/i, 'customise'],
+  [/\binitializ[a-z]*\b/i, 'initialise'],
+  [/\bnormaliz[a-z]*\b/i, 'normalise'],
+  [/\boptimiz[a-z]*\b/i, 'optimise'],
+  [/\bprioritiz[a-z]*\b/i, 'prioritise'],
+  [/\bsynchroniz[a-z]*\b/i, 'synchronise'],
+  [/\banaly[sz]?z[a-z]*\b/i, 'analyse'],
   [/\bcanceled\b/i, 'cancelled'],
   [/\bcentered?\b/i, 'centred'],
+  [/\bfavorites?\b/i, 'favourite'],
 ]
 
 const FILLER = [
@@ -2108,7 +2217,8 @@ async function main() {
         const shape =
           validate(draft) ??
           borrowedHeading(draft, style) ??
-          contamination(draft, workedExample(REPO), commitText)
+          contamination(draft, examplesInFull(REPO), commitText) ??
+          liftedParagraph(draft, examplesInFull(REPO))
         /* A draft of the wrong shape, or one retelling the example, is not a
            draft. Nothing below is worth reading about it. */
         if (shape) return [hard(shape)]

@@ -913,8 +913,48 @@ function prompt(release, changes, style) {
  * is what let 1.5.5 reach 30,130 tokens against a window of 24,576 with its
  * body cap working exactly as written.
  */
-function promptFor(release, changes, style) {
-  const skeleton = prompt(release, changes, style)
+/**
+ * What a person said when they refused the last draft of this release.
+ *
+ * Kept apart from `retryPrompt`, which carries the rules a draft broke inside
+ * one run. This is a different thing and reads differently: a person read a
+ * finished note, said what was wrong with it in their own words, and asked for
+ * another. Pasting it in among "Previously twice" would file a judgement as a
+ * lint.
+ *
+ * Only the reason, never the refused draft. `retryPrompt` hands back the
+ * previous answer because it wants the good parts kept; this does not, because
+ * the draft it refers to was written from the same commits and starting again
+ * from those is the point. Showing it would invite a light edit of a note
+ * somebody already turned down.
+ */
+export function refusalBlock(refusal) {
+  const reason = String(refusal ?? '').trim()
+  if (!reason) return ''
+  return [
+    '',
+    '─────────────────────────────────────────────────────────────────────',
+    'YOUR LAST NOTE FOR THIS RELEASE WAS READ BY A PERSON AND REFUSED',
+    '',
+    'They said:',
+    '',
+    `  ${reason}`,
+    '',
+    'Write this release again from the commits above, with that fixed. It is',
+    'the only feedback you have and it is worth more than a guess at what',
+    'else might be wrong: change what they named and leave the rest of your',
+    'judgement alone.',
+    '',
+  ].join('\n')
+}
+
+function promptFor(release, changes, style, refusal) {
+  /* Added before the allowance is worked out, not after, so the commit block
+     is asked to fit in what is left rather than in the whole window. It is a
+     few hundred characters against twenty-four thousand tokens, but the whole
+     of one release was a silent overflow and the way to not repeat that is to
+     let nothing sit outside the arithmetic. */
+  const skeleton = prompt(release, changes, style) + refusalBlock(refusal)
   const room = (OLLAMA_NUM_CTX - ANSWER_RESERVE) * 4
   const allowance = Math.max(0, Math.floor((room - (skeleton.length - COMMITS.length)) * COMMIT_SHARE))
 
@@ -1899,6 +1939,26 @@ async function alreadyDrafted() {
   return { unreachable: last }
 }
 
+/**
+ * Why each version's last draft was refused, if reports can say.
+ *
+ * Absent on an older reports, which answers 404 for an endpoint it has never
+ * heard of. That is not a failure: a draft written without the feedback is the
+ * behaviour of every run before this existed, and refusing to draft because a
+ * nicety is missing would trade a note for nothing. Same for a timeout.
+ */
+async function priorFeedback() {
+  try {
+    const { feedback } = await reports('/v1/changelog/feedback')
+    return feedback && typeof feedback === 'object' ? feedback : {}
+  } catch (err) {
+    if (!/reports 404/.test(err.message)) {
+      log(`! could not read what was refused (${err.message}) — drafting without it`)
+    }
+    return {}
+  }
+}
+
 async function postDraft(entry) {
   const query = REDRAFT === entry.version ? '?force=1' : ''
   return reports(`/v1/changelog${query}`, {
@@ -1957,6 +2017,10 @@ async function main() {
     log(`drafting ${REDRAFT} again, replacing the draft reports already has`)
   }
 
+  const refused = DRY_RUN || DUMP ? {} : await priorFeedback()
+  const refusedCount = Object.keys(refused).length
+  if (refusedCount) log(`${refusedCount} release(s) carry a reason they were refused`)
+
   let wrote = 0
   for (const channel of CHANNELS) {
     const inChannel = all.filter((r) => r.channel === channel)
@@ -1982,7 +2046,10 @@ async function main() {
       if (!count) { log(`${release.version}: nothing user-visible since ${prev.version}, skipping`); continue }
 
       log(`${release.version}: ${count} commits since ${prev.version}`)
-      const text = promptFor(release, changes, style)
+      if (refused[release.version]) {
+        log(`  refused before: ${refused[release.version].slice(0, 100)}`)
+      }
+      const text = promptFor(release, changes, style, refused[release.version])
 
       /* Say how big the prompt is, every time.
          The whole of this release was one silent overflow: num_ctx defaulted

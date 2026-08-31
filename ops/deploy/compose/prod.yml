@@ -68,6 +68,8 @@ services:
       ICE_UDP_MUX_PORT: ${ICE_UDP_MUX_PORT:-3478}
       ICE_ADVERTISE_IP: ${ICE_ADVERTISE_IP:-}
       DISABLE_STUN: ${DISABLE_STUN:-false}
+      SFU_REQUIRE_CLIENT_TOKEN: ${SFU_REQUIRE_CLIENT_TOKEN:-}
+      SFU_METRICS_PORT: ${SFU_METRICS_PORT:-9091}
       MAX_PEERS: ${MAX_PEERS:-}
     networks:
       - gryt-prod
@@ -108,6 +110,7 @@ services:
       SERVER_DESCRIPTION: ${SERVER_DESCRIPTION:-A Gryt voice chat server}
       SERVER_PASSWORD: ${SERVER_PASSWORD:-}
       MDNS_INTERFACE: ${MDNS_INTERFACE:-}
+      METRICS_PORT: ${METRICS_PORT:-9091}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://127.0.0.1:15738,https://app.gryt.chat}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       SFU_WS_HOST: ws://sfu:${SFU_PORT:-5005}
@@ -408,12 +411,16 @@ services:
         global:
           scrape_interval: 15s
         scrape_configs:
+          # 9091, not 5000. Metrics moved off the port the world talks to, so
+          # that a deployment behind a reverse proxy or a tunnel does not serve
+          # its Prometheus register to strangers. Reached over the Compose
+          # network, so the port is deliberately not published.
           - job_name: gryt-server
             static_configs:
-              - targets: ["server:5000"]
+              - targets: ["server:${METRICS_PORT:-9091}"]
           - job_name: gryt-sfu
             static_configs:
-              - targets: ["sfu:5005"]
+              - targets: ["sfu:${SFU_METRICS_PORT:-9091}"]
         CFG
         exec /bin/prometheus --config.file=/tmp/prometheus.yml
     networks:

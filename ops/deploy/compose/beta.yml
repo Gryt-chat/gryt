@@ -73,6 +73,9 @@ services:
       STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
       ICE_UDP_MUX_PORT: ${ICE_UDP_MUX_PORT:-4443}
       ICE_ADVERTISE_IP: ${ICE_ADVERTISE_IP:-}
+      DISABLE_STUN: ${DISABLE_STUN:-false}
+      SFU_REQUIRE_CLIENT_TOKEN: ${SFU_REQUIRE_CLIENT_TOKEN:-}
+      SFU_METRICS_PORT: ${SFU_METRICS_PORT:-9091}
     networks:
       - gryt-beta
     restart: unless-stopped
@@ -120,6 +123,7 @@ services:
       SERVER_DESCRIPTION: ${SERVER_DESCRIPTION:-A Gryt voice chat server (beta)}
       SERVER_PASSWORD: ${SERVER_PASSWORD:-}
       MDNS_INTERFACE: ${MDNS_INTERFACE:-}
+      METRICS_PORT: ${METRICS_PORT:-9091}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://127.0.0.1:15738,http://localhost:3667,https://app.gryt.chat,https://beta.gryt.chat}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       SFU_WS_HOST: ws://sfu:${SFU_PORT:-5015}

@@ -14,11 +14,12 @@
  */
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { askWithRetry, borrowedHeading, neverReachedTheModel, refusalBlock, styleProblems } from "./changelog-notes.mjs";
+import { askWithRetry, borrowedHeading, drafterRevision, neverReachedTheModel, refusalBlock, styleProblems } from "./changelog-notes.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const style = readFileSync(join(REPO, "patch-notes-style.md"), "utf8");
@@ -355,5 +356,28 @@ assert.match(refused, /The recap files a proxy fix under Updates\./, "and carrie
 assert.equal(refusalBlock(undefined), "", "no refusal is no block");
 assert.equal(refusalBlock(null), "", "null is no block");
 assert.equal(refusalBlock("   "), "", "a refusal with nothing typed in it is no block");
+
+/* ── The commit the drafter is running from (GRYT-780) ────────────────── */
+
+// ExecStartPre pulls the checkout and is allowed to fail, so a run can write
+// notes against rules that are no longer the rules. Three times in three days.
+// The commit goes on every draft so that question is answerable from the
+// review page rather than from the journal.
+const gitSays = execFileSync("git", ["-C", REPO, "rev-parse", "--short", "HEAD"], {
+  encoding: "utf8",
+}).trim();
+
+assert.equal(
+  drafterRevision(),
+  gitSays,
+  "the drafter reports the commit it is actually running from",
+);
+
+// Not a placeholder, not an empty string: absent is what a tarball with no
+// .git should produce, and a draft is worth posting without the label.
+assert.ok(
+  drafterRevision() === undefined || /^[0-9a-f]{7,}$/.test(drafterRevision()),
+  "a revision is a commit or nothing at all",
+);
 
 console.log("changelog-notes checks: ok");

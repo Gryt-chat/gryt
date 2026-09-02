@@ -16,25 +16,6 @@ services:
       - "${INTERNAL_SITE_HTTP_PORT:-9472}:80"
     volumes:
       - ./downloads:/usr/share/nginx/html/downloads:ro
-      # Release notes, which the changelog page fetches at runtime. Mounted
-      # rather than built in so a note is live without rebuilding the site.
-      #
-      # Read-only here and writable in the reports service below, which is the
-      # only thing that writes this file.
-      #
-      # Frozen since GRYT-861. A drafter on this box used to post notes to
-      # reports, and notes are written by hand now, so nothing adds to the file
-      # any more. Four published notes are still only in it, which is why the
-      # mount is still here; it comes out with GRYT-863, once they are MDX.
-      #
-      # Its own path, not /changelog.json at the root: the site router owns
-      # /changelog, and a real file under a path the router also claims is a
-      # collision waiting to be discovered by somebody else.
-      #
-      # A missing source directory makes Docker create one, which is harmless
-      # here — the page treats an absent file the same as an empty one and
-      # renders the hand-written notes on their own.
-      - ${GRYT_CHANGELOG_DIR:-/var/lib/gryt-changelog}:/usr/share/nginx/html/release-notes:ro
     restart: unless-stopped
 
   # Component library docs (ui.gryt.chat). Built from packages/ui, which is a
@@ -178,21 +159,8 @@ services:
       REPORTS_OIDC_REDIRECT_URI: "${REPORTS_OIDC_REDIRECT_URI:-}"
       REPORTS_BOOTSTRAP_ADMIN: "${REPORTS_BOOTSTRAP_ADMIN:-}"
       REPORTS_SESSION_SECRET: "${REPORTS_SESSION_SECRET:-}"
-      # Reading a drafted release note before it is published (GRYT-635).
-      #
-      # A drafter on this box used to post notes here rather than writing the
-      # file the site reads, so nothing a model wrote was public until somebody
-      # had read it. The drafter is gone (GRYT-861) and nothing posts any more.
-      # The routes stay until the four published notes still living only in
-      # changelog.json are MDX in the site (GRYT-863). Empty here and set in
-      # .env; without
-      # it those routes do not exist.
-      REPORTS_CHANGELOG_KEY: "${REPORTS_CHANGELOG_KEY:-}"
-      REPORTS_CHANGELOG_FILE: /release-notes/changelog.json
     volumes:
       - gryt-reports-data:/data
-      # The same directory the site mounts read-only above. One writer.
-      - ${GRYT_CHANGELOG_DIR:-/var/lib/gryt-changelog}:/release-notes
     restart: unless-stopped
 
 volumes:

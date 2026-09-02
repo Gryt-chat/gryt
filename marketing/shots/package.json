@@ -8,6 +8,7 @@
     "render": "node render.mjs"
   },
   "dependencies": {
+    "@gryt/owl": "^0.6.0",
     "fontkit": "^2.0.4",
     "sharp": "^0.34.2",
     "wawoff2": "^2.0.1"

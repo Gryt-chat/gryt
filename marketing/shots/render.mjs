@@ -22,7 +22,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,7 +30,8 @@ import sharp from "sharp";
 
 import { DEVICES, resolveFrame } from "./devices.mjs";
 import { measureAperture } from "./measure-frame.mjs";
-import { baselineOffset, fit, glyphs, loadFont } from "./text.mjs";
+import { KINDS } from "./panels.mjs";
+import { fit, loadFont } from "./text.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -126,73 +127,18 @@ function groundSvg(theme, width, height) {
   return `<rect width="${width}" height="${height}" fill="${theme.ground.color}"/>`;
 }
 
-/**
- * The text block, and how far down the panel it ends.
- *
- * Returns the bottom edge so the device can be placed under it rather than at
- * a hardcoded offset — a two-line headline and a three-line one must not push
- * the phone to different heights across a set, so the caller uses the tallest.
- */
-function textSvg({ panel, theme, font, width, top, size: forcedSize }) {
-  const out = [];
-  let y = top;
-
-  if (panel.icon) {
-    const size = theme.icon.size;
-    const x = (width - size) / 2;
-    /* Filled, not stroked. Phosphor's regular weight is a filled outline on a
-       256 grid — stroking it draws the outline of the outline. */
-    out.push(
-      `<g transform="translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${(size / 256).toFixed(4)})"
-          fill="${theme.icon.color}">${panel.icon}</g>`,
-    );
-    y += size + theme.icon.gap;
-  }
-
-  const opts = {
-    font,
-    weight: theme.headline.weight,
-    tracking: theme.headline.tracking ?? 0,
-  };
-  const { size, lines } = fit(panel.headline, {
-    ...opts,
-    maxWidth: width - theme.headline.inset * 2,
-    maxLines: theme.headline.maxLines,
-    /* One size for the whole set when the caller has worked it out. Sizing
-       each panel on its own gives the short headlines a bigger type than the
-       long ones, which reads as six posters rather than one set. */
-    sizes: forcedSize ? [forcedSize] : theme.headline.sizes,
-  });
-
-  const lineHeight = size * theme.headline.lineHeight;
-  const base = baselineOffset(font, size, lineHeight);
-
-  for (const line of lines) {
-    out.push(
-      glyphs(line, {
-        ...opts,
-        size,
-        x: width / 2,
-        y: y + base,
-        fill: theme.headline.color,
-        anchor: "middle",
-      }),
-    );
-    y += lineHeight;
-  }
-
-  return { svg: out.join(""), bottom: y };
-}
-
 /* ─────────────────────────────────────────────────────────────── the set ── */
 
 /**
  * Render one set for one device.
  *
- * The device is placed at the same y across every panel, derived from the
- * tallest text block in the set. A phone that shifts down by one line's height
- * between panel two and panel three is the thing that makes a set look
- * assembled rather than designed.
+ * Panels are laid out by kind (see `panels.mjs`), but the three `device` ones
+ * share a headline size and a device y so they read as a run. Sizing each on
+ * its own gives short headlines bigger type and shifts the phone down a line
+ * between panels, which is what makes a set look assembled.
+ *
+ * The statement panel is deliberately outside that agreement — it places its
+ * own phone, lower, because it is the opening and not one of the three.
  */
 export async function renderSet({ set, deviceId, outDir }) {
   const device = DEVICES[deviceId];
@@ -200,78 +146,78 @@ export async function renderSet({ set, deviceId, outDir }) {
   const theme = set.theme;
   const font = await loadFont();
 
-  const framed = await Promise.all(
-    set.panels.map((panel) =>
-      composeDevice(deviceId, panel.screenshot ? join(here, panel.screenshot) : null),
-    ),
-  );
+  const deviceKinds = set.panels.filter((p) => (p.kind ?? "device") === "device");
 
-  const deviceWidth = Math.round(W * theme.device.widthRatio);
-  const scale = deviceWidth / framed[0].width;
-  const deviceHeight = Math.round(framed[0].height * scale);
+  /** The largest size every device panel's headline fits at. */
+  const headlineSize = deviceKinds.length
+    ? Math.min(
+        ...deviceKinds.map(
+          (panel) =>
+            fit(panel.headline, {
+              font,
+              weight: theme.headline.weight,
+              tracking: theme.headline.tracking,
+              maxWidth: W - theme.headline.inset * 2,
+              maxLines: theme.headline.maxLines,
+              sizes: theme.headline.sizes,
+            }).size,
+        ),
+      )
+    : theme.headline.sizes[0];
 
-  /**
-   * The largest size every headline in the set fits at, and the tallest text
-   * block once they are all at it.
-   *
-   * Two passes because they depend on each other in that order: the size is
-   * the smallest of what each panel could take on its own, and only then is
-   * it worth asking how far down the block reaches.
-   */
-  const headlineSize = Math.min(
-    ...set.panels.map(
-      (panel) =>
-        fit(panel.headline, {
-          font,
-          weight: theme.headline.weight,
-          tracking: theme.headline.tracking ?? 0,
-          maxWidth: W - theme.headline.inset * 2,
-          maxLines: theme.headline.maxLines,
-          sizes: theme.headline.sizes,
-        }).size,
-    ),
-  );
-
-  let textBottom = 0;
-  for (const panel of set.panels) {
-    const { bottom } = textSvg({
-      panel, theme, font, width: W, top: theme.text.top, size: headlineSize,
-    });
-    textBottom = Math.max(textBottom, bottom);
+  // Laid out once to find the run's device y, then again to draw.
+  let runBottom = 0;
+  for (const panel of deviceKinds) {
+    const { bottom } = KINDS.device({ panel, theme, font, W, H, headlineSize });
+    runBottom = Math.max(runBottom, bottom);
   }
-  const deviceTop = Math.round(textBottom + theme.device.gap);
+  const runDeviceTop = Math.round(runBottom + theme.device.gap);
 
+  /* Emptied first. Renaming or dropping a panel otherwise leaves the old file
+     behind, and `out/` is what gets uploaded — a stale panel from two edits ago
+     is the kind of mistake nobody catches until it is live. */
+  await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
   const written = [];
 
   for (const [i, panel] of set.panels.entries()) {
-    const { svg: text } = textSvg({
-      panel, theme, font, width: W, top: theme.text.top, size: headlineSize,
-    });
-    const ground = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${groundSvg(theme, W, H)}${text}</svg>`;
+    const kind = panel.kind ?? "device";
+    const laid = await KINDS[kind]({ panel, theme, font, W, H, headlineSize });
 
-    const phone = await sharp(framed[i].buffer)
-      .resize(deviceWidth, deviceHeight, { fit: "fill" })
-      .png()
-      .toBuffer();
+    const ground = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${groundSvg(theme, W, H)}${laid.svg}</svg>`;
+    const layers = laid.tiles ? [...laid.tiles] : [];
 
-    /* Cropped by the composite rather than by a resize: the device is taller
-       than the room under the headline, and running off the bottom edge is the
-       look in all three templates. sharp clips a composite at the canvas edge,
-       so the overflow costs nothing. */
+    const deviceTop = kind === "device" ? runDeviceTop : laid.deviceTop;
+    if (deviceTop !== null && deviceTop !== undefined) {
+      const framed = await composeDevice(
+        deviceId,
+        panel.screenshot ? join(here, panel.screenshot) : null,
+      );
+      const ratio = panel.deviceWidthRatio ?? theme.device.widthRatio;
+      const w = Math.round(W * ratio);
+      const h = Math.round(framed.height * (w / framed.width));
+      const phone = await sharp(framed.buffer).resize(w, h, { fit: "fill" }).png().toBuffer();
+      /* Cropped by the composite rather than by a resize: the device is taller
+         than the room under the headline, and running off the bottom edge is
+         the look. sharp clips at the canvas edge, so the overflow is free. */
+      layers.push({ input: phone, left: Math.round((W - w) / 2), top: deviceTop });
+    }
+
     const panelBuffer = await sharp(Buffer.from(ground))
-      .composite([{ input: phone, left: Math.round((W - deviceWidth) / 2), top: deviceTop }])
+      .composite(layers)
       /* Flattened deliberately. Apple refuses a screenshot with an alpha
          channel, and a PNG that carries one uploads and then fails validation
          with a message that does not say why. */
-      .flatten({ background: theme.ground.type === "gradient" ? theme.ground.from : theme.ground.color })
+      .flatten({
+        background: theme.ground.type === "gradient" ? theme.ground.from : theme.ground.color,
+      })
       .png()
       .toBuffer();
 
     const name = `${String(i + 1).padStart(2, "0")}-${panel.slug}.png`;
     const file = join(outDir, name);
     await writeFile(file, panelBuffer);
-    written.push({ file, width: W, height: H });
+    written.push({ file, width: W, height: H, kind });
   }
 
   return written;
@@ -291,7 +237,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       try {
         const written = await renderSet({ set, deviceId, outDir });
         for (const w of written) {
-          console.log(`  ${basename(w.file)}  ${w.width}x${w.height}`);
+          console.log(`  ${basename(w.file)}  ${w.width}x${w.height}  ${w.kind}`);
         }
       } catch (err) {
         console.error(`  skipped: ${err.message}`);

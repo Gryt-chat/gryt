@@ -1,0 +1,15 @@
+{
+  "name": "@gryt/shots",
+  "private": true,
+  "type": "module",
+  "description": "Store screenshots for the App Store and Play listings",
+  "scripts": {
+    "measure": "node measure-frame.mjs",
+    "render": "node render.mjs"
+  },
+  "dependencies": {
+    "fontkit": "^2.0.4",
+    "sharp": "^0.34.2",
+    "wawoff2": "^2.0.1"
+  }
+}

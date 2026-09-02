@@ -52,6 +52,24 @@
 //   GRYT_CHANGELOG_DUMP    with --dump, where to write drafts for inspection.
 //                          Default ./changelog/drafts beside this file. Nothing
 //                          reads what is written there.
+//
+//   Which model writes the prose. ANTHROPIC_API_KEY picks the API; without
+//   one it is Ollama. GRYT_CHANGELOG_PROVIDER overrides that either way.
+//
+//   ANTHROPIC_API_KEY      the key to draft with. Setting it is what moves
+//                          drafting off Ollama, and it is the only setting
+//                          here that costs money to use.
+//   ANTHROPIC_MODEL        Default claude-opus-5
+//   ANTHROPIC_URL          Default https://api.anthropic.com
+//   ANTHROPIC_MAX_TOKENS   the cap on one answer, thinking included.
+//                          Default 32000.
+//   ANTHROPIC_TIMEOUT_MS   Default 600000
+//   ANTHROPIC_NUM_CTX      how much prompt to budget for, in tokens.
+//                          Default 200000. Well under the model's window,
+//                          and past the largest range this has ever seen.
+//   GRYT_CHANGELOG_PROVIDER  "anthropic" or "ollama". Worked out from
+//                          whether there is a key when this is unset.
+//
 //   OLLAMA_URL             Default http://127.0.0.1:11434
 //   OLLAMA_MODEL           Default llama3.1:8b
 //   OLLAMA_TIMEOUT_MS      Default 3600000
@@ -62,7 +80,7 @@
 //                          32768. Not optional in practice: Ollama's own
 //                          default is 4096 and this prompt is past that, so
 //                          leaving it unset silently drops part of the input.
-//                          See the comment on ask().
+//                          See the comment on askOllama().
 
 import { execFileSync } from 'node:child_process'
 import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync, realpathSync } from 'node:fs'
@@ -98,6 +116,62 @@ const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS ?? 3_600_000)
    tokens; 24576 covers it with the answer and costs 6 GiB, or 3 with a
    quantised cache. See ops/internal/README.md. */
 const OLLAMA_NUM_CTX = Number(process.env.OLLAMA_NUM_CTX ?? 24_576)
+
+/* ── Which model writes the prose ──────────────────────────────────────
+   Two providers, and the key picks between them: with ANTHROPIC_API_KEY set
+   the drafting goes to the Anthropic API, and without one it goes to Ollama.
+   That is the same rule the reports service uses to pick a triage model, so
+   there is one thing to learn here rather than two.
+
+   Why there is a choice at all. Ollama costs nothing to run and the notes it
+   wrote were not good enough to publish: 105 drafts, 4 published, and all
+   101 rejections had already passed every check further down this file. So
+   the checks were not the thing to fix.
+
+   The API costs money per draft, which nothing else on this box does. A
+   prompt measures 13,000 to 15,000 tokens and the answer is the note plus the
+   thinking in front of it, which bills as output — around 15 cents an attempt
+   at Opus 5 rates, up to three attempts a release. Nothing is spent until
+   somebody sets a key. */
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? ''
+const PROVIDER = (process.env.GRYT_CHANGELOG_PROVIDER || (ANTHROPIC_API_KEY ? 'anthropic' : 'ollama')).toLowerCase()
+const ANTHROPIC_URL = (process.env.ANTHROPIC_URL ?? 'https://api.anthropic.com').replace(/\/$/, '')
+const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-opus-5'
+
+/* The cap on one answer, and it covers thinking as well as the note.
+   A finished note measured 200 to 830 tokens across the drafts on disk, so
+   the note itself is nowhere near this. Thinking is what the room is for:
+   the model reasons before it answers and those tokens count against this
+   number, so a cap sized to the note would truncate the answer that was
+   about to be written. Streamed either way, so a large cap costs nothing
+   when the answer is short. */
+const ANTHROPIC_MAX_TOKENS = Number(process.env.ANTHROPIC_MAX_TOKENS ?? 32_000)
+const ANTHROPIC_TIMEOUT_MS = Number(process.env.ANTHROPIC_TIMEOUT_MS ?? 600_000)
+
+/* How much prompt to budget for, and it is not the model's window.
+   The window is far larger than this. The number matters because it is what
+   the commit block is trimmed to fit, and the trimming is the thing that
+   was quietly losing releases: 1.5.5 is 164 commits and the Ollama budget
+   drops some of them before the model reads a word. 200,000 is past the
+   largest range this has ever produced, so nothing gets dropped, while
+   still being a bound rather than no bound at all. */
+const ANTHROPIC_NUM_CTX = Number(process.env.ANTHROPIC_NUM_CTX ?? 200_000)
+
+if (PROVIDER !== 'anthropic' && PROVIDER !== 'ollama') {
+  console.error(`[changelog] GRYT_CHANGELOG_PROVIDER is "${PROVIDER}"; it has to be "anthropic" or "ollama"`)
+  process.exit(1)
+}
+if (PROVIDER === 'anthropic' && !ANTHROPIC_API_KEY) {
+  console.error('[changelog] GRYT_CHANGELOG_PROVIDER=anthropic without ANTHROPIC_API_KEY set')
+  process.exit(1)
+}
+
+/* What the rest of the file asks for instead of the provider's own settings.
+   Recorded on every draft as well, so a note in reports says which model
+   wrote it and a bad run is attributable afterwards. */
+const MODEL = PROVIDER === 'anthropic' ? ANTHROPIC_MODEL : OLLAMA_MODEL
+const CONTEXT_TOKENS = PROVIDER === 'anthropic' ? ANTHROPIC_NUM_CTX : OLLAMA_NUM_CTX
+const CONTEXT_SETTING = PROVIDER === 'anthropic' ? 'ANTHROPIC_NUM_CTX' : 'OLLAMA_NUM_CTX'
 
 /* Four characters to the token. Rough, and on the safe side for English prose
    with code in it, which is what these prompts are. The same estimator is used
@@ -1017,7 +1091,7 @@ function promptFor(release, changes, style, refusal) {
      of one release was a silent overflow and the way to not repeat that is to
      let nothing sit outside the arithmetic. */
   const skeleton = prompt(release, changes, style) + refusalBlock(refusal)
-  const room = (OLLAMA_NUM_CTX - ANSWER_RESERVE) * 4
+  const room = (CONTEXT_TOKENS - ANSWER_RESERVE) * 4
   const allowance = Math.max(0, Math.floor((room - (skeleton.length - COMMITS.length)) * COMMIT_SHARE))
 
   /* Built and measured rather than predicted. The allowance is spent on
@@ -1083,7 +1157,131 @@ function retryPrompt(previous, problems) {
   ].join('\n')
 }
 
-async function ask(text) {
+/**
+ * The same schema, with every object closed to properties it did not name.
+ *
+ * Ollama takes SCHEMA as it stands. The Anthropic API's json_schema format
+ * wants `additionalProperties: false` on each object, and adding it to SCHEMA
+ * itself would change what Ollama is sent for no reason — so it is added here,
+ * on the way out, and the one definition upstream stays the definition.
+ */
+export function strictSchema(node) {
+  if (Array.isArray(node)) return node.map(strictSchema)
+  if (!node || typeof node !== 'object') return node
+  const out = {}
+  for (const [k, v] of Object.entries(node)) out[k] = strictSchema(v)
+  if (out.type === 'object' && out.properties) out.additionalProperties = false
+  return out
+}
+
+/**
+ * What the model actually wrote, out of a stream of server-sent events.
+ *
+ * Only `text_delta` is collected. With thinking on — which it is by default on
+ * this model — the answer arrives after a run of `thinking_delta`, and those
+ * are the reasoning rather than the note. Kept per block rather than as one
+ * string because a turn can carry more than one text block, and two JSON
+ * documents concatenated parse as neither.
+ */
+export function readAnthropicEvent(event, state) {
+  if (event.type === 'error') {
+    throw new Error(`anthropic: ${event.error?.type ?? 'error'}: ${event.error?.message ?? ''}`.trim())
+  }
+  if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+    const i = event.index ?? 0
+    state.blocks.set(i, (state.blocks.get(i) ?? '') + event.delta.text)
+  }
+  if (event.type === 'message_start') {
+    state.inputTokens = event.message?.usage?.input_tokens ?? 0
+  }
+  if (event.type === 'message_delta') {
+    state.stopReason = event.delta?.stop_reason ?? state.stopReason
+    state.outputTokens = event.usage?.output_tokens ?? state.outputTokens
+  }
+  return state
+}
+
+/* The state `readAnthropicEvent` fills in, so the test and the caller agree
+   on its shape. */
+export const emptyAnthropicState = () => ({
+  blocks: new Map(),
+  stopReason: null,
+  inputTokens: 0,
+  outputTokens: 0,
+})
+
+async function askAnthropic(text) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ANTHROPIC_TIMEOUT_MS)
+  try {
+    /* Streamed for the same reason the Ollama call is: a non-streamed request
+       sends nothing until the whole answer exists, and Node's fetch gives up
+       waiting for response headers after five minutes. Thinking makes that a
+       real risk rather than a theoretical one, and it is what the SDK does for
+       a max_tokens this size anyway. */
+    const res = await fetch(`${ANTHROPIC_URL}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        /* Server-side fallback. If a safety classifier declines the request,
+           the API re-runs it on another model inside the same call instead of
+           handing back a refusal. Vanishingly unlikely for a prompt made of
+           git commits, and it costs nothing when it does not fire. */
+        'anthropic-beta': 'server-side-fallback-2026-07-01',
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: ANTHROPIC_MODEL,
+        max_tokens: ANTHROPIC_MAX_TOKENS,
+        stream: true,
+        fallbacks: 'default',
+        /* The same fixed shape Ollama is asked for, by the same reasoning:
+           the site renders it with its own components, and a malformed answer
+           is detectable rather than merely ugly. */
+        output_config: { format: { type: 'json_schema', schema: strictSchema(SCHEMA) } },
+        messages: [{ role: 'user', content: text }],
+      }),
+    })
+    if (!res.ok) throw new Error(`anthropic ${res.status} ${await res.text().catch(() => '')}`.trim())
+
+    const state = emptyAnthropicState()
+    let buf = ''
+    for await (const chunk of res.body) {
+      buf += Buffer.from(chunk).toString('utf8')
+      /* One event per `data:` line, and the last line of a chunk is usually a
+         partial one — keep it for the next chunk rather than parsing it. */
+      const lines = buf.split('\n')
+      buf = lines.pop() ?? ''
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue
+        let event
+        try { event = JSON.parse(line.slice(5).trim()) } catch { continue }
+        readAnthropicEvent(event, state)
+      }
+    }
+
+    log(`  ${state.inputTokens} tokens in, ${state.outputTokens} out`)
+    /* A refusal is a 200 with nothing usable in it, so it has to be checked
+       rather than caught. It means the fallback model declined as well; the
+       one before it would have been rescued silently. */
+    if (state.stopReason === 'refusal') throw new Error('anthropic: the request was declined')
+
+    const parts = [...state.blocks.values()]
+    /* Normally one block. Where there are two, joining them is right when the
+       JSON was split across them and wrong when each is its own document, and
+       there is no telling which from here — so try the join, then the pieces. */
+    for (const candidate of [parts.join(''), ...parts]) {
+      try { return JSON.parse(candidate) } catch { /* next */ }
+    }
+    throw new Error(`anthropic: no JSON in the answer (${parts.join('').slice(0, 200)})`)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function askOllama(text) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS)
   try {
@@ -1140,6 +1338,10 @@ async function ask(text) {
     clearTimeout(timer)
   }
 }
+
+/* Which of the two gets asked. Chosen once at load, so a run cannot be half
+   one model and half the other. */
+const ask = (text) => (PROVIDER === 'anthropic' ? askAnthropic(text) : askOllama(text))
 
 /* Read when it is used rather than at load, unlike the other settings here.
    A minute of real sleeping in a test is a test nobody runs, and the file is
@@ -2276,16 +2478,16 @@ async function main() {
          before it is sent. Four characters to the token is rough and is on
          the safe side for English prose. */
       const estimate = TOKENS(text)
-      log(`  prompt ${(text.length / 1024).toFixed(1)} kB, about ${estimate} tokens of ${OLLAMA_NUM_CTX}`)
+      log(`  prompt ${(text.length / 1024).toFixed(1)} kB, about ${estimate} tokens of ${CONTEXT_TOKENS}`)
       /* Only when the budget failed to do its job.
          It used to warn at 85% of the window, which fires on every long range
          now that the commits are sized to fill what is left — the budget
          working is not news. What is news is a prompt past what was reserved
          for it, because that means something is in here the budget cannot
          see. */
-      if (estimate > OLLAMA_NUM_CTX - ANSWER_RESERVE) {
-        log(`  ! past the ${OLLAMA_NUM_CTX - ANSWER_RESERVE} tokens budgeted, so part of it may be dropped before the model reads it`)
-        log(`    raise OLLAMA_NUM_CTX, or lower GRYT_CHANGELOG_COMMIT_SHARE (${COMMIT_SHARE})`)
+      if (estimate > CONTEXT_TOKENS - ANSWER_RESERVE) {
+        log(`  ! past the ${CONTEXT_TOKENS - ANSWER_RESERVE} tokens budgeted, so part of it may be dropped before the model reads it`)
+        log(`    raise ${CONTEXT_SETTING}, or lower GRYT_CHANGELOG_COMMIT_SHARE (${COMMIT_SHARE})`)
       }
       if (DRY_RUN) { console.log(`\n───── prompt for ${release.version} ─────\n${text}\n`); continue }
 
@@ -2399,7 +2601,7 @@ async function main() {
         source: {
           since: prev.version,
           commits: count,
-          model: OLLAMA_MODEL,
+          model: MODEL,
           revision: REVISION,
           /* Which parts of Gryt moved, in the order the manifest lists them.
              Straight off the diff, so there is nothing here for a model to get

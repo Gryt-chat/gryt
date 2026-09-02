@@ -17,10 +17,11 @@ ExecStartPre=-/usr/local/bin/gryt-pull-superproject
 # to be installed again.
 ExecStart=/usr/bin/env node /usr/local/lib/gryt/changelog-notes.mjs
 
-# Where OLLAMA_URL, OLLAMA_MODEL and the reports address and key live.
-# Required: the Ollama defaults point at a local instance and there is not one
-# on this box, and the script refuses to start without somewhere to post a
-# draft. See gryt-changelog-notes.env.example.
+# Where ANTHROPIC_API_KEY or the OLLAMA_* settings live, along with the reports
+# address and key. Required: without a key the drafting goes to Ollama, whose
+# default is a local instance and there is not one on this box, and the script
+# refuses to start without somewhere to post a draft. See
+# gryt-changelog-notes.env.example.
 EnvironmentFile=-/etc/default/gryt-changelog-notes
 
 # It works on a git checkout and talks to two hosts, one on the LAN and one on

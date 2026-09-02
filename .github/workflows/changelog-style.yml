@@ -24,6 +24,7 @@ on:
       - .github/scripts/check-changelog-style.mjs
       - .github/workflows/changelog-style.yml
       - ops/internal/changelog-notes.mjs
+      - ops/internal/changelog-notes.test.mjs
       # The prompt reads both of these in full, so removing or renaming one
       # changes what a draft is judged by.
       - ops/internal/writing/**
@@ -65,3 +66,9 @@ jobs:
       # stops being true, this failing is the right way to find out.
       - name: Check the style rules
         run: node .github/scripts/check-changelog-style.mjs
+
+      # The drafter's own checks. Same job because it is the same two things
+      # being protected and neither needs an install: the rules that decide
+      # whether a draft is kept, and the request that fetches one.
+      - name: Check the drafter
+        run: node ops/internal/changelog-notes.test.mjs

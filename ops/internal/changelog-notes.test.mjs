@@ -19,7 +19,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { askWithRetry, borrowedHeading, drafterRevision, liftedParagraph, neverReachedTheModel, refusalBlock, styleProblems } from "./changelog-notes.mjs";
+import { askWithRetry, borrowedHeading, drafterRevision, emptyAnthropicState, liftedParagraph, neverReachedTheModel, readAnthropicEvent, refusalBlock, strictSchema, styleProblems } from "./changelog-notes.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const style = readFileSync(join(REPO, "patch-notes-style.md"), "utf8");
@@ -465,5 +465,142 @@ for (const word of ["customisable", "recognisable", "colourful"]) {
     `"${word}" is British and must pass`,
   );
 }
+
+/* ── Drafting through the Anthropic API (GRYT-861) ────────────────────── */
+
+// The API's json_schema format wants every object closed. SCHEMA is not
+// written that way, because Ollama does not need it and there is one copy.
+const closed = strictSchema({
+  type: "object",
+  properties: {
+    headline: { type: "string" },
+    sections: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { heading: { type: "string" } },
+        required: ["heading"],
+      },
+    },
+  },
+  required: ["headline"],
+});
+
+assert.equal(closed.additionalProperties, false, "the top-level object is closed");
+assert.equal(
+  closed.properties.sections.items.additionalProperties,
+  false,
+  "an object nested inside an array is closed too",
+);
+assert.equal(
+  closed.properties.headline.additionalProperties,
+  undefined,
+  "a string is not an object and gets nothing added to it",
+);
+
+// The input is left alone, which is the whole reason this is a function and
+// not four characters added to SCHEMA.
+const before = { type: "object", properties: { a: { type: "string" } } };
+strictSchema(before);
+assert.equal(before.additionalProperties, undefined, "strictSchema does not edit what it was given");
+
+// Reading the stream. Thinking is on by default on this model, so the answer
+// arrives after a run of deltas that are the reasoning rather than the note —
+// collecting those too is a parse failure with the note sitting right there.
+const drive = (events) => {
+  const state = emptyAnthropicState();
+  for (const e of events) readAnthropicEvent(e, state);
+  return state;
+};
+
+const answered = drive([
+  { type: "message_start", message: { usage: { input_tokens: 16300 } } },
+  { type: "content_block_start", index: 0, content_block: { type: "thinking" } },
+  { type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "The range has four commits" } },
+  { type: "content_block_start", index: 1, content_block: { type: "text" } },
+  { type: "content_block_delta", index: 1, delta: { type: "text_delta", text: '{"headline":' } },
+  { type: "content_block_delta", index: 1, delta: { type: "text_delta", text: '"A release"}' } },
+  { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 812 } },
+]);
+
+assert.deepEqual(
+  JSON.parse([...answered.blocks.values()].join("")),
+  { headline: "A release" },
+  "the text deltas are the note and the thinking deltas are not",
+);
+assert.equal(answered.stopReason, "end_turn");
+assert.equal(answered.inputTokens, 16300, "the prompt size comes off message_start");
+assert.equal(answered.outputTokens, 812, "the answer size comes off message_delta");
+
+// Two text blocks are kept apart. Joined they are one document; each on its
+// own is another, and the caller tries both rather than guessing here.
+const split = drive([
+  { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: '{"a":1}' } },
+  { type: "content_block_delta", index: 1, delta: { type: "text_delta", text: '{"b":2}' } },
+]);
+assert.equal(split.blocks.size, 2, "one entry per content block");
+
+// An error arrives as an event on a 200 response, so it has to be thrown
+// rather than caught.
+assert.throws(
+  () => drive([{ type: "error", error: { type: "overloaded_error", message: "Overloaded" } }]),
+  /overloaded_error: Overloaded/,
+  "an error event stops the read",
+);
+
+// The request itself, against a server pretending to be the API.
+//
+// Everything above this is a pure function and none of it would have caught a
+// wrong header, a body the API refuses, or a stream split down the middle of a
+// `data:` line. Run in a child process because the provider is decided once
+// when the module loads, and this file has already loaded it as Ollama.
+const child = `
+import assert from "node:assert/strict";
+import { createServer } from "node:http";
+
+let seen = null;
+const server = createServer((req, res) => {
+  let body = "";
+  req.on("data", (c) => { body += c; });
+  req.on("end", () => {
+    seen = { url: req.url, headers: req.headers, body: JSON.parse(body) };
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    // Written in awkward pieces on purpose: one event split across two
+    // writes, and a chunk that ends mid-line.
+    res.write('event: message_start\\ndata: {"type":"message_start","message":{"usage":{"input_tokens":42}}}\\n\\n');
+    res.write('event: content_block_delta\\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\\\\"head');
+    res.write('line\\\\":\\\\"A release\\\\"}"}}\\n\\nevent: message_delta\\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":7}}\\n\\n');
+    res.end('event: message_stop\\ndata: {"type":"message_stop"}\\n\\n');
+  });
+});
+await new Promise((r) => server.listen(0, "127.0.0.1", r));
+
+process.env.ANTHROPIC_URL = "http://127.0.0.1:" + server.address().port;
+process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+process.env.GRYT_CHANGELOG_PROVIDER = "anthropic";
+
+// Via the environment, not argv: the module treats argv[1] as "was I run\n// directly?" and would start a real drafting run if it saw its own path.
+const { askWithRetry } = await import(process.env.DRAFTER);
+const answer = await askWithRetry("write a note");
+server.close();
+
+assert.deepEqual(answer, { headline: "A release" }, "the note survives an awkwardly chunked stream");
+assert.equal(seen.url, "/v1/messages");
+assert.equal(seen.headers["x-api-key"], "sk-ant-test");
+assert.equal(seen.headers["anthropic-version"], "2023-06-01");
+assert.equal(seen.headers["anthropic-beta"], "server-side-fallback-2026-07-01");
+assert.equal(seen.body.stream, true, "streamed, or fetch gives up after five minutes");
+assert.equal(seen.body.model, "claude-opus-5");
+assert.equal(seen.body.fallbacks, "default");
+assert.equal(seen.body.output_config.format.type, "json_schema");
+assert.equal(seen.body.output_config.format.schema.additionalProperties, false, "the schema goes out closed");
+assert.equal(seen.body.messages[0].content, "write a note");
+assert.equal(seen.body.thinking, undefined, "omitted, which is adaptive on this model");
+`;
+
+execFileSync(process.execPath, ["--input-type=module", "-e", child], {
+  stdio: ["ignore", "ignore", "inherit"],
+  env: { ...process.env, DRAFTER: join(REPO, "ops/internal/changelog-notes.mjs") },
+});
 
 console.log("changelog-notes checks: ok");

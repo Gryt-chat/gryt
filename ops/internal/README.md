@@ -413,9 +413,38 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now gryt-changelog-notes.timer
 ```
 
-Edit `/etc/default/gryt-changelog-notes` before the first run. `OLLAMA_URL` has
-no useful default — the model does not run on this box — and the port is not
-optional.
+Edit `/etc/default/gryt-changelog-notes` before the first run.
+
+### Which model writes it
+
+Two of them, and `ANTHROPIC_API_KEY` picks. With a key set, drafting goes to the
+Anthropic API. Without one it goes to Ollama, which is what everything below
+about `OLLAMA_NUM_CTX` and the card describes. `GRYT_CHANGELOG_PROVIDER`
+overrides the guess either way.
+
+Ollama drafted 105 notes and 4 of them were published. All 101 rejections had
+already passed every check in this script, so there was nothing left to tighten
+there.
+
+The API costs money per draft, which nothing else on this box does. Measured on
+the last three releases, a prompt is 13,000 to 15,000 tokens. The answer is a
+note of under a thousand plus whatever the model thinks first, and thinking is
+billed as output — so at Opus 5 rates an attempt is around 15 cents, with up to
+three attempts a release. Redrafting all 38 releases that have no note comes to
+something between five and fifteen dollars. It is billed to
+an API account and not to a Claude subscription; the reports service beside it
+already uses a key for triage, so it lands on the same bill.
+
+Two other things change with it. A release takes about forty minutes on
+qwen3:32b and seconds through the API. And `ANTHROPIC_NUM_CTX` defaults to
+200,000, past the largest range this has ever seen, so the commit block stops
+being trimmed: 1.5.5 is 164 commits and the Ollama budget drops some of them
+before the model reads a word.
+
+### On Ollama
+
+`OLLAMA_URL` has no useful default — the model does not run on this box — and
+the port is not optional.
 
 `OLLAMA_NUM_CTX` matters more than it looks, and it is a memory decision
 rather than a size one.
@@ -474,14 +503,15 @@ for working on the prompt without a reports instance to hand; nothing reads what
 it writes.
 
 A run with nothing to do costs one call to the releases API. A run with something
-to do is minutes: roughly eight per release on qwen3:32b, which is the model to
-use. `sudo journalctl -u gryt-changelog-notes -n 50` for what it did.
+to do takes seconds per release through the API, or roughly forty minutes on
+qwen3:32b. `sudo journalctl -u gryt-changelog-notes -n 50` for what it did.
 
 ### The backfill
 
-42 stable releases have shipped and three have notes written by hand, so the
-first real run has about 35 to draft, at roughly eight minutes each on
-qwen3:32b. Four and a half hours, which the machine spends on its own.
+42 stable releases have shipped and four have notes, so a full backfill is
+about 38 to draft. Through the API that is a few minutes and a few dollars. On
+qwen3:32b it is roughly forty minutes each, which the machine spends on its own
+overnight.
 
 **Use the largest model that fits on the card.** qwen3:14b is three minutes a
 release rather than eight and reads flatter for it: in one run it produced a

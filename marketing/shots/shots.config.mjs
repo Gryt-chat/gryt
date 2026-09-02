@@ -97,24 +97,24 @@ export const sets = [
       },
       {
         style: "headlineSm", x: 1.07, y: 0.05,
-        text: "Tap a channel and you’re in the call",
+        text: "Text channels and voice rooms in one list",
         maxWidth: 0.62,
       },
       {
         style: "onBand", x: 2.08, y: 0.06,
-        eyebrow: "Sealed",
-        text: "Direct messages the server can’t read",
+        eyebrow: "Your key",
+        text: "Your identity is twenty-four words you keep",
         maxWidth: 0.84,
       },
       {
         style: "headlineSm", x: 3.07, y: 0.06,
-        text: "Share a screen at the quality you pick",
+        text: "Everyone gets an owl",
         maxWidth: 0.6,
       },
       {
         x: 4.07, y: 0.05,
-        eyebrow: "Everyone gets one",
-        text: "The owls are drawn by hand",
+        eyebrow: "Drawn by hand",
+        text: "The hats come from the people here",
         maxWidth: 0.86,
       },
       {
@@ -135,10 +135,10 @@ export const sets = [
      */
     phones: [
       { x: 0.80, y: 0.80, width: 0.72, angle: -8, screenshot: "captures/iphone-6.9/home.png" },
-      { x: 1.78, y: 0.56, width: 0.60, angle: 7, screenshot: "captures/iphone-6.9/voice.png" },
-      { x: 2.62, y: 0.84, width: 0.64, angle: -5, screenshot: "captures/iphone-6.9/encrypted.png" },
-      { x: 3.70, y: 0.80, width: 0.58, angle: 6, screenshot: "captures/iphone-6.9/screen.png" },
-      { x: 5.66, y: 0.82, width: 0.64, angle: -6, screenshot: "captures/iphone-6.9/server.png" },
+      { x: 1.78, y: 0.56, width: 0.60, angle: 7, screenshot: "captures/iphone-6.9/channels.png" },
+      { x: 2.62, y: 0.84, width: 0.64, angle: -5, screenshot: "captures/iphone-6.9/identity.png" },
+      { x: 3.70, y: 0.80, width: 0.58, angle: 6, screenshot: "captures/iphone-6.9/members.png" },
+      { x: 5.66, y: 0.82, width: 0.64, angle: -6, screenshot: "captures/iphone-6.9/homelab.png" },
     ],
 
     /**

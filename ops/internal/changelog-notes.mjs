@@ -1615,8 +1615,85 @@ function readerProse(entry) {
  * `rejected/`. Reading a refusal is how the first fabricated draft was
  * diagnosed, and one reason at a time makes that three runs instead of one.
  */
-export function styleProblems(entry, parts) {
+/**
+ * Prose that says the same thing twice.
+ *
+ * The most common thing wrong with these drafts, by a distance. Of eleven
+ * reviewed on 2026-09-02, five repeated themselves: an intro paragraph restated
+ * as the first line of the section below it, a section's second paragraph
+ * saying its first one again, and 1.7.2 carrying one sentence three times, once
+ * per section, in a note of 1650 characters covering 80 commits.
+ *
+ * Nothing caught any of it, because every rule here was about a word or a
+ * shape, and this is about two sentences being the same sentence.
+ *
+ * Sentence by sentence rather than paragraph by paragraph. The repetitions were
+ * rarely whole paragraphs — usually one sentence lifted into a new position
+ * with a word changed, which a paragraph comparison misses entirely.
+ *
+ * `overlap` is content words over the longer set, so it already ignores the
+ * articles and the word order. Eight words is the floor because short sentences
+ * legitimately resemble each other: "The tray icon now works" and "The tour
+ * works properly now" share most of what little they have.
+ */
+export function repeatedProse(entry) {
   const problems = []
+
+  const sentences = []
+  const push = (where, text) => {
+    for (const raw of String(text).split(/(?<=[.!?])\s+/)) {
+      const s = raw.trim()
+      if (s && contentWords(s).size >= 8) sentences.push({ where, text: s })
+    }
+  }
+
+  entry.intro.forEach((p) => push('the opening', p))
+  entry.sections.forEach((s) => s.body.forEach((p) => push(`"${s.heading}"`, p)))
+
+  /* Every pair once. These are short documents — a dozen sentences, rarely
+     forty — so the quadratic does not matter and a cleverer index would only
+     be something else to get wrong. */
+  outer: for (let i = 0; i < sentences.length; i += 1) {
+    for (let j = i + 1; j < sentences.length; j += 1) {
+      if (overlap(sentences[i].text, sentences[j].text) <= 0.75) continue
+
+      const a = sentences[i]
+      const b = sentences[j]
+      const where = a.where === b.where ? `twice in ${a.where}` : `in ${a.where} and again in ${b.where}`
+      problems.push(soft(`the same sentence ${where}: "${trim(a.text)}"`))
+      /* One is the point. A draft that repeats itself four times would
+         otherwise bury every other problem it has. */
+      break outer
+    }
+  }
+
+  /* A recap bullet under two groups. 1.9.2 listed "the server refuses empty
+     secrets" under both Voice and Security, and 1.7.2 listed the same call
+     bullet twice. The recap is meant to be the whole note read quickly, so a
+     line appearing twice makes it longer without making it say more. */
+  const items = entry.recap.flatMap((g) => g.items.map((item) => ({ group: g.group, item })))
+  for (let i = 0; i < items.length; i += 1) {
+    for (let j = i + 1; j < items.length; j += 1) {
+      if (overlap(items[i].item, items[j].item) <= 0.8) continue
+      const groups = items[i].group === items[j].group
+        ? `twice under ${items[i].group}`
+        : `under both ${items[i].group} and ${items[j].group}`
+      problems.push(soft(`the same recap line ${groups}: "${trim(items[i].item)}"`))
+      i = items.length
+      break
+    }
+  }
+
+  return problems
+}
+
+/** Enough of a sentence to recognise it, without filling the log with it. */
+function trim(text) {
+  return text.length > 70 ? `${text.slice(0, 70)}…` : text
+}
+
+export function styleProblems(entry, parts) {
+  const problems = [...repeatedProse(entry)]
   const headings = entry.sections.map((s) => s.heading)
   const prose = [...entry.intro, ...entry.sections.flatMap((s) => s.body)]
 

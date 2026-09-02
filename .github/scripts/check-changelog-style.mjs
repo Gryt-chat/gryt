@@ -118,6 +118,64 @@ function handWritten(dir) {
    reason it was refused, and the reason the rule exists. */
 const BAD_DRAFTS = [
   {
+    /* Verbatim from the draft rejected on 2026-09-02. One sentence, three
+       times, once per section, in 1650 characters covering 80 commits. Every
+       rule here passed it. */
+    name: '1.7.2, which said the same sentence in all three of its sections',
+    expect: 'the same sentence',
+    range: [
+      {
+        component: 'client',
+        commits: [{ subject: 'Encrypt a direct message (GRYT-729) (#311)', body: '' }],
+      },
+    ],
+    note: {
+      headline: 'Direct messages are now private by default, and calling works in them.',
+      intro: ['This release makes direct messages private by default, so the server cannot read them.'],
+      sections: [
+        {
+          heading: 'Direct messages are private',
+          body: ['The server never had to see your messages, so this is just making it so the server cannot see them if it tries.'],
+        },
+        {
+          heading: 'Calling in direct messages',
+          body: ['The server never had to see your messages, so the privacy change is just making it so the server cannot see them if it tries.'],
+        },
+        {
+          heading: 'Group direct messages',
+          body: ['A group is created from a one-to-one by adding someone, and the conversation stays private.'],
+        },
+      ],
+      recap: [{ group: 'Direct messages', items: ['Messages are now encrypted so the server cannot read them'] }],
+    },
+  },
+  {
+    /* Also 2026-09-02. The recap listed the same fix under two groups, which
+       makes the short version longer without making it say more. */
+    name: '1.9.2, which listed one recap line under two groups',
+    expect: 'the same recap line',
+    range: [
+      {
+        component: 'sfu',
+        commits: [{ subject: 'Refuse an empty server secret (GRYT-786) (#30)', body: '' }],
+      },
+    ],
+    note: {
+      headline: 'The server no longer accepts an empty signing secret.',
+      intro: ['A server registering with an empty secret verified every token against a key anybody could guess.'],
+      sections: [
+        {
+          heading: 'An empty secret is refused',
+          body: ['Registration is refused outright, and a join is refused when the stored secret is empty.'],
+        },
+      ],
+      recap: [
+        { group: 'Voice', items: ['The server now refuses empty secrets'] },
+        { group: 'Security', items: ['The server now refuses empty secrets'] },
+      ],
+    },
+  },
+  {
     name: '1.6.41, which invented a security section',
     expect: 'claims security, and nothing in the commits is about security',
     range: [

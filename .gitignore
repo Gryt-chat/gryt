@@ -54,7 +54,3 @@ ops/downloads/**
 ops/deploy/compose/local.yml
 ops/deploy/compose/pp.yml
 
-
-# Drafted release notes written by `changelog-notes.mjs --dump`, for reading
-# while the prompt is being worked on. Nothing else reads them.
-ops/internal/changelog/

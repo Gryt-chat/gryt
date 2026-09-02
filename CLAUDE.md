@@ -160,6 +160,12 @@ first, a recap list after, facts taken from `manifest.json` diffs rather than fr
 memory. It lived only in an untracked local file until it nearly went the way of
 the SVG purge decision below.
 
+The procedure that goes with it is the `changelog-notes` skill, in
+[`.claude/skills/changelog-notes/`](.claude/skills/changelog-notes/SKILL.md):
+which releases have no note, how to get a commit range out of two manifests, and
+where the MDX goes. A script on the box used to do this and wrote 105 drafts for
+4 published notes, so it was removed in GRYT-861 and the job is done here.
+
 ### Anything you defer gets a task
 
 If you write "separate decision", "out of scope", "your call" or "follow-up" in a PR

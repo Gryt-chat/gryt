@@ -350,167 +350,31 @@ the same reason it does above.
 The first run rebuilds all three and will take a few minutes. After that, most runs print
 three `already on <commit>` lines and stop.
 
-## Drafting the changelog
+## The changelog
 
-`changelog-notes.mjs` drafts the release notes for a stable release. The facts
-are not guessed: every release commits `.release/manifest.json`, which pins the
-exact client, server, sfu and image worker commit it shipped, so the diff
-between two releases is `git log old..new` in four submodules.
-`patch-notes-style.md` at the repository root is the style guide, and it is
-handed to the model in full along with the headlines of the three notes written
-by hand.
+Written by hand, in Claude Code. `.claude/skills/changelog-notes/SKILL.md` is
+the procedure and `patch-notes-style.md` at the repository root is the style
+guide. Notes are MDX in `packages/site/content/changelog`, and the site builds
+them in.
 
-The model never writes markup. It fills a fixed shape — a headline, two to four
-sections of heading and paragraphs, and the recap list grouped by label — and
-the changelog page renders that shape with its own components. A malformed
-answer is detectable rather than merely ugly, and is dropped: the next run tries
-again rather than posting something half-formed.
+`changelog-notes.mjs` used to draft them here on a local model. It produced 105
+drafts and 4 of them were published, and every one of the 101 rejections had
+already passed every check in the script, so there was nothing left to tighten.
+Moving it to a paid API would have worked and would have cost money per release,
+which is the one thing the drafter was not supposed to do.
 
-### A draft is not published
+### Taking it off the box
 
-Each draft is posted to the reports service, which holds it until somebody has
-read it at [reports.gryt.chat/admin/changelog](https://reports.gryt.chat/admin/changelog)
-and pressed Publish or Reject. Reports is what writes `changelog.json` into the
-directory both containers mount, and the changelog page fetches it at runtime —
-so publishing takes seconds and nothing rebuilds.
-
-This script wrote that file itself until GRYT-635. Two fabricated drafts were
-caught by reading them while it was being built: one retold a different release
-wholesale, and one was a paraphrase — a section headed "Security improvements
-for identity and account tokens", about keychain encryption, in a release whose
-commit range does not contain the word keychain. It read like the rest of the
-note and it scored under the contamination guard in this script, so the guard is
-a backstop rather than a proof.
-
-`GRYT_CHANGELOG_URL` and `GRYT_CHANGELOG_KEY` are required and the script
-refuses to start without them. `GRYT_CHANGELOG_REDRAFT=1.6.43` drafts one
-version again even though reports already has a note for it; the existing draft
-is kept and marked superseded.
-
-The commit range each note was drafted from is posted with it and shown beside
-it in the inbox, so a claim can be checked against the commits. It is not in the
-file the site reads.
-
-Stable releases only by default. `GRYT_CHANGELOG_CHANNELS="latest beta"` drafts
-the pre-releases as well, which the changelog page hides behind a toggle.
-
-Notes written by hand in `packages/site/content/changelog` are not touched and
-win where both exist.
-
-Releases older than **v1.2.12** have no manifest and are skipped — the format
-did not exist yet. Nothing here involves changesets; those live in the `ui`
-repository and version npm packages, which is a different job.
-
-### Installing the timer
+The units are gone from this repository, so remove them from the machine too:
 
 ```bash
-sudo mkdir -p /var/lib/gryt-changelog
-sudo mkdir -p /usr/local/lib/gryt
-sudo ln -sfn "$PWD/ops/internal/changelog-notes.mjs" /usr/local/lib/gryt/changelog-notes.mjs
-sudo cp ops/internal/systemd/gryt-changelog-notes.env.example /etc/default/gryt-changelog-notes
-sudo cp ops/internal/systemd/gryt-changelog-notes.{service,timer} /etc/systemd/system/
+sudo systemctl disable --now gryt-changelog-notes.timer
+sudo rm -f /etc/systemd/system/gryt-changelog-notes.{service,timer}
+sudo rm -f /etc/default/gryt-changelog-notes /usr/local/lib/gryt/changelog-notes.mjs
 sudo systemctl daemon-reload
-sudo systemctl enable --now gryt-changelog-notes.timer
 ```
 
-Edit `/etc/default/gryt-changelog-notes` before the first run. `OLLAMA_URL` has
-no useful default — the model does not run on this box — and the port is not
-optional.
-
-`OLLAMA_NUM_CTX` matters more than it looks, and it is a memory decision
-rather than a size one.
-
-Ollama allocates the window you ask for rather than the one the model has, and
-it asks for 4096 when nothing says otherwise. A prompt for a five-commit
-release is around 12,000 tokens, so the rest was being dropped before the model
-read it, with nothing in the answer to say so.
-
-What it costs is on the card. qwen3:32b keeps 256 KiB of KV cache per token —
-6 GiB at 24576, 8 at 32768, 10 at the model's own 40960 — and the box drafting
-these has a 12 GiB 3060 with Frigate on it. The weights are 20 GB either way,
-so the card was never holding the whole model; what changes is how much of it
-runs on the CPU, and every GiB of cache is a GiB of weights that does.
-
-24576 is the default. The largest prompt drafted so far is 16,300 tokens and
-the script prints the size on every run, so a release that outgrows it says so
-rather than losing commits quietly.
-
-Two variables on the **Ollama container**, not in this unit's env file, halve
-the cache:
-
-```
-OLLAMA_FLASH_ATTENTION=1
-OLLAMA_KV_CACHE_TYPE=q8_0
-```
-
-q8_0 is hard to tell from f16 in the output and gives back 3 GiB, which is
-3 GiB of weights off the CPU. Do that before reaching for a bigger model: on
-12 GiB there is no bigger model that fits, only a slower one.
-
-`GRYT_CHANGELOG_KEY` here has to match `REPORTS_CHANGELOG_KEY` in
-`ops/internal/.env`, which is what the reports service checks.
-
-Then recreate both containers once so they pick up the mounts:
-
-```bash
-docker compose -f ops/internal/docker-compose.yml up -d --no-deps site reports
-```
-
-Needs Node 20 or newer on the host, and `gh` authenticated as something that
-can list releases on `Gryt-chat/gryt`.
-
-Run it by hand first, and read what it wrote before letting the timer have it:
-
-```bash
-node ops/internal/changelog-notes.mjs --dry-run   # the prompt, without the model
-node ops/internal/changelog-notes.mjs --dump      # draft to disk, post nothing
-node ops/internal/changelog-notes.mjs             # one run
-```
-
-`--dry-run` prints what it would ask for each release and calls nothing. Useful
-for reading the prompt after changing the style guide. `--dump` asks the model
-and writes each draft to `GRYT_CHANGELOG_DUMP` instead of posting it, which is
-for working on the prompt without a reports instance to hand; nothing reads what
-it writes.
-
-A run with nothing to do costs one call to the releases API. A run with something
-to do is minutes: roughly eight per release on qwen3:32b, which is the model to
-use. `sudo journalctl -u gryt-changelog-notes -n 50` for what it did.
-
-### The backfill
-
-42 stable releases have shipped and three have notes written by hand, so the
-first real run has about 35 to draft, at roughly eight minutes each on
-qwen3:32b. Four and a half hours, which the machine spends on its own.
-
-**Use the largest model that fits on the card.** qwen3:14b is three minutes a
-release rather than eight and reads flatter for it: in one run it produced a
-headline word for word from a hand-written note it had been shown as an example,
-for a release about something else entirely. The point of this is prose somebody
-might have written, so the hours are the cheaper half of that trade. On the
-machine this was written for, qwen3:32b is the largest there is.
-
-The unit's two-hour `TimeoutStartSec` does not apply. It bounds one run of the
-service, which drafts at most one release; a backfill is run by hand and systemd
-never sees it. Stopping the timer for the duration only keeps two runs off the
-card at once — reports refuses the second draft either way, so what it saves is
-GPU rather than correctness.
-
-```bash
-sudo systemctl stop gryt-changelog-notes.timer
-set -a; . /etc/default/gryt-changelog-notes; set +a
-GRYT_CHANGELOG_LIMIT=50 node ops/internal/changelog-notes.mjs
-sudo systemctl start gryt-changelog-notes.timer
-```
-
-Idempotent, so an interrupted run picks up where it stopped: the script asks
-reports which versions already have a note and skips those. A shallow submodule
-deepens itself on demand, so there is no `--unshallow` to run first.
-
-Nothing is published by any of that. All 35 land in the queue at
-`/admin/changelog` waiting to be read, which is the point — and reading 35 is a
-sitting or two, not an afternoon, because the queue advances to the next one
-still waiting after each decision.
-
-Expect to reject a few anyway. Rejecting frees the version, so the next tick
-draws it again.
+Leave `/var/lib/gryt-changelog/changelog.json` alone for now. Four published
+notes are still only in that file, and the changelog page still fetches it at
+runtime. They become MDX first; the mounts, the reports routes and
+`REPORTS_CHANGELOG_KEY` come out after that, under GRYT-863.

@@ -20,9 +20,12 @@ services:
       # rather than built in so a note is live without rebuilding the site.
       #
       # Read-only here and writable in the reports service below, which is the
-      # only thing that writes this file. gryt-changelog-notes.service drafts
-      # the notes and posts them to reports; reports holds each one until
-      # somebody has read it at /admin/changelog, and writes the file.
+      # only thing that writes this file.
+      #
+      # Frozen since GRYT-861. A drafter on this box used to post notes to
+      # reports, and notes are written by hand now, so nothing adds to the file
+      # any more. Four published notes are still only in it, which is why the
+      # mount is still here; it comes out with GRYT-863, once they are MDX.
       #
       # Its own path, not /changelog.json at the root: the site router owns
       # /changelog, and a real file under a path the router also claims is a
@@ -177,12 +180,13 @@ services:
       REPORTS_SESSION_SECRET: "${REPORTS_SESSION_SECRET:-}"
       # Reading a drafted release note before it is published (GRYT-635).
       #
-      # gryt-changelog-notes.service on this box drafts a note after a release
-      # and posts it here rather than writing the file the site reads, so
-      # nothing a model wrote is public until somebody has read it. The key is
-      # what lets it post, and it is not one of the app keys above: those ship
-      # inside a public binary and this one writes to a page. Empty here and set
-      # in .env; without it those routes do not exist.
+      # A drafter on this box used to post notes here rather than writing the
+      # file the site reads, so nothing a model wrote was public until somebody
+      # had read it. The drafter is gone (GRYT-861) and nothing posts any more.
+      # The routes stay until the four published notes still living only in
+      # changelog.json are MDX in the site (GRYT-863). Empty here and set in
+      # .env; without
+      # it those routes do not exist.
       REPORTS_CHANGELOG_KEY: "${REPORTS_CHANGELOG_KEY:-}"
       REPORTS_CHANGELOG_FILE: /release-notes/changelog.json
     volumes:

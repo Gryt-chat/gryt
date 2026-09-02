@@ -2,9 +2,4 @@
 # public. README.md says where to download them.
 frames/
 
-# Captures come out of a simulator and are regenerated per release. Committing
-# them would mean a set that looks current and is not.
-captures/
-
-# Rendered panels. Uploaded to the stores, not stored here.
-out/
+node_modules/

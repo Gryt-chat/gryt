@@ -44,6 +44,17 @@ async function apertureFor(deviceId) {
   if (!apertureCache.has(deviceId)) {
     const device = DEVICES[deviceId];
     const framePath = resolveFrame(deviceId);
+
+    /* Frameless: the screenshot is the whole device, so the aperture is its
+       own bounds and there is nothing to measure. */
+    if (!framePath) {
+      apertureCache.set(deviceId, {
+        framePath: null,
+        aperture: { x: 0, y: 0, ...device.capture, warnings: [] },
+      });
+      return apertureCache.get(deviceId);
+    }
+
     const aperture = await measureAperture(framePath, device.capture);
     for (const warning of aperture.warnings ?? []) {
       console.warn(`  frame ${basename(framePath)}: ${warning}`);
@@ -61,8 +72,11 @@ async function apertureFor(deviceId) {
  */
 export async function composeDevice(deviceId, screenshotPath) {
   const { framePath, aperture } = await apertureFor(deviceId);
-  const frame = sharp(framePath);
-  const { width, height } = await frame.metadata();
+  const device = DEVICES[deviceId];
+
+  const { width, height } = framePath
+    ? await sharp(framePath).metadata()
+    : device.capture;
 
   const layers = [];
 
@@ -96,15 +110,33 @@ export async function composeDevice(deviceId, screenshotPath) {
     layers.push({ input: body, left: aperture.x, top: aperture.y });
   }
 
-  layers.push({ input: await frame.png().toBuffer(), left: 0, top: 0 });
+  if (framePath) {
+    layers.push({ input: await sharp(framePath).png().toBuffer(), left: 0, top: 0 });
+  }
+
+  let composed = await sharp({
+    create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+  })
+    .composite(layers)
+    .png()
+    .toBuffer();
+
+  /* Frameless devices get their corners rounded here rather than by the caller.
+     A square-cornered screenshot on a coloured ground is the tell that nobody
+     thought about it, and the radius belongs with the device rather than with
+     the layout. */
+  if (!framePath && device.cornerRadius) {
+    const mask = Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="${width}" height="${height}" rx="${device.cornerRadius}" fill="#fff"/></svg>`,
+    );
+    composed = await sharp(composed)
+      .composite([{ input: mask, blend: "dest-in" }])
+      .png()
+      .toBuffer();
+  }
 
   return {
-    buffer: await sharp({
-      create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
-    })
-      .composite(layers)
-      .png()
-      .toBuffer(),
+    buffer: composed,
     width,
     height,
   };
@@ -162,32 +194,54 @@ export async function renderSet({ set, deviceId, outDir }) {
   /* Composed once per distinct screenshot. Three of the five placements in a
      set reuse a capture across devices, and framing is the expensive step. */
   const cache = new Map();
-  const framedFor = async (screenshot) => {
-    const key = screenshot ?? "";
+  /**
+   * A capture is named by slug, and the path is per device.
+   *
+   * `captures/<device>/<slug>.png`. The config names screens rather than
+   * files, so one set renders for the iPhone, the iPad and Android without
+   * three copies of the layout — and an iPad panel can never accidentally
+   * carry a phone capture, which is the mistake the earlier hardcoded paths
+   * made silently and at the wrong resolution.
+   */
+  const framedFor = async (slug) => {
+    const key = slug ?? "";
     if (!cache.has(key)) {
-      cache.set(key, await composeDevice(deviceId, screenshot ? join(here, screenshot) : null));
+      const path = slug ? join(here, "captures", deviceId, `${slug}.png`) : null;
+      cache.set(key, await composeDevice(deviceId, path));
     }
     return cache.get(key);
   };
 
+  /**
+   * Placements for this device, where the set gives them.
+   *
+   * A tablet panel is 0.75 wide-to-tall and a phone panel 0.46, so the same
+   * fractional placements put a phone-sized device in the middle of a much
+   * wider field with the text stranded above it. The type scales on its own
+   * (see `scaleTheme`); where a subject sits does not, and pretending it does
+   * is how a tablet listing ends up looking like the phone one stretched.
+   */
+  const perDevice = set.perDevice?.[deviceId] ?? {};
+  const resolved = { ...set, ...perDevice };
+
   const { cuts, strip } = await renderStrip({
-    set,
+    set: resolved,
     W,
     H,
     font,
     framedFor,
-    owlTiles: await owlTiles({ owls: set.owls, theme: set.theme, W, H }),
+    owlTiles: await owlTiles({ owls: resolved.owls, theme: resolved.theme, W, H }),
   });
 
   /* Emptied first. Renaming or dropping a panel otherwise leaves the old file
-     behind, and `out/` is what gets uploaded — a stale panel from two edits ago
+     behind, and `panels/` is what gets uploaded — a stale panel from two edits ago
      is the kind of mistake nobody catches until it is live. */
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
 
   const written = [];
   for (const [i, buffer] of cuts.entries()) {
-    const name = `${String(i + 1).padStart(2, "0")}-${set.slugs[i] ?? `panel-${i + 1}`}.png`;
+    const name = `${String(i + 1).padStart(2, "0")}-${resolved.slugs[i] ?? `panel-${i + 1}`}.png`;
     const file = join(outDir, name);
     await writeFile(file, buffer);
     written.push({ file, width: W, height: H });
@@ -226,7 +280,7 @@ if (isMain(import.meta.url)) {
   for (const set of sets) {
     for (const deviceId of set.devices) {
       if (only.length && !only.includes(deviceId)) continue;
-      const outDir = join(here, "out", set.slug, deviceId);
+      const outDir = join(here, "panels", set.slug, deviceId);
       console.log(`${set.slug} → ${deviceId} (${DEVICES[deviceId].label})`);
       try {
         const written = await renderSet({ set, deviceId, outDir });

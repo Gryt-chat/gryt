@@ -174,8 +174,43 @@ function commandBlock({ font, theme, spec, W, H }) {
  * so a device or a word that straddles a boundary needs no special handling —
  * it is simply present in both cuts.
  */
+/**
+ * The reference panel width the theme's pixel values were chosen against.
+ *
+ * Everything in the theme that is a length — type sizes, insets, the command
+ * chip — is in pixels, and a panel is 1320 across on an iPhone and 2064 on an
+ * iPad. Left alone, the same headline is a third smaller on the bigger device
+ * and the set stops looking like one design. Fractions could have avoided this,
+ * but a font size written as 0.079 of a panel is unreadable to whoever tunes it
+ * next.
+ */
+const REFERENCE_WIDTH = 1320;
+
+/** Every length in the theme, scaled to this device's panel. */
+function scaleTheme(theme, k) {
+  if (k === 1) return theme;
+  const scale = (v) => (typeof v === "number" ? Math.round(v * k * 100) / 100 : v);
+  const lengths = new Set([
+    "size", "tracking", "inset", "gap", "height", "pad", "radius", "lineHeight",
+  ]);
+
+  const walk = (node) => {
+    if (Array.isArray(node)) return node.map((v) => (typeof v === "number" ? scale(v) : walk(v)));
+    if (!node || typeof node !== "object") return node;
+    const out = {};
+    for (const [key, value] of Object.entries(node)) {
+      if (key === "lineHeight") out[key] = value; // a ratio, not a length
+      else if (key === "sizes" && Array.isArray(value)) out[key] = value.map(scale);
+      else if (lengths.has(key) && typeof value === "number") out[key] = scale(value);
+      else out[key] = typeof value === "object" ? walk(value) : value;
+    }
+    return out;
+  };
+  return walk(theme);
+}
+
 export async function renderStrip({ set, W, H, font, framedFor, owlTiles }) {
-  const theme = set.theme;
+  const theme = scaleTheme(set.theme, W / REFERENCE_WIDTH);
   /* The number of cuts, from the filenames rather than a `panels` array. A
      strip has no per-panel objects — that is the point of it — so the slug list
      is the only thing that says how many panels there are. */

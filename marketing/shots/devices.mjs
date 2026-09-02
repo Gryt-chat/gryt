@@ -50,7 +50,12 @@ export const DEVICES = {
     store: "app-store",
     output: { width: 2064, height: 2752 },
     capture: { width: 2064, height: 2752 },
-    frame: "iPad Pro 13 - Silver - Portrait.png",
+    /* Frameless. Apple's iPad bezel is not on this machine and the zip it
+       ships in is not something to redistribute from a public repo. Frameless
+       is also the safer read of Apple's own rule — a frame that does not match
+       current hardware is a rejection, and no frame cannot. */
+    frame: null,
+    cornerRadius: 72,
     simulator: "iPad Pro 13-inch (M5)",
   },
 
@@ -63,14 +68,27 @@ export const DEVICES = {
     store: "play",
     output: { width: 1080, height: 1920 },
     capture: { width: 1080, height: 2400 },
-    frame: "android-phone.png",
+    /* Frameless, and for the extra reason that a generic Android bezel is a
+       picture of nobody's phone. */
+    frame: null,
+    cornerRadius: 64,
     simulator: null,
   },
 };
 
+/**
+ * The frame PNG for a device, or null when it is drawn frameless.
+ *
+ * Frameless is not a fallback. Apple allows a device frame but refuses one that
+ * does not match current hardware, so a bezel is a liability the moment the
+ * hardware moves on; a rounded screenshot on a coloured ground never is. The
+ * iPhone set uses a frame because Apple's own asset is to hand and the aperture
+ * matches the simulator at 1:1.
+ */
 export function resolveFrame(deviceId) {
   const device = DEVICES[deviceId];
   if (!device) throw new Error(`unknown device "${deviceId}"`);
+  if (!device.frame) return null;
 
   const path = join(framesDir, device.frame);
   if (!existsSync(path)) {

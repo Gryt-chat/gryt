@@ -8,10 +8,24 @@ run off one panel and arrive in the next.
 cd marketing/shots
 yarn install
 node capture.mjs iphone-6.9 voice       # once per capture, app driven by hand
-node render.mjs                          # writes out/<set>/<device>/
+node render.mjs                        # writes panels/<set>/<device>/
 ```
 
-`out/` is what you upload. Nothing in here is committed except the code.
+`panels/` is what you upload, and it is committed. It is not called `out/`
+because the superproject ignores `**/out/` as a build artifact, and these are
+deliverables rather than artifacts., as are the captures under
+`captures/`.
+
+That is deliberate and it is the opposite of what a build output usually gets.
+A capture is a driven simulator session — an app installed on the right device,
+joined to the demo server, walked to the right screen — and none of that is
+reproducible from the repository. The rendered panels are a pure function of
+the captures, the config and the frame, but the iPhone frame is *not* committed
+(see below), so without them nobody but this machine can rebuild that set.
+
+They go stale, and that is the trade: re-capture and re-render at each release
+that changes the UI, rather than shipping a listing that shows a version nobody
+is running.
 
 ## Before the first run: get the frames
 
@@ -38,7 +52,7 @@ panel height, so `x: 1.6` is a little past halfway through panel two. A
 placement reads as where it sits in the sequence rather than as a pixel offset
 that has to be recomputed when the device size changes.
 
-`out/<set>/<device>/_strip.png` is the uncut canvas. It is not uploaded
+`panels/<set>/<device>/_strip.png` is the uncut canvas. It is not uploaded
 anywhere — it is how you see whether the phones line up across the cuts.
 
 **Every panel still has to survive being looked at alone.** The store shows one
@@ -103,13 +117,22 @@ fine. Two things are not:
   real data, not mockups. A headline promising something the capture behind it
   does not show is a rejection.
 
-## The part that is not solved
+## What is not done
 
-Getting a populated server, a live call and a readable history onto a simulator
-repeatably. `capture.mjs` deliberately does not drive the app — a script
-guessing at deep links produces a screenshot of the wrong screen, which looks
-finished and is not. `marketing/video/demo-mode.md` argues for a demo mode in
-the client for the launch video; the same thing would serve this.
+**Android.** `devices.mjs` has the entry and the sizes are right — Play takes
+1080 to 3840 for phone, minimum two, and a separate tablet set of at least four
+at 9:16, plus a 1024x500 feature graphic. There are no captures, because this
+machine has the Android command-line tools and no `adb`, no emulator binary and
+no AVD. Getting one needs a platform-tools and system-image install and a
+Gradle build of the app.
+
+**Voice and screen share.** No captures for either. Joining a voice room
+publishes the machine's microphone to a live shared server, which is not
+something to do quietly; screen share has no simulator path at all.
+
+**Getting to a screen** is still by hand. `capture.mjs` does not drive the app —
+a script guessing at deep links produces a screenshot of the wrong screen, which
+looks finished and is not.
 
 ## The owls
 

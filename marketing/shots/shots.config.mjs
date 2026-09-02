@@ -134,11 +134,11 @@ export const sets = [
      * rotated, and the store is full of the second kind.
      */
     phones: [
-      { x: 0.80, y: 0.80, width: 0.72, angle: -8, screenshot: "captures/iphone-6.9/home.png" },
-      { x: 1.78, y: 0.56, width: 0.60, angle: 7, screenshot: "captures/iphone-6.9/channels.png" },
-      { x: 2.62, y: 0.84, width: 0.64, angle: -5, screenshot: "captures/iphone-6.9/identity.png" },
-      { x: 3.70, y: 0.80, width: 0.58, angle: 6, screenshot: "captures/iphone-6.9/members.png" },
-      { x: 5.66, y: 0.82, width: 0.64, angle: -6, screenshot: "captures/iphone-6.9/homelab.png" },
+      { x: 0.80, y: 0.80, width: 0.72, angle: -8, screenshot: "home" },
+      { x: 1.78, y: 0.56, width: 0.60, angle: 7, screenshot: "channels" },
+      { x: 2.62, y: 0.84, width: 0.64, angle: -5, screenshot: "identity" },
+      { x: 3.70, y: 0.80, width: 0.58, angle: 6, screenshot: "members" },
+      { x: 5.66, y: 0.82, width: 0.64, angle: -6, screenshot: "homelab" },
     ],
 
     /**
@@ -156,6 +156,35 @@ export const sets = [
         "kesh", "nils", "opal", "rune", "vega", "hild", "marek",
         "senna", "yuki", "beck", "ilse", "orla", "tam",
       ],
+    },
+
+    /**
+     * The tablet is a different shape, not a bigger phone.
+     *
+     * A panel is 0.75 wide-to-tall here against the phone's 0.46, so the
+     * devices sit larger, lower and flatter — a tablet tilted eight degrees
+     * reads as dropped rather than held. The owl wall goes to five columns
+     * because four leaves a third of the panel empty.
+     */
+    perDevice: {
+      "ipad-13": {
+        phones: [
+          { x: 0.78, y: 0.86, width: 0.80, angle: -5, screenshot: "home" },
+          { x: 1.74, y: 0.66, width: 0.72, angle: 4, screenshot: "channels" },
+          { x: 2.60, y: 0.88, width: 0.76, angle: -3, screenshot: "identity" },
+          { x: 3.62, y: 0.84, width: 0.70, angle: 4, screenshot: "members" },
+          { x: 5.60, y: 0.86, width: 0.76, angle: -4, screenshot: "homelab" },
+        ],
+        owls: {
+          x: 4.06, y: 0.30,
+          columns: 5, rows: 4, gap: 26, cell: 0.166,
+          seeds: [
+            "sivert", "ada", "mallory", "bo", "juniper", "tor", "wren",
+            "kesh", "nils", "opal", "rune", "vega", "hild", "marek",
+            "senna", "yuki", "beck", "ilse", "orla", "tam",
+          ],
+        },
+      },
     },
 
     /** Panel filenames, in order. */

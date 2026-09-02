@@ -26,8 +26,9 @@
  * inside the screen and the derived value is the one to trust.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { basename } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import sharp from "sharp";
 
@@ -99,7 +100,24 @@ export async function measureAperture(framePath, expected) {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+/**
+ * Whether this file is the one node was asked to run.
+ *
+ * `import.meta.url === "file://" + process.argv[1]` is the usual shape and it
+ * is wrong on a path with a symlink in it: `import.meta.url` is resolved and
+ * argv is not, so on macOS anything under /tmp compares false and the CLI
+ * silently does nothing. Resolving both is the fix.
+ */
+function isMain(metaUrl) {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(fileURLToPath(metaUrl)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
+
+if (isMain(import.meta.url)) {
   const [framePath, w, h] = process.argv.slice(2);
   if (!framePath) {
     console.error("usage: node measure-frame.mjs <frame.png> [screenWidth screenHeight]");

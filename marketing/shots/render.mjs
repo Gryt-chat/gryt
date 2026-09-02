@@ -21,17 +21,18 @@
  * off its own screen.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { owlAvatarSvg } from "@gryt/owl";
 import sharp from "sharp";
 
 import { DEVICES, resolveFrame } from "./devices.mjs";
 import { measureAperture } from "./measure-frame.mjs";
-import { KINDS } from "./panels.mjs";
-import { fit, loadFont } from "./text.mjs";
+import { renderStrip } from "./strip.mjs";
+import { loadFont } from "./text.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -109,123 +110,116 @@ export async function composeDevice(deviceId, screenshotPath) {
   };
 }
 
-/* ────────────────────────────────────────────────────────────── the panel ── */
+/* ─────────────────────────────────────────────────────────────── the owls ── */
 
-function groundSvg(theme, width, height) {
-  if (theme.ground.type === "gradient") {
-    const { from, to, angle = 160 } = theme.ground;
-    // Angle in degrees, 0 = left to right, measured clockwise.
-    const rad = (angle * Math.PI) / 180;
-    const x1 = (50 - Math.cos(rad) * 50).toFixed(2);
-    const y1 = (50 - Math.sin(rad) * 50).toFixed(2);
-    const x2 = (50 + Math.cos(rad) * 50).toFixed(2);
-    const y2 = (50 + Math.sin(rad) * 50).toFixed(2);
-    return `<defs><linearGradient id="g" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%">
-      <stop offset="0%" stop-color="${from}"/><stop offset="100%" stop-color="${to}"/>
-    </linearGradient></defs><rect width="${width}" height="${height}" fill="url(#g)"/>`;
+/**
+ * The owl wall, as composite layers in strip coordinates.
+ *
+ * Rasterised one at a time rather than inlined into the strip's SVG: an owl
+ * carries its own full-bleed background rect, and nesting twenty of those in
+ * one document leaves the corner rounding to librsvg.
+ */
+async function owlTiles({ owls, theme, W, H }) {
+  if (!owls) return [];
+
+  const cell = Math.round(owls.cell * W);
+  const left0 = Math.round(owls.x * W);
+  const top0 = Math.round(owls.y * H);
+  const wanted = owls.rows * owls.columns;
+
+  if (owls.seeds.length < wanted) {
+    console.warn(
+      `  owl wall has ${owls.seeds.length} seeds for ${wanted} tiles — they will repeat. Add ${wanted - owls.seeds.length} more.`,
+    );
   }
-  return `<rect width="${width}" height="${height}" fill="${theme.ground.color}"/>`;
+
+  const mask = Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${cell}" height="${cell}"><rect width="${cell}" height="${cell}" rx="${theme.owlTile.radius}" fill="#fff"/></svg>`,
+  );
+
+  const tiles = [];
+  for (let i = 0; i < wanted; i++) {
+    const flat = await sharp(Buffer.from(owlAvatarSvg(owls.seeds[i % owls.seeds.length], {})))
+      .resize(cell, cell)
+      .png()
+      .toBuffer();
+    tiles.push({
+      input: await sharp(flat).composite([{ input: mask, blend: "dest-in" }]).png().toBuffer(),
+      left: left0 + (i % owls.columns) * (cell + owls.gap),
+      top: top0 + Math.floor(i / owls.columns) * (cell + owls.gap),
+    });
+  }
+  return tiles;
 }
 
 /* ─────────────────────────────────────────────────────────────── the set ── */
 
-/**
- * Render one set for one device.
- *
- * Panels are laid out by kind (see `panels.mjs`), but the three `device` ones
- * share a headline size and a device y so they read as a run. Sizing each on
- * its own gives short headlines bigger type and shifts the phone down a line
- * between panels, which is what makes a set look assembled.
- *
- * The statement panel is deliberately outside that agreement — it places its
- * own phone, lower, because it is the opening and not one of the three.
- */
 export async function renderSet({ set, deviceId, outDir }) {
   const device = DEVICES[deviceId];
   const { width: W, height: H } = device.output;
-  const theme = set.theme;
   const font = await loadFont();
 
-  const deviceKinds = set.panels.filter((p) => (p.kind ?? "device") === "device");
+  /* Composed once per distinct screenshot. Three of the five placements in a
+     set reuse a capture across devices, and framing is the expensive step. */
+  const cache = new Map();
+  const framedFor = async (screenshot) => {
+    const key = screenshot ?? "";
+    if (!cache.has(key)) {
+      cache.set(key, await composeDevice(deviceId, screenshot ? join(here, screenshot) : null));
+    }
+    return cache.get(key);
+  };
 
-  /** The largest size every device panel's headline fits at. */
-  const headlineSize = deviceKinds.length
-    ? Math.min(
-        ...deviceKinds.map(
-          (panel) =>
-            fit(panel.headline, {
-              font,
-              weight: theme.headline.weight,
-              tracking: theme.headline.tracking,
-              maxWidth: W - theme.headline.inset * 2,
-              maxLines: theme.headline.maxLines,
-              sizes: theme.headline.sizes,
-            }).size,
-        ),
-      )
-    : theme.headline.sizes[0];
-
-  // Laid out once to find the run's device y, then again to draw.
-  let runBottom = 0;
-  for (const panel of deviceKinds) {
-    const { bottom } = KINDS.device({ panel, theme, font, W, H, headlineSize });
-    runBottom = Math.max(runBottom, bottom);
-  }
-  const runDeviceTop = Math.round(runBottom + theme.device.gap);
+  const { cuts, strip } = await renderStrip({
+    set,
+    W,
+    H,
+    font,
+    framedFor,
+    owlTiles: await owlTiles({ owls: set.owls, theme: set.theme, W, H }),
+  });
 
   /* Emptied first. Renaming or dropping a panel otherwise leaves the old file
      behind, and `out/` is what gets uploaded — a stale panel from two edits ago
      is the kind of mistake nobody catches until it is live. */
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
+
   const written = [];
-
-  for (const [i, panel] of set.panels.entries()) {
-    const kind = panel.kind ?? "device";
-    const laid = await KINDS[kind]({ panel, theme, font, W, H, headlineSize });
-
-    const ground = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${groundSvg(theme, W, H)}${laid.svg}</svg>`;
-    const layers = laid.tiles ? [...laid.tiles] : [];
-
-    const deviceTop = kind === "device" ? runDeviceTop : laid.deviceTop;
-    if (deviceTop !== null && deviceTop !== undefined) {
-      const framed = await composeDevice(
-        deviceId,
-        panel.screenshot ? join(here, panel.screenshot) : null,
-      );
-      const ratio = panel.deviceWidthRatio ?? theme.device.widthRatio;
-      const w = Math.round(W * ratio);
-      const h = Math.round(framed.height * (w / framed.width));
-      const phone = await sharp(framed.buffer).resize(w, h, { fit: "fill" }).png().toBuffer();
-      /* Cropped by the composite rather than by a resize: the device is taller
-         than the room under the headline, and running off the bottom edge is
-         the look. sharp clips at the canvas edge, so the overflow is free. */
-      layers.push({ input: phone, left: Math.round((W - w) / 2), top: deviceTop });
-    }
-
-    const panelBuffer = await sharp(Buffer.from(ground))
-      .composite(layers)
-      /* Flattened deliberately. Apple refuses a screenshot with an alpha
-         channel, and a PNG that carries one uploads and then fails validation
-         with a message that does not say why. */
-      .flatten({
-        background: theme.ground.type === "gradient" ? theme.ground.from : theme.ground.color,
-      })
-      .png()
-      .toBuffer();
-
-    const name = `${String(i + 1).padStart(2, "0")}-${panel.slug}.png`;
+  for (const [i, buffer] of cuts.entries()) {
+    const name = `${String(i + 1).padStart(2, "0")}-${set.slugs[i] ?? `panel-${i + 1}`}.png`;
     const file = join(outDir, name);
-    await writeFile(file, panelBuffer);
-    written.push({ file, width: W, height: H, kind });
+    await writeFile(file, buffer);
+    written.push({ file, width: W, height: H });
   }
+
+  /* The uncut strip, for looking at. Not uploaded anywhere — it is how you see
+     whether the phones actually line up across the cuts. */
+  await writeFile(join(outDir, "_strip.png"), strip);
 
   return written;
 }
 
 /* ────────────────────────────────────────────────────────────────── cli ── */
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+/**
+ * Whether this file is the one node was asked to run.
+ *
+ * `import.meta.url === "file://" + process.argv[1]` is the usual shape and it
+ * is wrong on a path with a symlink in it: `import.meta.url` is resolved and
+ * argv is not, so on macOS anything under /tmp compares false and the CLI
+ * silently does nothing. Resolving both is the fix.
+ */
+function isMain(metaUrl) {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(fileURLToPath(metaUrl)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
+
+if (isMain(import.meta.url)) {
   const [configPath = "./shots.config.mjs", ...only] = process.argv.slice(2);
   const { sets } = await import(configPath.startsWith(".") ? join(here, configPath) : configPath);
 
@@ -236,9 +230,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       console.log(`${set.slug} → ${deviceId} (${DEVICES[deviceId].label})`);
       try {
         const written = await renderSet({ set, deviceId, outDir });
-        for (const w of written) {
-          console.log(`  ${basename(w.file)}  ${w.width}x${w.height}  ${w.kind}`);
-        }
+        for (const w of written) console.log(`  ${basename(w.file)}  ${w.width}x${w.height}`);
       } catch (err) {
         console.error(`  skipped: ${err.message}`);
       }

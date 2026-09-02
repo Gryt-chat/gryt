@@ -18,7 +18,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -72,7 +72,24 @@ export function capture({ deviceId, slug }) {
   return file;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+/**
+ * Whether this file is the one node was asked to run.
+ *
+ * `import.meta.url === "file://" + process.argv[1]` is the usual shape and it
+ * is wrong on a path with a symlink in it: `import.meta.url` is resolved and
+ * argv is not, so on macOS anything under /tmp compares false and the CLI
+ * silently does nothing. Resolving both is the fix.
+ */
+function isMain(metaUrl) {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(fileURLToPath(metaUrl)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
+
+if (isMain(import.meta.url)) {
   const [deviceId, slug] = process.argv.slice(2);
   if (!deviceId || !slug) {
     console.error("usage: node capture.mjs <device> <slug>");

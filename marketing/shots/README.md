@@ -1,12 +1,13 @@
 # Store screenshots
 
-Panels for the App Store and Play listings: a real capture, dropped into a real
-device frame, on a Gryt-coloured ground with an icon and a headline.
+Panels for the App Store and Play listings. Real captures dropped into real
+device frames, composed as one wide strip and cut into panels, so a phone can
+run off one panel and arrive in the next.
 
 ```bash
 cd marketing/shots
 yarn install
-node capture.mjs iphone-6.9 channels    # once per panel, app driven by hand
+node capture.mjs iphone-6.9 voice       # once per capture, app driven by hand
 node render.mjs                          # writes out/<set>/<device>/
 ```
 
@@ -26,22 +27,38 @@ and drop them in with the exact filenames `devices.mjs` names:
 
 `render.mjs` fails with the missing path rather than rendering something wrong.
 
-## How a panel is built
+## One strip, cut into panels
 
-1. The ground — flat colour or a gradient, from the theme.
-2. The icon, then the headline, centred, from the top down.
-3. The framed device, centred, running off the bottom edge.
+Everything is placed against a canvas six panels wide and cut at the end, so a
+phone can leave one panel and arrive in the next. Scrolling the carousel then
+reads as panning across one picture rather than flicking through six cards.
 
-Two rules keep a set looking like a set rather than six posters:
+Coordinates are strip units. `x` counts panels across and `y` is a fraction of
+panel height, so `x: 1.6` is a little past halfway through panel two. A
+placement reads as where it sits in the sequence rather than as a pixel offset
+that has to be recomputed when the device size changes.
 
-- **One headline size across every panel**, the largest that fits them all.
-  Sizing each panel on its own gives the short headlines bigger type.
-- **One device y across every panel**, derived from the tallest text block. A
-  phone that shifts down a line between panels is what makes a set look
-  assembled.
+`out/<set>/<device>/_strip.png` is the uncut canvas. It is not uploaded
+anywhere — it is how you see whether the phones line up across the cuts.
 
-The screenshot goes **under** the frame. The bezel is opaque and covers the
-capture's square corners, so nothing needs a rounded mask.
+**Every panel still has to survive being looked at alone.** The store shows one
+at a time with a sliver of the next, and the first one is always seen on its
+own. No panel may be only the middle of a phone.
+
+**Text may not cross a panel edge.** A phone crossing one is the point; a
+headline crossing one is a word chopped in half in the cut, and it is invisible
+while you are looking at the uncut strip — which is exactly when the layout gets
+adjusted. `strip.mjs` throws rather than warns, and names the `maxWidth` that
+would fit.
+
+Two more things worth knowing:
+
+- **The screenshot goes under the frame.** The bezel is opaque and covers the
+  capture's square corners, so nothing needs a rounded mask.
+- **Rotation happens once, on the composed device.** Frame and screenshot
+  together, so the bezel can never drift from its own screen. Angles stay under
+  about ten degrees: past that a phone stops reading as a phone standing at an
+  angle and starts reading as a picture somebody rotated.
 
 ## Sizes, and why capture ≠ output
 
@@ -94,10 +111,16 @@ guessing at deep links produces a screenshot of the wrong screen, which looks
 finished and is not. `marketing/video/demo-mode.md` argues for a demo mode in
 the client for the launch video; the same thing would serve this.
 
-## Adding an icon
+## The owls
 
-`icons.mjs` holds Phosphor path data, vendored because the icon packages in
-this repository are React components and neither renders outside a React tree.
-They are the regular weight on Phosphor's 256 grid — the same icons the app
-draws. Add one by copying the first `d` out of the `regular` block of
-`phosphor-react-native/src/defs/<Name>.tsx`.
+`@gryt/owl` renders SVG from pure functions with no DOM, so the wall in panel
+five is real output from the seeds in `shots.config.mjs` rather than a picture
+of some owls. Add seeds until there are at least `rows x columns` of them —
+below that they repeat and `render.mjs` says so.
+
+## Colours
+
+Gryt's own, not a palette invented for a listing. `#2E2D5F` is the ground of
+the logo and `#968FF8` is the app's accent. The logo's ground rather than the
+app's near-black `#111318` is deliberate: on a shelf of dark-grey chat apps,
+indigo is what reads from a thumbnail.

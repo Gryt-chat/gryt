@@ -1172,10 +1172,18 @@ jobs:
           # the release in Gryt-chat/client, where this token cannot write, and
           # got a 403 that no retry was ever going to clear. That is what left
           # v1.5.9 a draft with no .snap on it.
+          # `--win nsis portable` rather than a bare `--win`, which would also
+          # build the appx and publish it. The MSIX is built in its own step
+          # below and kept off the release, because nobody can install it: it
+          # is unsigned, and `Add-AppxPackage -AllowUnsigned` refuses any
+          # package that activates an executable, which every packaged Electron
+          # app does. v1.9.5 put 254MB on the release page that fails for
+          # everyone who downloads it. See packages/client/scripts/sign-windows.cjs
+          # for the HRESULTs and GRYT-848 for the certificate.
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             TARGETS="--linux AppImage deb snap"
           elif [[ "$RUNNER_OS" == "Windows" ]]; then
-            TARGETS="--win"
+            TARGETS="--win nsis portable"
           else
             echo "Unsupported runner OS: $RUNNER_OS"
             exit 1
@@ -1217,6 +1225,60 @@ jobs:
             echo "Could not package and publish after 3 attempts." >&2
             exit 1
           fi
+
+      # The MSIX, built every release and attached to none of them.
+      #
+      # Built, because a target nobody builds rots. This one went out in v1.9.5
+      # carrying electron-builder's own SampleAppx placeholder tiles, which
+      # happened because until then nothing had ever looked inside the package
+      # the release was producing. It is also the artefact a Store submission
+      # uploads, so there has to be one to fetch.
+      #
+      # Not published, because an unsigned MSIX cannot be installed by anybody.
+      # Not by double-clicking it, and not with `Add-AppxPackage -AllowUnsigned`
+      # either — that refuses any package activating an executable, and Gryt's
+      # manifest activates `app\Gryt Chat.exe` as a Windows.FullTrustApplication.
+      # Attaching it to the release meant 254MB that failed for everyone who
+      # downloaded it. GRYT-848 is the certificate; a Store submission needs a
+      # Partner Center identity instead, because Microsoft signs what it
+      # distributes.
+      #
+      # Its own step rather than another target on the run above, because
+      # `--publish always` publishes everything it builds and there is no
+      # per-target way to opt one artefact out that is worth the config. The
+      # cost is one more pack over the same win-unpacked tree, a few minutes.
+      - name: Package the MSIX
+        if: runner.os == 'Windows'
+        working-directory: packages/client
+        shell: bash
+        env:
+          VERSION: ${{ env.VERSION }}
+          # Same as the step above. Empty until a certificate exists, and the
+          # hook says out loud that the package it just made cannot be
+          # installed.
+          GRYT_WIN_SIGN_TOOL: ${{ secrets.WINDOWS_SIGN_TOOL }}
+          GRYT_WIN_SIGN_ARGS: ${{ secrets.WINDOWS_SIGN_ARGS }}
+        run: |
+          set -euo pipefail
+
+          npx electron-builder \
+            --win appx \
+            --publish never \
+            -c.extraMetadata.version="$VERSION"
+
+          ls -la release/*.appx
+
+      # Kept for a month rather than forever. Long enough to pull one for a
+      # Store submission or to check what the tiles look like, short enough that
+      # a quarter-gigabyte per release does not pile up.
+      - name: Upload the MSIX
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: msix-${{ env.VERSION }}
+          path: packages/client/release/*.appx
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Package macOS app
         if: runner.os == 'macOS'

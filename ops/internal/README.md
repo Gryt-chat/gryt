@@ -374,7 +374,16 @@ sudo rm -f /etc/default/gryt-changelog-notes /usr/local/lib/gryt/changelog-notes
 sudo systemctl daemon-reload
 ```
 
-Leave `/var/lib/gryt-changelog/changelog.json` alone for now. Four published
-notes are still only in that file, and the changelog page still fetches it at
-runtime. They become MDX first; the mounts, the reports routes and
-`REPORTS_CHANGELOG_KEY` come out after that, under GRYT-863.
+The notes that lived only in `/var/lib/gryt-changelog/changelog.json` are MDX in
+`packages/site` now, nothing fetches the file and nothing writes it, so the
+mounts and `REPORTS_CHANGELOG_KEY` are gone from the compose file too. Once
+site#78 and reports#28 are deployed, the directory on the box can go:
+
+```bash
+sudo rm -rf /var/lib/gryt-changelog
+```
+
+The `changelog_drafts` table inside the reports database is deliberately still
+there. It holds three unread drafts nobody will miss, and dropping a table in
+the database with every report ever sent is worth doing on purpose rather than
+as a line in a removal.

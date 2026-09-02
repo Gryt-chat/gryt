@@ -27,8 +27,13 @@ gh api --paginate -q '.[] | select(.draft|not) | [.tag_name, .prerelease] | @tsv
 ```
 
 ```bash
-ls packages/site/content/changelog/
+git -C packages/site ls-tree --name-only origin/main content/changelog/
 ```
+
+**Against `origin/main`, not the working checkout.** The superproject's copy of a submodule
+is routinely parked on somebody else's branch. On 2026-09-02 a plain `ls` of that directory
+showed three notes when there were four, and the missing one got overwritten by a new file
+with the same name.
 
 Stable releases are the ones that need a note. A beta only earns one when it has
 something above **Under the hood**, and it covers the whole `1.4.0` line rather

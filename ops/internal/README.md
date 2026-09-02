@@ -16,13 +16,26 @@ Cloudflare tunnel rather than the one on this host. Written up in
 
 It’s **not** intended for self-hosters. Self-hosting docs live under `ops/deploy/*` (Docker Compose) and `ops/helm/*` (Kubernetes).
 
-## Start (site + docs)
+## Start
 
 From the repo root:
 
 ```bash
 cp ops/internal/.env.example ops/internal/.env
-docker compose --env-file ops/internal/.env -f ops/internal/docker-compose.yml up -d --build
+docker compose --env-file ops/internal/.env -f ops/internal/docker-compose.yml up -d --build docs site ui
+```
+
+**Name the services.** Without them that command is a bare `up -d` over the whole file, so it
+also recreates `fider`, `fider-db` and `reports`. Those three own `gryt-fider-pg-data` and
+`gryt-reports-data`. Recreating a database because you wanted to rebuild the docs is not a
+trade anybody would make on purpose, and on `dev.lan` it is somebody else's feature board and
+everyone's bug reports. The refresh scripts below take the same care for the same reason;
+this is the manual version of it.
+
+Fider and reports are started the same way, one at a time, when they actually need it:
+
+```bash
+docker compose --env-file ops/internal/.env -f ops/internal/docker-compose.yml up -d --no-deps reports
 ```
 
 ## Ports

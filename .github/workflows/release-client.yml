@@ -1143,6 +1143,16 @@ jobs:
           CHANNEL: ${{ env.CHANNEL }}
           RELEASE_TYPE: ${{ env.RELEASE_TYPE }}
           VERSION: ${{ env.VERSION }}
+          # Windows signing. Empty until a certificate exists, and empty is
+          # fine: scripts/sign-windows.cjs signs nothing without them and
+          # warns that Smart App Control will block the result.
+          #
+          # Whichever CA is bought also needs its own credentials here, next
+          # to these. They differ per CA and the signing tools read them from
+          # the environment themselves, so nothing is passed through Gryt's
+          # code. See the hook for the two likely commands. GRYT-848.
+          GRYT_WIN_SIGN_TOOL: ${{ secrets.WINDOWS_SIGN_TOOL }}
+          GRYT_WIN_SIGN_ARGS: ${{ secrets.WINDOWS_SIGN_ARGS }}
         run: |
           set -euo pipefail
 

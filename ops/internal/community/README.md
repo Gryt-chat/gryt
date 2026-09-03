@@ -140,6 +140,28 @@ covers `*.gryt.chat` and stops there, so `sfu.community.gryt.chat` would need
 Advanced Certificate Manager and the failure is a TLS error at the edge that
 nothing in Gryt's logs mentions.
 
+## Staying current
+
+The VM was found on server 1.8.3 with 1.8.8 released, because `SERVER_VERSION`
+and friends in `.env` pinned exact tags and a pinned tag never moves. Same shape
+as GRYT-291, where app.gryt.chat served a build five versions behind the desktop
+app for weeks.
+
+Those three variables are `latest` now, and
+[`update.sh`](update.sh) pulls them from a ten-minute timer. It only ever pulls
+the tag a service is already configured for, so putting a version back in `.env`
+pins that service again and this stops moving it.
+
+It recreates a container only when the tag resolves to a different image. The
+first version of that check compared `docker inspect .Image` against
+`docker compose images -q`, which answer in different id formats, so nothing
+ever matched and every service was recreated every ten minutes. Run it twice in
+a row when changing it — the second run has to say `already on`.
+
+The SFU is left alone while anybody is in voice, since recreating it drops every
+call on it. Nobody is expected to use voice on this server, but expected is not
+the same as never.
+
 ## Backups
 
 `backup.sh` runs nightly through the systemd units in `systemd/`, writes to

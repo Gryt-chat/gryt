@@ -54,3 +54,7 @@
 	path = packages/crypto
 	url = https://github.com/Gryt-chat/crypto.git
 	branch = main
+[submodule "packages/core"]
+	path = packages/core
+	url = https://github.com/Gryt-chat/core.git
+	branch = main

@@ -193,6 +193,18 @@ git push                        # then the gitlink
 
 Reverse that order and the superproject points at a commit that doesn't exist on the remote.
 
+**`packages/core` is `@gryt/core`, the logic the client and the phone share.** Before
+writing something on one side, check whether the other already does it: the goal is that
+the two apps don't diverge in method or choice. Something belongs in that package if it
+compiles with no DOM and no React Native, and both apps would otherwise need a copy. Its
+tsconfig leaves `DOM` out of `lib` so the first half of that fails loudly rather than
+quietly.
+
+**Both apps pin the same version of every `@gryt/*` package.** `@gryt/voice` is at `0.4.4`
+in the client and `^0.3.2` in mobile, which is what this is meant to stop: a shared package
+on two versions is two implementations again. If one app needs a version the other can't
+take yet, that's the thing to fix.
+
 ## Package manager
 
 Use **yarn, never npm**. `packages/client` and `packages/server` both ship `yarn.lock` and

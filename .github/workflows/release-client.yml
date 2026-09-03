@@ -674,6 +674,49 @@ jobs:
             git push origin "v$VERSION"
           fi
 
+      # The superproject carries the release; this only makes the submodule's own
+      # history say which of its commits shipped.
+      #
+      # Without it `git describe` inside packages/client answers v1.3.1, which is
+      # what the tag list has said since August while ten minor versions went
+      # out. It is a stale answer that looks authoritative, and it is the first
+      # thing anybody reaches for when working out what a release contained.
+      #
+      # No GitHub Release here, unlike the server. The artifact belongs to the
+      # superproject — a second release in the client repo would be two things
+      # both claiming to be the release, with only one of them holding the
+      # installers.
+      - name: Tag client repo
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="v${{ steps.version.outputs.version }}"
+
+          # Same idempotency as the superproject tag above and `Tag server repo`
+          # in release-server.yml: a re-dispatch that already got this far finds
+          # its own tag and must not fail on it, and a tag naming a different
+          # commit is somebody else's and must not be moved. GRYT-300.
+          HEAD_SHA="$(git -C packages/client rev-parse HEAD)"
+          REMOTE_SHA="$(git -C packages/client ls-remote origin "refs/tags/${TAG}" | awk '{ print $1 }')"
+
+          if [[ -n "$REMOTE_SHA" ]]; then
+            if [[ "$REMOTE_SHA" == "$HEAD_SHA" ]]; then
+              echo "${TAG} is already on the client remote at ${HEAD_SHA} — nothing to do."
+              exit 0
+            fi
+
+            echo "${TAG} already exists in the client repo at ${REMOTE_SHA}," >&2
+            echo "but this release built ${HEAD_SHA}." >&2
+            echo "" >&2
+            echo "Refusing to move a published tag. Either delete the remote tag" >&2
+            echo "and dispatch again, or release a new version." >&2
+            exit 1
+          fi
+
+          git -C packages/client tag -f "$TAG" "$HEAD_SHA"
+          git -C packages/client push origin "$TAG"
+
       - name: Determine checkout ref
         id: ref
         shell: bash

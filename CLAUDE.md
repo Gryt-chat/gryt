@@ -103,7 +103,7 @@ current client.
 Branch naming is `claude/<id>-<slug>`, matching the existing `copilot/*` branches:
 
 ```
-claude/GRYT-118-invite-expiry     # Vikunja task at tasks.sivert.io
+claude/GRYT-118-invite-expiry     # Vikunja task
 claude/gh-42-invite-expiry        # GitHub issue
 claude/docs-ai-policy-typo        # no ticket — use a descriptive slug
 ```
@@ -116,8 +116,8 @@ AI involvement with `git log`. Stripping the trailer breaks a promise Gryt made 
 
 ## Task tracking
 
-Tasks live in Vikunja at [tasks.sivert.io](https://tasks.sivert.io), project `GRYT`. The
-kanban board is the state: **To-Do → Doing → Review → Done**.
+Tasks live in Vikunja, project `GRYT`. Sivert has the address; it is not written down in
+a public repository. The kanban board is the state: **To-Do → Doing → Review → Done**.
 
 | When | What happens | Who does it |
 |------|--------------|-------------|

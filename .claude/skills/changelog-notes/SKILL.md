@@ -10,7 +10,7 @@ published, so the job is done here now.
 
 Two files carry the rules and this one carries the procedure:
 
-- [`patch-notes-style.md`](../../../patch-notes-style.md) is the house style.
+- [`patch-notes-style.md`](../../patch-notes-style.md) is the house style.
   Read it in full before writing. Shape, voice, bullets, what goes in Security,
   what a picture has to earn. Don't summarise it to yourself first.
 - `no-ai-slop` then `natural-writing`, in that order, over everything you write

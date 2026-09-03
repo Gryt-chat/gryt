@@ -96,9 +96,9 @@ Merge branch · Bump … · Build N, because …
 
 ### Why, as opposed to what
 
-The commits carry `GRYT-` numbers. Those lead to the tasks at
-[tasks.sivert.io](https://tasks.sivert.io), which is where the reason lives. Use
-the range for what changed and the task for why it was worth doing.
+The commits carry `GRYT-` numbers. Those lead to the tasks in Vikunja, which is
+where the reason lives. Use the range for what changed and the task for why it
+was worth doing.
 
 A commit with no body gives you a subject and nothing else. It doesn't give you a
 symptom, a cause, or who it affected. Three drafts were thrown away for inventing

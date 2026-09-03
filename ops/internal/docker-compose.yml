@@ -132,8 +132,9 @@ services:
       REPORTS_DISCORD_WEBHOOK_URL: "${REPORTS_DISCORD_WEBHOOK_URL:-}"
       # Filing a report as a task on the board (GRYT-534). A write credential,
       # so it is empty here and set in .env; without it the button is not
-      # offered rather than offered and broken.
-      REPORTS_VIKUNJA_URL: "${REPORTS_VIKUNJA_URL:-https://tasks.sivert.io}"
+      # offered rather than offered and broken. The address has no default
+      # either — a built-in one files onto whoever's board was compiled in.
+      REPORTS_VIKUNJA_URL: "${REPORTS_VIKUNJA_URL:-}"
       REPORTS_VIKUNJA_TOKEN: "${REPORTS_VIKUNJA_TOKEN:-}"
       REPORTS_VIKUNJA_PROJECT: "${REPORTS_VIKUNJA_PROJECT:-2}"
       # The weekly digest (GRYT-537). SMTP is the GRYT_SMTP_* set the rest of

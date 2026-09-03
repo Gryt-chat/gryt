@@ -110,7 +110,7 @@ services:
       # Every interface, not just loopback. The tunnel reaches this over the
       # network as dev.lan:5010, and the server defaults to 127.0.0.1 — so
       # without this it answers the healthcheck (which curls localhost on the
-      # same box) while the tunnel gets nothing, and beta.sivert.io serves a
+      # same box) while the tunnel gets nothing, and the beta hostname serves a
       # 502 next to a container `docker ps` calls healthy. Prod has always had
       # it; server-nt got it in #56; this one was missed.
       HOST: "0.0.0.0"

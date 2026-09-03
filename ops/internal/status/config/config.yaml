@@ -1,0 +1,119 @@
+# Gryt public status page.
+#
+# Runs on the VPS on purpose: everything it watches is served from home through
+# a Cloudflare tunnel, so a status page hosted alongside those services would go
+# dark exactly when somebody needs it.
+#
+# Checks hit the public hostnames rather than internal ports, so what this page
+# reports is what a user actually experiences, tunnel and CDN included.
+#
+# Every check asserts on the response body, not only on the status code. A
+# status code alone cannot tell a working service from an error page standing
+# where the service used to be — anything that answers on the hostname passes a
+# code check, including whatever the edge substitutes when the origin is gone.
+# The body assertions below name something only the real service serves.
+
+storage:
+  type: sqlite
+  path: /data/data.db
+
+ui:
+  title: "Gryt Status"
+  header: "Gryt Status"
+  description: "Live status of the Gryt services you can reach from the internet."
+  link: "https://gryt.chat"
+endpoints:
+  # ── Signing in ──────────────────────────────────────────────────
+  # The discovery document, not the login page: it is what every client
+  # fetches before it can authenticate, so if this is down nobody signs in.
+  - name: "Accounts (Keycloak)"
+    group: "Signing in"
+    url: "https://auth.gryt.chat/realms/gryt/.well-known/openid-configuration"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].issuer == https://auth.gryt.chat/realms/gryt"
+      - "[CERTIFICATE_EXPIRATION] > 240h"
+
+  # The certificate authority. Joining any server needs a certificate from it,
+  # so this being down looks like "I can log in but cannot join anything".
+  - name: "Identity certificates"
+    group: "Signing in"
+    url: "https://id.gryt.chat/health"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].status == ok"
+
+  # ── Apps ────────────────────────────────────────────────────────
+  - name: "Web client"
+    group: "Apps"
+    url: "https://app.gryt.chat/"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY] == pat(*<title>Gryt</title>*)"
+      - "[CERTIFICATE_EXPIRATION] > 240h"
+
+  - name: "Beta web client"
+    group: "Apps"
+    url: "https://beta.gryt.chat/"
+    interval: 120s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY] == pat(*<title>Gryt</title>*)"
+
+  # The CLI installer. Piped straight into sh, so a wrong body here is worse
+  # than a missing one.
+  - name: "CLI installer"
+    group: "Apps"
+    url: "https://get.gryt.chat/"
+    interval: 120s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY] == pat(*Installs the Gryt CLI*)"
+
+  # ── Sites ───────────────────────────────────────────────────────
+  - name: "Homepage"
+    group: "Sites"
+    url: "https://gryt.chat/"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY] == pat(*Voice, Text & Video Chat*)"
+      - "[CERTIFICATE_EXPIRATION] > 240h"
+
+  # Root 307s to /docs, so check where it lands rather than the redirect.
+  - name: "Documentation"
+    group: "Sites"
+    url: "https://docs.gryt.chat/docs"
+    interval: 120s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY] == pat(*Gryt Documentation*)"
+
+  - name: "Feature requests"
+    group: "Sites"
+    url: "https://feedback.gryt.chat/"
+    interval: 120s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY] == pat(*<title>Gryt Chat</title>*)"
+
+  - name: "Component library"
+    group: "Sites"
+    url: "https://ui.gryt.chat/"
+    interval: 300s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY] == pat(*the component library behind Gryt*)"
+
+  # In-app bug reports and feedback post here. Down means reports are lost
+  # silently, which nobody notices from inside the app.
+  - name: "Bug report intake"
+    group: "Sites"
+    url: "https://reports.gryt.chat/"
+    interval: 120s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].ok == true"

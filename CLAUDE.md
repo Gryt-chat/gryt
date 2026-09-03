@@ -338,6 +338,20 @@ without a single contraction.
 This file also named a `humanizer` skill until 2026-08-22. It was never on the Windows
 machine and is not in the catalog, so nothing was running it.
 
+`natural-writing` had the same problem for longer, and this file didn't say so.
+It was written on 2026-08-28 and only reached the Windows machine on 2026-09-03.
+So for six days the rule above asked for two skills and there was one to run.
+
+Reading the description above and working from that doesn't stand in for it. The
+Microsoft Store listing copy was written that way on 2026-09-02. It went in with
+no contractions anywhere across 1700 characters, and with "persistent channels"
+still in it. That exact phrase is in the skill's own examples, with the fix next
+to it.
+
+Both are installed now. If `Skill` says a name is unknown, it isn't registered
+in this session rather than missing from the machine. Read its `SKILL.md`, and
+say that is what you did.
+
 One caveat when running it over an existing page. `git blame` will not tell you who
 wrote a line: every commit in these repositories is authored `Sivert`, including the ones
 an agent makes, so blame says "Sivert" for all of it. The `Co-authored-by: Claude` trailer

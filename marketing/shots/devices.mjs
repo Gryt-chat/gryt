@@ -74,6 +74,30 @@ export const DEVICES = {
     cornerRadius: 64,
     simulator: null,
   },
+
+  /**
+   * The Microsoft Store's desktop set.
+   *
+   * `capture` is 2400x1350 rather than the 1920x1080 the window asks for,
+   * because Windows hands back a backing store scaled by the display. On a 4K
+   * monitor at 125% that is 1.25x, and the extra pixels are real rather than
+   * upscaled. The Store takes anything from 1366x768 up to 3840x2160, so this
+   * sits comfortably inside and needs no resampling.
+   *
+   * `simulator` is null and it always will be. Nothing here boots: desktop.cjs
+   * drives the real renderer in a hidden Electron window, which is the whole
+   * reason the desktop set does not go through capture.mjs.
+   */
+  desktop: {
+    label: "Windows desktop",
+    store: "microsoft",
+    output: { width: 2400, height: 1350 },
+    capture: { width: 2400, height: 1350 },
+    /* Frameless. There is no such thing as a current Windows bezel, and the app
+       is a window rather than a device. */
+    frame: null,
+    simulator: null,
+  },
 };
 
 /**

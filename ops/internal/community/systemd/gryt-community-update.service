@@ -1,0 +1,9 @@
+[Unit]
+Description=Pull the images community.gryt.chat is configured for
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/opt/gryt-community/.env
+ExecStart=/opt/gryt-community/update.sh

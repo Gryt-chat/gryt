@@ -1,0 +1,23 @@
+services:
+  gatus:
+    image: twinproduction/gatus:v5.36.0
+    container_name: gryt-status
+    restart: unless-stopped
+    # Loopback only. The Cloudflare tunnel reaches it from this host; nothing
+    # else should. It also keeps it clear of the 1024:65000 DNAT that forwards
+    # this box's public ports to the WireGuard peer at home.
+    ports:
+      - "127.0.0.1:3001:8080"
+    volumes:
+      - ./config:/config:ro
+      - gatus-data:/data
+    environment:
+      GATUS_CONFIG_PATH: /config
+    healthcheck:
+      test: ["CMD", "/gatus", "--help"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  gatus-data:

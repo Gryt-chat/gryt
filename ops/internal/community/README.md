@@ -22,7 +22,8 @@ might get a shell on.
       │  DNAT udp/10000 -> 10.2.0.6, over WireGuard
       ▼
     VM gryt-community  (192.168.122.213 on virbr0, 10.2.0.6 on wg0)
-      └─ compose: server, sfu, minio, image-worker, cloudflared
+      ├─ cloudflared, as a systemd service on the VM
+      └─ compose: server, sfu, minio, image-worker
 ```
 
 Everything the VM sends leaves through the VPS (`AllowedIPs = 0.0.0.0/0`). That
@@ -35,14 +36,16 @@ because calls kept connecting on a candidate nobody had chosen.
 
 | | Where | Reachable from |
 |---|---|---|
-| Server HTTP | `server:5000` on the compose network | `community.gryt.chat`, via cloudflared |
-| SFU signalling | `sfu:5005` on the compose network | `community-sfu.gryt.chat`, via cloudflared |
+| Server HTTP | `127.0.0.1:5020` on the VM | `community.gryt.chat`, via cloudflared |
+| SFU signalling | `127.0.0.1:5025` on the VM | `community-sfu.gryt.chat`, via cloudflared |
 | SFU media | `0.0.0.0:10000/udp` on the VM | the VPS address, DNAT'd over WireGuard |
 | MinIO | compose network | nothing |
 | Metrics | compose network | nothing |
 
-`127.0.0.1:5020` and `127.0.0.1:5025` are also published on the VM. Those are
-for debugging from inside it; cloudflared reaches the services by name.
+`127.0.0.1:5020` and `127.0.0.1:5025` are how cloudflared reaches the two
+services. It runs as a systemd unit on the VM rather than in the compose
+project, so it is not on the compose network and cannot resolve `server` or
+`sfu`. Those two ports are load-bearing, not debug conveniences.
 
 ## Isolation
 
@@ -113,11 +116,24 @@ sudo install -d -o sivert -g sivert /opt/gryt-community
 # copy compose.yml, backup.sh and .env.example from this directory
 cp .env.example .env    # fill in every blank
 docker compose up -d
-docker compose --profile tunnel up -d    # once CLOUDFLARE_TUNNEL_TOKEN is set
 ```
 
-The tunnel's ingress in the Zero Trust dashboard points at `http://server:5000`
-and `http://sfu:5005`, since cloudflared runs on the compose network.
+Then the tunnel, following Cloudflare's own install steps from the Zero Trust
+dashboard. That installs cloudflared as a systemd unit reading
+`/etc/cloudflared/token`, which is what runs today.
+
+Its two published application routes point at `http://localhost:5020` and
+`http://localhost:5025`, because a systemd cloudflared is not on the compose
+network and `server` and `sfu` do not resolve there. Adding a route through the
+dashboard creates the DNS record as well, so there is nothing to add by hand.
+
+`compose.yml` still carries a `cloudflared` service behind a `tunnel` profile,
+from before. It is unused. Starting it with an empty `CLOUDFLARE_TUNNEL_TOKEN`
+gives a container that restarts forever with `"cloudflared tunnel run" requires
+the ID or name of the tunnel`, which is what an empty token looks like. To use
+it instead of the systemd unit, put the token in `.env`, `systemctl disable
+--now cloudflared`, and repoint both routes at `http://server:5000` and
+`http://sfu:5005`.
 
 `community-sfu.gryt.chat`, one label deep. Cloudflare's universal certificate
 covers `*.gryt.chat` and stops there, so `sfu.community.gryt.chat` would need

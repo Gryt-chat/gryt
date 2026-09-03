@@ -49,6 +49,9 @@ endpoints:
   # The default server in the client and the one named on the site, so it is
   # the only server a user has a reason to see the state of.
   #
+  # Its SFU is not checked. Voice is not expected on this server, and a red
+  # light for something nobody uses trains people to ignore the page.
+  #
   # No serverId assertion: /info reports it as null on this deployment, so the
   # name is what distinguishes the real service from anything else answering
   # on the hostname.
@@ -59,17 +62,6 @@ endpoints:
     conditions:
       - "[STATUS] == 200"
       - "[BODY].name == Gryt Chat (OFFICIAL)"
-
-  # Voice for that server. /health is the only path here that answers plain
-  # HTTP; everything else expects a WebSocket upgrade and answers 400 by design.
-  - name: "Community voice (SFU)"
-    group: "Talking"
-    url: "https://community-sfu.gryt.chat/health"
-    interval: 60s
-    conditions:
-      - "[STATUS] == 200"
-      - "[BODY].status == healthy"
-      - "[BODY].service == sfu"
 
   # ── Apps ────────────────────────────────────────────────────────
   - name: "Web client"

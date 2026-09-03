@@ -1,0 +1,11 @@
+[Unit]
+Description=Keep community.gryt.chat on the last released images
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=10min
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

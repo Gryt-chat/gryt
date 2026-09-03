@@ -59,7 +59,7 @@ Three of these look like exceptions but aren't:
 Everything else — docs, the site, client UI, `ops/`, build scripts, CI config, tests — gets
 normal review.
 
-If you change the list above, change [`guide/ai.mdx`](packages/docs/content/docs/guide/ai.mdx)
+If you change the list above, change [`guide/ai.mdx`](../packages/docs/content/docs/guide/ai.mdx)
 in the same breath. Those two drifting apart is the failure mode that matters most here.
 
 ## Git
@@ -161,7 +161,7 @@ memory. It lived only in an untracked local file until it nearly went the way of
 the SVG purge decision below.
 
 The procedure that goes with it is the `changelog-notes` skill, in
-[`.claude/skills/changelog-notes/`](.claude/skills/changelog-notes/SKILL.md):
+[`.claude/skills/changelog-notes/`](skills/changelog-notes/SKILL.md):
 which releases have no note, how to get a commit range out of two manifests, and
 where the MDX goes. A script on the box used to do this and wrote 105 drafts for
 4 published notes, so it was removed in GRYT-861 and the job is done here.

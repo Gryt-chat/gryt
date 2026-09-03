@@ -358,7 +358,7 @@ three `already on <commit>` lines and stop.
 ## The changelog
 
 Written by hand, in Claude Code. `.claude/skills/changelog-notes/SKILL.md` is
-the procedure and `patch-notes-style.md` at the repository root is the style
+the procedure and `.claude/patch-notes-style.md` is the style
 guide. Notes are MDX in `packages/site/content/changelog`, and the site builds
 them in.
 

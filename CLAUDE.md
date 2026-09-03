@@ -193,6 +193,18 @@ git push                        # then the gitlink
 
 Reverse that order and the superproject points at a commit that doesn't exist on the remote.
 
+### Shared code between the client and the phone
+
+`@gryt/core` holds the logic both apps use, and [`parity.md`](parity.md) is the plan for
+moving the rest of it there. The goal is that the two apps don't diverge in method or
+choice, so read that before writing something on one side that the other already does.
+
+Two rules from it are worth having here as well. **Both apps pin the same version of
+every `@gryt/*` package** — `@gryt/voice` is at `0.4.4` in the client and `^0.3.2` in
+mobile, which is the drift this is meant to stop. And **a copy that stays a copy gets a
+comment naming the other file**, because `MESSAGE_MAX` sat at 8000 on the desktop and
+4000 on the phone for as long as nothing said the two were related.
+
 ## Package manager
 
 Use **yarn, never npm**. `packages/client` and `packages/server` both ship `yarn.lock` and

@@ -1,7 +1,7 @@
 # Working rules for Gryt
 
 Gryt is a WebRTC voice chat platform maintained by one person. It's a superproject with
-thirteen git submodules under `packages/`. Read these rules before making changes.
+fifteen git submodules under `packages/`. Read these rules before making changes.
 
 ## Review-required paths
 
@@ -126,10 +126,16 @@ a public repository. The kanban board is the state: **To-Do → Doing → Review
 | PR merged | Move to **Done** *and* set the task's done flag | CI |
 
 CI covers the last two through `.github/workflows/vikunja-task-done.yml`, which calls a
-reusable workflow in `Gryt-chat/.github`. Every repo has it — the superproject and all ten
-submodules — so you don't normally need to touch a task after opening the PR. There is no
-longer an exception to work around: `ui` was the last one missing it and GRYT-143 landed
-that on 2026-08-11.
+reusable workflow in `Gryt-chat/.github`. Every repo has it — the superproject and all
+fifteen submodules — so you don't normally need to touch a task after opening the PR.
+
+This paragraph said "all ten submodules" and named `ui` as the last one missing it,
+fixed by GRYT-143 on 2026-08-11. That stopped being true when submodules were added
+afterwards and nobody came back here: `core` had neither this workflow nor
+`bump-gitlink.yml` from the day it was created until 2026-09-04, so its tasks never
+moved and its gitlink never did either. A new submodule needs the three shared
+workflows copied into it: this one, `bump-gitlink.yml` and `discord-ci-notify.yml`.
+None of them arrive on their own.
 
 Moving a task is not exposed by the Vikunja MCP server, so use the REST API directly:
 

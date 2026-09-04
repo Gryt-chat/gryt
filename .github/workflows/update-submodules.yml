@@ -173,67 +173,32 @@ jobs:
             git add "$path"
           }
 
-          if [[ "$SELECTED" == "all" || "$SELECTED" == "client" ]]; then
-            update_submodule "packages/client" "$DEFAULT_SUBMODULE_BRANCH"
-          fi
+          # Derived from $SUBMODULES rather than written out, because this was
+          # the last hand-kept copy of the list and it had already drifted. The
+          # comment above records the same mistake twice, on mobile and then
+          # reports, against the two copies that were consolidated then. This
+          # was the third, and packages/core was its third drift: added as a
+          # submodule, never added here, so its gitlink sat at 0dec296 through
+          # five releases while the sweep ran green every hour and said nothing.
+          #
+          # The short name a dispatch selects is the path's last segment, which
+          # is what every one of those blocks used.
+          MATCHED=0
 
-          if [[ "$SELECTED" == "all" || "$SELECTED" == "server" ]]; then
-            update_submodule "packages/server" "$DEFAULT_SUBMODULE_BRANCH"
-          fi
+          for path in $SUBMODULES; do
+            name="${path##*/}"
 
-          if [[ "$SELECTED" == "all" || "$SELECTED" == "sfu" ]]; then
-            update_submodule "packages/sfu" "$DEFAULT_SUBMODULE_BRANCH"
-          fi
+            if [[ "$SELECTED" == "all" || "$SELECTED" == "$name" ]]; then
+              MATCHED=1
+              update_submodule "$path" "$DEFAULT_SUBMODULE_BRANCH"
+            fi
+          done
 
-          if [[ "$SELECTED" == "all" || "$SELECTED" == "image-worker" ]]; then
-            update_submodule "packages/image-worker" "$DEFAULT_SUBMODULE_BRANCH"
-          fi
-
-          # docs, site and auth were missing here, so their pointers only ever
-          # moved when someone did it by hand. That is why docs and site had to
-          # be bumped manually during the llms.txt work.
-          if [[ "$SELECTED" == "all" || "$SELECTED" == "docs" ]]; then
-            update_submodule "packages/docs" "$DEFAULT_SUBMODULE_BRANCH"
-          fi
-
-          if [[ "$SELECTED" == "all" || "$SELECTED" == "site" ]]; then
-            update_submodule "packages/site" "$DEFAULT_SUBMODULE_BRANCH"
-          fi
-
-          if [[ "$SELECTED" == "all" || "$SELECTED" == "auth" ]]; then
-            update_submodule "packages/auth" "$DEFAULT_SUBMODULE_BRANCH"
-          fi
-
-          if [[ "$SELECTED" == "all" || "$SELECTED" == "ui" ]]; then
-            update_submodule "packages/ui" "$DEFAULT_SUBMODULE_BRANCH"
-          fi
-
-          if [[ "$SELECTED" == "all" || "$SELECTED" == "cli" ]]; then
-            update_submodule "packages/cli" "$DEFAULT_SUBMODULE_BRANCH"
-          fi
-
-          if [[ "$SELECTED" == "all" || "$SELECTED" == "voice" ]]; then
-            update_submodule "packages/voice" "$DEFAULT_SUBMODULE_BRANCH"
-          fi
-
-          if [[ "$SELECTED" == "all" || "$SELECTED" == "mobile" ]]; then
-            update_submodule "packages/mobile" "$DEFAULT_SUBMODULE_BRANCH"
-          fi
-
-          if [[ "$SELECTED" == "all" || "$SELECTED" == "bot" ]]; then
-            update_submodule "packages/bot" "$DEFAULT_SUBMODULE_BRANCH"
-          fi
-
-          # Added with the submodule itself rather than after the first stale
-          # pointer, which is how docs, site and auth ended up in the comment
-          # above. A submodule missing from this list is one whose gitlink only
-          # ever moves by hand, and nothing reports that it has stopped.
-          if [[ "$SELECTED" == "all" || "$SELECTED" == "reports" ]]; then
-            update_submodule "packages/reports" "$DEFAULT_SUBMODULE_BRANCH"
-          fi
-
-          if [[ "$SELECTED" == "all" || "$SELECTED" == "crypto" ]]; then
-            update_submodule "packages/crypto" "$DEFAULT_SUBMODULE_BRANCH"
+          # A dispatch naming something that is not a submodule used to do
+          # nothing at all and report success, because no block matched it.
+          if [[ "$MATCHED" == "0" ]]; then
+            echo "::error::No submodule matched '$SELECTED'. Known: $SUBMODULES"
+            exit 1
           fi
 
       - name: Commit changes

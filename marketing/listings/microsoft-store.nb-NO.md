@@ -15,7 +15,7 @@ Tale går over WebRTC gjennom en SFU, så én server sender lyden videre og en s
 
 Meldinger er krypterte og nøklene er dine. Identiteten din er et nøkkelpar appen lager og beholder på enheten din, ikke en konto noen andre kan låse deg ute av.
 
-Alt sammen er åpen kildekode under AGPL: klienten, serveren, medieserveren, dokumentasjonen, og en skriftlig policy på hvor mye av det som er bygget med KI og hvordan du selv sjekker det med git log.
+Alt sammen er åpen kildekode under AGPL: klienten, serveren, medieserveren og dokumentasjonen.
 
 Funksjoner
 - Tekstkanaler, roller og rettigheter som blir stående

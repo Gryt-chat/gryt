@@ -1286,8 +1286,30 @@ jobs:
         shell: bash
         env:
           DEBUG: electron-builder,electron-osx-sign,electron-notarize
-          CSC_LINK: ${{ secrets.MACOS_CERT_P12_BASE64 }}
-          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          # The keychain "Prepare macOS signing keychain" already built, rather
+          # than CSC_LINK and CSC_KEY_PASSWORD, which used to be here.
+          #
+          # With CSC_LINK set, electron-builder ignores that work and does its
+          # own: app-builder-lib's `createKeychain` makes a keychain with a
+          # random 32-byte password, imports the certificate, and then runs
+          #
+          #   security set-key-partition-list -S apple-tool:,apple: -s -k <p12 password>
+          #
+          # where `-k` is the *keychain's* password. It has been passing the
+          # certificate's for as long as the function has existed — 26.8.1, what
+          # we pin, and 26.15.3, the current release, are identical here.
+          #
+          # macOS did not check until 26.6. GitHub moved macos-latest from
+          # 26.5.2 to 26.6.2 on 2026-08-31, and v1.9.13 failed on
+          # `SecKeychainUnlock: The user name or passphrase you entered is not
+          # correct` with nothing in this repository changed and the signing
+          # secrets untouched since March. GRYT-903.
+          #
+          # `codeSigningInfo` in macPackager.js returns `{ keychainFile:
+          # process.env.CSC_KEYCHAIN }` whenever CSC_LINK is absent, and only
+          # calls `createKeychain` when it is present. So naming the keychain
+          # here is what keeps electron-builder out of the broken path.
+          CSC_KEYCHAIN: ${{ runner.temp }}/build.keychain-db
           APPLE_API_KEY: ${{ runner.temp }}/AuthKey.p8
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
@@ -1310,9 +1332,17 @@ jobs:
           # rather than this one, and every shipped macOS build asked an empty
           # repository for updates. The other platforms always passed these,
           # which is why only macOS was broken.
+          # `forceCodeSigning` is the other half of dropping CSC_LINK. Without a
+          # certificate to import, electron-builder looks for an identity and,
+          # when it cannot find one, calls `reportError`, which *warns* and
+          # carries on — a green build that shipped an unsigned app, which
+          # Gatekeeper refuses and the updater cannot replace. `reportError`
+          # throws instead when this is set, so a keychain that did not work is
+          # a failed release rather than a bad one.
           npx electron-builder \
             --mac \
             --publish never \
+            -c.mac.forceCodeSigning=true \
             -c.extraMetadata.version="$VERSION" \
             -c.publish.provider=github \
             -c.publish.owner="$OWNER" \

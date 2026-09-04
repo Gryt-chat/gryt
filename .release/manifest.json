@@ -1,15 +1,15 @@
 {
   "product": "gryt",
-  "version": "1.9.15",
-  "baseVersion": "1.9.15",
+  "version": "1.9.16",
+  "baseVersion": "1.9.16",
   "channel": "latest",
-  "monorepoCommit": "71f4b37071d6e263d8342430de377f5003b1f4f8",
-  "createdAt": "2026-09-04T20:39:50.513Z",
+  "monorepoCommit": "dfc63261e127076a53429ff8e724d0176be333b1",
+  "createdAt": "2026-09-04T20:56:05.870Z",
   "components": {
     "client": {
       "repo": "Gryt-chat/client",
       "path": "packages/client",
-      "commit": "1db10f70c9756677595e0f4ade12a7318a995145"
+      "commit": "17311dd6718cc46b835087eb3eff5de30a76dbd7"
     },
     "server": {
       "repo": "Gryt-chat/server",

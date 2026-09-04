@@ -3,13 +3,13 @@
   "version": "1.9.15",
   "baseVersion": "1.9.15",
   "channel": "latest",
-  "monorepoCommit": "0976a076f9f268cc3c45d6d10daa29e8c4d8a2f2",
-  "createdAt": "2026-09-04T20:32:27.478Z",
+  "monorepoCommit": "71f4b37071d6e263d8342430de377f5003b1f4f8",
+  "createdAt": "2026-09-04T20:39:50.513Z",
   "components": {
     "client": {
       "repo": "Gryt-chat/client",
       "path": "packages/client",
-      "commit": "2c70db70b9f665c5417ad706a7d33086e44a6135"
+      "commit": "1db10f70c9756677595e0f4ade12a7318a995145"
     },
     "server": {
       "repo": "Gryt-chat/server",

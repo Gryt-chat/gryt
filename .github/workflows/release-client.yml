@@ -711,12 +711,18 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
   build-electron:
-    name: Build Electron app (${{ matrix.os }})
+    name: Build Electron app (${{ matrix.os }}, ${{ matrix.variant }})
     needs: prepare-release
 
     strategy:
       fail-fast: false
       matrix:
+        # Two builds per platform. `slim` leaves the embedded server out,
+        # which is 34MB off the installer, and is what the site offers as
+        # the default download. See scripts/variant.mjs in the client.
+        variant:
+          - full
+          - slim
         os:
           - ubuntu-latest
           - macos-latest
@@ -743,8 +749,20 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    # publish-release needs this job, and a matrix leg failing fails the job
+    # even with fail-fast off. Without this, a bug in the slim path would
+    # block a release the full builds had already succeeded at. Slim is
+    # additive: when it breaks, a release is what it was before this existed.
+    #
+    # Worth removing once a release has proven the slim path, so that a
+    # silently missing slim artifact stops being possible.
+    continue-on-error: ${{ matrix.variant == 'slim' }}
+
     env:
       OWNER: Gryt-chat
+      # Read by the client's beforeBuild hook, its extraResources check and
+      # electron-builder.config.cjs. Empty is what `full` means to all three.
+      GRYT_VARIANT: ${{ matrix.variant == 'slim' && 'slim' || '' }}
       REPO: gryt
       VERSION: ${{ needs.prepare-release.outputs.version }}
       BASE_VERSION: ${{ needs.prepare-release.outputs.base_version }}
@@ -851,6 +869,7 @@ jobs:
           fi
 
       - name: Install server dependencies
+        if: matrix.variant == 'full'
         working-directory: packages/server
         shell: bash
         run: |
@@ -858,6 +877,7 @@ jobs:
           yarn install --frozen-lockfile --ignore-engines
 
       - name: Install SFU dependencies
+        if: matrix.variant == 'full'
         working-directory: packages/sfu
         shell: bash
         run: |
@@ -872,6 +892,7 @@ jobs:
       # The install of the worker's *runtime* dependencies is a separate thing
       # the build script does, into its own output directory.
       - name: Install image worker dependencies
+        if: matrix.variant == 'full'
         working-directory: packages/image-worker
         shell: bash
         run: |
@@ -911,6 +932,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Build embedded server and SFU
+        if: matrix.variant == 'full'
         working-directory: packages/client
         shell: bash
         run: |
@@ -918,6 +940,7 @@ jobs:
           npm run build:embedded-server
 
       - name: Verify embedded server dependencies
+        if: matrix.variant == 'full'
         working-directory: packages/client
         shell: bash
         run: |
@@ -1029,11 +1052,11 @@ jobs:
           npx vite build
 
       - name: Set up Docker Buildx
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.variant == 'full'
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.variant == 'full'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -1042,7 +1065,7 @@ jobs:
 
       - name: Build and push Docker image
         id: docker
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.variant == 'full'
         working-directory: packages/client
         shell: bash
         run: |
@@ -1122,7 +1145,7 @@ jobs:
           echo "image_digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
       - name: Attest the client image
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.variant == 'full'
         uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.DOCKER_IMAGE }}
@@ -1201,6 +1224,7 @@ jobs:
           published=""
           for attempt in 1 2 3; do
             if npx electron-builder \
+              --config electron-builder.config.cjs \
               $TARGETS \
               --publish always \
               -c.extraMetadata.version="$VERSION" \
@@ -1248,7 +1272,7 @@ jobs:
       # per-target way to opt one artefact out that is worth the config. The
       # cost is one more pack over the same win-unpacked tree, a few minutes.
       - name: Package the MSIX
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.variant == 'full'
         working-directory: packages/client
         shell: bash
         env:
@@ -1272,7 +1296,7 @@ jobs:
       # Store submission or to check what the tiles look like, short enough that
       # a quarter-gigabyte per release does not pile up.
       - name: Upload the MSIX
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.variant == 'full'
         uses: actions/upload-artifact@v4
         with:
           name: msix-${{ env.VERSION }}
@@ -1340,6 +1364,7 @@ jobs:
           # throws instead when this is set, so a keychain that did not work is
           # a failed release rather than a bad one.
           npx electron-builder \
+            --config electron-builder.config.cjs \
             --mac \
             --publish never \
             -c.mac.forceCodeSigning=true \

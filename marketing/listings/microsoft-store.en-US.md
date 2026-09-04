@@ -14,7 +14,7 @@ Voice goes over WebRTC through an SFU, so one server relays the audio and a call
 
 Messages are encrypted and the keys are yours. Your identity is a keypair the app makes and keeps on your device, not an account somebody else can lock you out of.
 
-The whole thing is open source under the AGPL: the desktop client, the server, the media server, the docs, and a written policy on how much of it was built with AI and how you can check that yourself with git log.
+The whole thing is open source under the AGPL: the desktop client, the server, the media server and the docs.
 
 Features
 - Text channels, roles and permissions that stay put

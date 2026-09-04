@@ -1394,7 +1394,13 @@ jobs:
             release/*.dmg
             release/*.zip
             release/*.blockmap
-            release/latest-mac.yml
+            # A glob, because the channel file is named after the channel:
+            # latest-mac.yml for a full build and slim-mac.yml for a slim one.
+            # Spelled out, it was a literal path rather than a pattern, so
+            # nullglob left it in the list when it did not exist and the upload
+            # failed with "no matches found". That is what kept macOS slim off
+            # v1.9.15 while every other leg published.
+            release/*-mac.yml
           )
           shopt -u nullglob
 

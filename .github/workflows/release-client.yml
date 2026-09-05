@@ -33,6 +33,9 @@ on:
 permissions:
   contents: write
   packages: write
+  # For the `gh workflow run` at the end of publish-release, which starts
+  # publish-snap.yml. Dispatching a workflow is an Actions write.
+  actions: write
   # Both for `actions/attest-build-provenance`, which signs a statement about
   # this build into sigstore's public transparency log (GRYT-723). `id-token`
   # is how the runner proves to sigstore which workflow it is, and
@@ -1598,6 +1601,44 @@ jobs:
 
           gh release edit "v$VERSION" --repo "$OWNER/$REPO" --draft=false
           echo "Published v$VERSION."
+
+      # publish-snap.yml listens for `release: published`, and that event does
+      # not fire when the release was created with GITHUB_TOKEN — which is what
+      # the step above uses. So it never started on its own, and every stable
+      # release since it was split out has needed somebody to dispatch it by
+      # hand afterwards. It had two runs in total by v1.9.19, both manual.
+      #
+      # `workflow_dispatch` is one of the two events GitHub exempts from that
+      # rule, so dispatching it here does start a run.
+      #
+      # Dispatched rather than made a job of this workflow. Release Client
+      # shares its concurrency group with Release Server, a job holds that group
+      # until it finishes, and sitting in the group waiting out a Snap Store
+      # review is the exact thing the snap was split out to stop doing.
+      #
+      # Stable only, which is publish-snap.yml's own rule but not one it can
+      # apply here: it treats any dispatch as deliberate and skips its beta
+      # check, so the channel gate has to be on this side.
+      #
+      # `continue-on-error` because the Store is not part of the release's
+      # availability contract. Everything a person can install has already
+      # shipped by this point, so a failure to even start the upload must not
+      # turn a finished release red.
+      - name: Start the Snap Store publish
+        if: needs.prepare-release.outputs.channel == 'latest'
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          gh workflow run publish-snap.yml \
+            --repo "$OWNER/$REPO" \
+            --ref main \
+            -f tag="v$VERSION"
+
+          echo "Dispatched publish-snap.yml for v$VERSION."
 
       # Moved here from the Linux build leg. Announcing from there fired while
       # macOS was still signing, so #releases advertised a build that Mac users

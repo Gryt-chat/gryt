@@ -87,17 +87,40 @@ label() {
 # How many people are in voice on this stack, or empty if it cannot be
 # determined.
 #
-# Read off the SFU's own Prometheus gauge through whichever host port that
-# stack publishes 5005 on, so it works for prod and beta without either being
-# named here.
+# Read off the SFU's own Prometheus gauge, from inside the container.
+#
+# This used to ask host port 5005, which is the SFU's *signalling* port. The
+# metrics listener is a second one on SFU_METRICS_PORT, and the SFU logs
+# "container-only; do not publish this port" when it starts it — so there was
+# never a published port to reach it on. The curl came back empty, awk found no
+# gauge and exited 1, and every run since has logged
+#
+#   [prod/sfu] new image, but the peer count could not be read — deferring
+#
+# which reads like a busy channel and is not. It deferred on every tick, so the
+# SFU was never updated at all: on 2026-09-06 prod was still running a
+# 2026-09-02 image with a newer one pulled and waiting, and beta the same. The
+# failure is a safe one, which is exactly why it went unnoticed — no call was
+# ever cut, and no SFU was ever updated either.
+#
+# `docker exec` rather than a published port, because not publishing it is
+# deliberate and opening it would be the wrong fix. The port is read off the
+# container's own environment, so prod and beta still need no naming here.
+#
+# wget or curl: the image has one of them, and which is not worth pinning a
+# base image over.
 sfu_peers() {
-  local container="$1" hostport
-  hostport=$(docker port "$container" 5005/tcp 2>/dev/null | head -1) || return 0
-  [[ -z "$hostport" ]] && return 0
-  # docker reports the wildcard bind; ask the loopback address instead.
-  hostport=${hostport/0.0.0.0/127.0.0.1}
-  hostport=${hostport/\[::\]/127.0.0.1}
-  curl -sf --max-time 5 "http://${hostport}/metrics" 2>/dev/null \
+  local container="$1" port
+  port=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container" 2>/dev/null \
+    | sed -n 's/^SFU_METRICS_PORT=//p' | head -1)
+
+  # Unset means an SFU old enough not to have the setting; 0 means metrics are
+  # recorded and served nowhere, which that build says outright at boot. Either
+  # way the count cannot be read, and the caller defers rather than guessing.
+  [[ -z "$port" || "$port" == "0" ]] && return 0
+
+  docker exec "$container" sh -c \
+    "wget -qO- http://127.0.0.1:${port}/metrics 2>/dev/null || curl -sf --max-time 5 http://127.0.0.1:${port}/metrics" 2>/dev/null \
     | awk '/^gryt_sfu_peers_active /{print $2; found=1} END{if(!found) exit 1}'
 }
 

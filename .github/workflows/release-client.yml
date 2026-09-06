@@ -1415,10 +1415,100 @@ jobs:
 
           gh release upload "$TAG" "${ASSETS[@]}" --repo "$OWNER/$REPO" --clobber
 
-  # Runs only after every matrix leg succeeds. `needs` on a matrix job means a
-  # single failed platform skips this, which leaves the release as an
-  # unpublished draft rather than a half-built release nobody can install —
-  # v1.3.1-beta.2 and beta.3 both shipped without Windows assets that way.
+      # ── Each platform goes live on its own ──────────────────────────────
+      #
+      # The release left draft only once all six legs had finished, so a Windows
+      # build that took four minutes waited on a macOS build that took fifteen.
+      # Windows users got the update eleven minutes late for a reason none of
+      # them could act on.
+      #
+      # Publishing part-way is safe because the client already refuses a release
+      # it cannot install. `newestReleaseWithoutApi` walks candidate tags newest
+      # first and calls `releaseIsInstallable`, which wants *this* platform and
+      # variant's channel file — `latest-mac.yml`, `slim.yml` and so on — plus
+      # the installer that file names, both present and non-empty. A tag missing
+      # either is skipped with "assets incomplete" and the app falls through to
+      # the version below. So a macOS client meeting a release that is so far
+      # Windows-only does not error: it sees no update yet, which is true.
+      #
+      # Which makes this the whole change. Flip the draft from the leg, as soon
+      # as that leg's own assets are up. `--draft=false` on a published release
+      # is a no-op, so six legs racing to run it is fine and the first one home
+      # wins.
+      #
+      # It checks the same two things the client checks rather than trusting the
+      # upload above. A leg that produced no channel file leaves the release
+      # alone instead of publishing something its own platform cannot install,
+      # which is how macOS slim missed v1.9.15.
+      - name: Make this platform's build available
+        working-directory: packages/client
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ env.VERSION }}
+          OWNER: ${{ env.OWNER }}
+          REPO: ${{ env.REPO }}
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+
+          TAG="v$VERSION"
+
+          # electron-builder names the channel file after the channel, and slim
+          # publishes on one of its own so the two variants do not overwrite
+          # each other inside a single release.
+          if [[ "$VARIANT" == "slim" ]]; then CHANNEL="slim"; else CHANNEL="latest"; fi
+
+          case "$RUNNER_OS" in
+            macOS)   YML="${CHANNEL}-mac.yml" ;;
+            Windows) YML="${CHANNEL}.yml" ;;
+            *)       YML="${CHANNEL}-linux.yml" ;;
+          esac
+
+          if [[ ! -f "release/$YML" ]]; then
+            echo "::warning::This leg produced no $YML, so it has nothing to publish."
+            exit 0
+          fi
+
+          # The installer the channel file points at. An update reads this file
+          # and then asks for that name, so a release carrying one without the
+          # other is one the updater breaks on rather than skips.
+          # `|| true` on both: `set -o pipefail` is on, so a grep that matches
+          # nothing or a transient API error would otherwise fail the leg — and
+          # failing a build that has already produced and uploaded its installer
+          # is a far worse outcome than not publishing a minute early. Both fall
+          # through to the checks below, which warn and leave the release alone.
+          INSTALLER="$(grep -m1 -E '^[[:space:]]*path:' "release/$YML" | sed -E 's/^[[:space:]]*path:[[:space:]]*//' | tr -d '\r' || true)"
+
+          if [[ -z "$INSTALLER" ]]; then
+            echo "::warning::No path: in $YML, so there is no way to check what it installs."
+            exit 0
+          fi
+
+          ON_RELEASE="$(gh release view "$TAG" --repo "$OWNER/$REPO" --json assets --jq '.assets[] | select(.size > 0) | .name' || true)"
+
+          for NEEDED in "$YML" "$INSTALLER"; do
+            if ! printf '%s\n' "$ON_RELEASE" | grep -qxF "$NEEDED"; then
+              echo "::warning::$NEEDED is not on $TAG yet, so this leg is leaving it alone."
+              exit 0
+            fi
+          done
+
+          gh release edit "$TAG" --repo "$OWNER/$REPO" --draft=false
+          echo "$TAG is installable on $RUNNER_OS ($VARIANT)."
+
+  # Runs after every matrix leg. The release is usually live by the time this
+  # starts — each leg publishes it once its own assets are up — so this no
+  # longer decides whether anybody can install anything. It owns the
+  # whole-release work instead: checksums across every file, the attestation,
+  # the notes appendix that refers to them, and telling Discord once rather
+  # than six times.
+  #
+  # A failed leg still skips this. That now leaves a release live for the
+  # platforms that finished and silent for the one that did not, rather than a
+  # draft nobody can install. `cleanup-failed-release` already declines to
+  # delete a published release, so whatever somebody installed stays
+  # installable.
   publish-release:
     name: Publish release
     needs: [prepare-release, build-electron]
@@ -1463,7 +1553,12 @@ jobs:
           done
 
           if [[ "$MISSING" -ne 0 ]]; then
-            echo "Leaving $TAG as a draft."
+            # No longer "leaving it as a draft": the legs that did finish have
+            # published it between them, and taking it back would pull an
+            # update out from under whoever already has it. Failing here is the
+            # signal that a platform is missing; the release stands, carrying
+            # the platforms that built.
+            echo "::error::$TAG is missing assets. It stays published for the platforms that have them."
             exit 1
           fi
 
@@ -1592,6 +1687,11 @@ jobs:
 
           gh release edit "$TAG" --repo "$OWNER/$REPO" --notes-file notes.md
 
+      # A backstop now rather than the moment of release. Every leg publishes
+      # the release once its own assets are up, so by here it is almost always
+      # live already and this is a no-op. It stays because "almost always" is
+      # not always: a leg that uploaded its assets but could not reach the API
+      # to flip the draft would otherwise leave a finished release unpublished.
       - name: Publish the release
         shell: bash
         env:
@@ -1600,7 +1700,7 @@ jobs:
           set -euo pipefail
 
           gh release edit "v$VERSION" --repo "$OWNER/$REPO" --draft=false
-          echo "Published v$VERSION."
+          echo "v$VERSION is published."
 
       # publish-snap.yml listens for `release: published`, and that event does
       # not fire when the release was created with GITHUB_TOKEN — which is what

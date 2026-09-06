@@ -14,7 +14,7 @@
     <a href="https://ghcr.io/gryt-chat/server"><img src="https://img.shields.io/badge/Docker-ghcr.io-blue?logo=docker&logoColor=white" alt="Docker" /></a>
   </p>
 
-  <img src="/.github/preview.png" width="700" alt="Gryt preview" />
+  <img src="/.github/preview.webp" width="700" alt="The Gryt desktop client: a voice call with six people, a chat channel, and the member list" />
 
   <br />
 

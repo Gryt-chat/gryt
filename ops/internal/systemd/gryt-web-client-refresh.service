@@ -7,6 +7,31 @@ Requires=docker.service
 [Service]
 Type=oneshot
 
+# Bring the checkout up to date first, so ops/ changes reach this machine.
+#
+# The same ExecStartPre is on gryt-sites-refresh.service, and for a while that
+# was the only place it lived. On 2026-09-06 the sites timer turned out to be
+# disabled, so nothing had pulled the superproject since 2026-09-01 and the
+# checkout sat around thirty commits behind — including the two compose changes
+# this unit deploys from. This unit kept firing every ten minutes and reporting
+# success the whole time, because it reads each stack's compose files off the
+# running container's labels and those paths were all still there.
+#
+# So the pull hangs off both timers now. One of them being off is then a slow
+# rebuild or a slow image, rather than a machine quietly deploying from last
+# week.
+#
+# Cheap and idempotent: a fetch and a fast-forward that exits without a word
+# when there is nothing to move. If both timers do land together, one loses the
+# index lock, says so, and picks it up on the next tick.
+#
+# A separate process on purpose. The refresher below is symlinked out of the
+# checkout this pull rewrites, and bash reads a script as it runs it, so pulling
+# from inside the refresher could replace its own remaining lines underneath it.
+#
+# The leading dash so a failed pull does not stop the refresh.
+ExecStartPre=-/usr/local/bin/gryt-pull-superproject
+
 # A symlink into the checkout rather than a copy, so `git pull` updates the
 # script and nothing has to be installed again. systemd needs a literal
 # absolute path here — it does not expand variables in the executable itself —

@@ -1,0 +1,84 @@
+name: Permission labels
+
+# Checks that every permission the server ships has a label in the client's
+# role editor, and that the client has no labels for permissions the server
+# dropped.
+#
+# This lives in the superproject because nowhere else can see both sides. The
+# server owns the list and the client owns the wording — deliberately, since
+# how a permission reads is not the server's business — so each repository's
+# CI is green while the two have already drifted. When they have, the role
+# editor draws the permission as a bare id under "Newer than this client". It
+# saves correctly; it just reads as a client that is out of date. Twice now:
+# upload_avatar_image in GRYT-866 and set_activity in GRYT-929.
+
+on:
+  # Time-based for the same reason Avatar parity is. The commit that changes
+  # which two versions ship together is the gitlink bump from Update
+  # Submodules, and that commit carries [skip ci], so anything hung off `push`
+  # would skip exactly the commits worth checking.
+  schedule:
+    - cron: "41 6 * * *"
+
+  workflow_dispatch:
+
+  # So a change to the check is exercised by the PR that makes it, rather than
+  # first running at 06:41 the morning after it merges.
+  pull_request:
+    paths:
+      - .github/scripts/check-permission-labels.mjs
+      - .github/workflows/permission-labels.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: permission-labels-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    name: Compare server permissions against client labels
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout monorepo
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Clone the two sides
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Cloned from the URL at main rather than resolved from the recorded
+          # gitlink, matching Avatar parity. What ships is each repository's
+          # own main; the gitlink is a snapshot of that, usually current and
+          # sometimes an hour behind.
+          #
+          # One file each, because that is all the check reads. Blobless plus a
+          # path-limited checkout fetches those two blobs and nothing else.
+          # Repo and path kept on one line each rather than in an
+          # associative array, so this reads the same on the bash 3.2 a
+          # maintainer has locally as it does on the runner.
+          for entry in \
+            "server:src/constants/permissions.ts" \
+            "client:src/packages/socket/src/lib/permissions.ts"
+          do
+            repo="${entry%%:*}"
+            path="${entry#*:}"
+
+            # actions/checkout leaves an empty directory for each gitlink, and
+            # clone refuses a directory that has anything in it.
+            rm -rf "packages/${repo}"
+
+            git clone --quiet --filter=blob:none --no-checkout \
+              "https://github.com/Gryt-chat/${repo}.git" "packages/${repo}"
+            git -C "packages/${repo}" checkout --quiet origin/main -- "${path}"
+            echo "${repo}: $(git -C "packages/${repo}" rev-parse --short origin/main)"
+          done
+
+      - name: Compare
+        shell: bash
+        run: node .github/scripts/check-permission-labels.mjs

@@ -82,3 +82,5 @@ jobs:
       - name: Compare
         shell: bash
         run: node .github/scripts/check-permission-labels.mjs
+
+# Trigger note: the check reads source as text, so it needs no install step.

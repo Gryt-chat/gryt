@@ -295,10 +295,14 @@ an import gets triggered by accident.
 
 ## Style
 
-Match the surrounding code. Sivert's prose — docs, blog posts, comments — is plain and
-direct, with hedges like "a bit", "probably", "honestly". Avoid aphorisms, antithesis pairs
-("not X, but Y"), and sections that end on a punchy one-liner. If a sentence sounds like it
-belongs in a keynote, rewrite it.
+Match the surrounding code, with one exception: comment density. Most of what is in the
+files predates the rule at the end of this page and is what it exists to remove, so follow
+the rule rather than the file.
+
+Sivert's prose — docs, blog posts, comments — is plain and direct, with hedges like "a
+bit", "probably", "honestly". Avoid aphorisms, antithesis pairs ("not X, but Y"), and
+sections that end on a punchy one-liner. If a sentence sounds like it belongs in a keynote,
+rewrite it.
 
 **Don't tell the reader a point is important.** "Worth noting", "worth a close look",
 "this is the moment the number is settled", "the one people miss" — each of those spends a
@@ -334,43 +338,6 @@ text, a meta description, a message to somebody outside the repository. If it is
 a person will read it, it goes through both skills before you hand it over.
 
 Run them on the copy **before you commit**, not as a later pass. The draft is what ships.
-
-**The one exception is code comments**, along with log lines, test names, and variable and
-function names. Those want to be plain and direct, and a copy skill spends a turn on prose
-nobody browses. Don't run the skills over them. The rule below applies instead.
-
-## Comments
-
-**Default to none. Two lines when you need one. Longer only to stop a specific mistake,
-and then say which mistake.**
-
-This reverses what this file used to say. It claimed the comments here were load-bearing
-and long on purpose, and that was true of some of them and became an excuse for the rest.
-The result is code you have to read around.
-
-Delete on sight:
-
-- **Narration.** A comment that says what the next line says. `// increment the counter`.
-- **History.** What this used to be, who changed it, which task it came from. That is what
-  `git log` is. A comment that starts "this used to" is telling you about a file that no
-  longer exists.
-- **Justification nobody asked for.** Three paragraphs on why a sensible choice was
-  sensible. If it is the obvious thing, it needs no defence.
-- **Restated types.** `/** The user's name. */` above `name: string`.
-
-Keep, and let it run past two lines if it has to:
-
-- **A trap.** Something that looks wrong and is not, or looks fine and is not. `btoa` being
-  unsafe above `0x7f` on Hermes is the example that keeps earning its place — it is why
-  `@gryt/crypto` has one base64 implementation rather than the browser's.
-- **A constraint from outside.** A protocol, a wire format, an engine bug, an order that
-  matters. `check-subpaths.mjs` enumerating modules by hand rather than reading the
-  directory is worth one line, because otherwise a new module is silently unchecked.
-- **A decision that will otherwise be re-litigated.** Not the history of it — the
-  conclusion, once, where the code is.
-
-The test: **would somebody make a mistake without it?** Not "is this interesting", not "did
-this take a while to work out". If nothing breaks when the comment is gone, it goes.
 
 This used to carve out PR bodies, commit messages and task descriptions as "in between",
 on the argument that they are work records rather than product surface. That carve-out is
@@ -411,3 +378,39 @@ It matters less than it looks, because the answer is usually "leave it either wa
 phrase like "worth knowing" reads as Sivert's voice in the pages that already had it, and
 the rule above is about not adding more rather than about editing what is there. Rewrite a
 line when it is genuinely announcing the next one, not because a scan matched it.
+
+**The one exception is code comments**, along with log lines, test names, and variable and
+function names. Those want to be plain and direct, and a copy skill spends a turn on prose
+nobody browses. Don't run the skills over them. The rule below applies instead.
+
+## Comments
+
+**Default to none. Two lines when you need one. Longer only to stop a specific mistake,
+and then say which mistake.**
+
+This reverses what this file used to say. It claimed the comments here were load-bearing
+and long on purpose, and that was true of some of them and became an excuse for the rest.
+The result is code you have to read around.
+
+Delete on sight:
+
+- **Narration.** A comment that says what the next line says. `// increment the counter`.
+- **History.** What this used to be, who changed it, which task it came from. That is what
+  `git log` is. A comment that starts "this used to" is telling you about a file that no
+  longer exists.
+- **Justification nobody asked for.** Three paragraphs on why a sensible choice was
+  sensible. If it is the obvious thing, it needs no defence.
+- **Restated types.** `/** The user's name. */` above `name: string`.
+
+Keep, and let it run past two lines if it has to:
+
+- **A trap.** Something that looks wrong and is not, or looks fine and is not. `btoa` being
+  unsafe above `0x7f` on Hermes is the example that keeps earning its place — it is why
+  `@gryt/crypto` has one base64 implementation rather than the browser's.
+- **A constraint from outside.** A protocol, a wire format, an engine bug, an order that
+  matters. `check-subpaths.mjs` enumerating modules by hand rather than reading the
+  directory is worth one line, because otherwise a new module is silently unchecked.
+- **A decision that will otherwise be re-litigated.** Not the history of it — the
+  conclusion, once, where the code is.
+
+The test: **would somebody make a mistake without it?** Not "is this interesting", not "did

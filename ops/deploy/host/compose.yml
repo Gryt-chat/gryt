@@ -1,3 +1,26 @@
+# Keep the log files from growing without end.
+#
+# Docker's default json-file driver has no size limit unless the daemon is
+# configured with one, and most are not. A server that runs for a year writes
+# until the disk is full, and on a box where the database sits on the same disk
+# that is not only a logging problem.
+#
+# 20MB across two files per container, so a busy service keeps something like a
+# day of history and a quiet one keeps months. Raise it if you would rather
+# have more; the point is that there is a number rather than none.
+#
+# Deliberately json-file rather than journald. journald needs journald on the
+# host, and Docker refuses to start a container with it on a system without
+# systemd — Alpine, a minimal container host, WSL with systemd off. A logging
+# choice should not be the thing that stops the stack coming up. The project's
+# own deployment uses journald, and it does that in an override file of its own
+# rather than here (gryt#198).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "2"
+
 services:
   # Web client (dev/local only — won't authenticate against auth.gryt.chat in production)
   # Use for local development or with your own Keycloak.
@@ -7,6 +30,7 @@ services:
       context: ../..
       dockerfile: Dockerfile.client
     container_name: gryt-client
+    logging: *default-logging
     profiles: ["web"]
     env_file:
       - ./.env
@@ -28,6 +52,7 @@ services:
       context: ../..
       dockerfile: Dockerfile.server
     container_name: gryt-server
+    logging: *default-logging
     env_file:
       - ./.env
     environment:
@@ -69,6 +94,7 @@ services:
       context: ../..
       dockerfile: Dockerfile.sfu
     container_name: gryt-sfu
+    logging: *default-logging
     env_file:
       - ./.env
     environment:
@@ -95,6 +121,7 @@ services:
   minio:
     image: minio/minio:latest
     container_name: gryt-minio
+    logging: *default-logging
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"

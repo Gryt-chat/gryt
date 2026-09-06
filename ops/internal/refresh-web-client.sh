@@ -103,6 +103,11 @@ label() {
 # failure is a safe one, which is exactly why it went unnoticed — no call was
 # ever cut, and no SFU was ever updated either.
 #
+# That line is also why the gate below now names both images and the count. It
+# repeated every ten minutes for four days and told nobody which build was
+# waiting or how many were supposedly in voice, so there was nothing in it to
+# read as broken.
+#
 # `docker exec` rather than a published port, because not publishing it is
 # deliberate and opening it would be the wrong fix. The port is read off the
 # container's own environment, so prod and beta still need no naming here.
@@ -225,18 +230,24 @@ refresh_container() {
   #
   # An unreadable peer count defers too. Being unable to tell is not the same as
   # nobody being there, and the cost of guessing wrong is somebody's call.
+  # Every line here names both images and the peer count, so the log answers
+  # "why is the SFU still on last week's build" without anybody having to go
+  # and ask the container. The old lines said "new image" and left which one,
+  # and how many were in voice, to the imagination — and the one that mattered
+  # said only "could not be read", which is how it repeated for four days
+  # without anybody reading it as broken.
   if [[ "$service" == "sfu" && -n "$pulled_id" && "$pulled_id" != "$image_before" ]]; then
-    local peers
+    local peers move="${image_before:0:19} -> ${pulled_id:0:19}"
     peers=$(sfu_peers "$container") || peers=""
     if [[ -z "$peers" ]]; then
-      log "[$tag] new image, but the peer count could not be read — deferring"
+      log "[$tag] update available ($move), peer count unreadable — deferring"
       return 0
     fi
     if [[ "${peers%%.*}" -gt 0 ]]; then
-      log "[$tag] new image, but ${peers%%.*} in voice — deferring"
+      log "[$tag] update available ($move), ${peers%%.*} in voice — deferring"
       return 0
     fi
-    log "[$tag] new image and nobody in voice — recreating"
+    log "[$tag] update available ($move), 0 in voice — updating"
   fi
 
   # `--no-deps` because the client's `depends_on` reaches the server, and the

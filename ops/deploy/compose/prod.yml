@@ -1,26 +1,5 @@
 name: gryt-prod
 
-# Logs that survive the container.
-#
-# The default json-file driver keeps its files under the container, so `docker
-# compose up -d` on a new image takes the old container's entire history with
-# it. On 2026-09-06 a voice drop on pp could not be diagnosed for exactly that
-# reason: the server had been up for seventeen hours through the incident, was
-# recreated ten minutes later by a routine deploy, and every line it had written
-# went with it.
-#
-# journald keeps them in the system journal instead, where they outlive the
-# container and are searchable by time across every service at once. `docker
-# logs` still works — the driver supports reading back.
-#
-# Applied to the long-lived services only. The init containers run once and say
-# nothing worth keeping, and MinIO is noisy enough to be worth leaving where it
-# is.
-x-logging: &gryt-logging
-  driver: journald
-  options:
-    tag: "{{.Name}}"
-
 services:
   # ── Object Storage ───────────────────────────────────────────────────────
   minio:
@@ -80,7 +59,6 @@ services:
   sfu:
     image: ghcr.io/gryt-chat/sfu:${SFU_VERSION:-latest}
     container_name: gryt-prod-sfu
-    logging: *gryt-logging
     ports:
       - "${SFU_PORT:-5005}:5005"
       - "${ICE_UDP_MUX_PORT:-3478}:${ICE_UDP_MUX_PORT:-3478}/udp"
@@ -116,7 +94,6 @@ services:
   server:
     image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest}
     container_name: gryt-prod-server
-    logging: *gryt-logging
     network_mode: host
     extra_hosts:
       - "sfu:127.0.0.1"
@@ -204,7 +181,6 @@ services:
   image-worker:
     image: ghcr.io/gryt-chat/image-worker:${IMAGE_WORKER_VERSION:-latest}
     container_name: gryt-prod-image-worker
-    logging: *gryt-logging
     # The server runs with host networking, so it cannot reach this container
     # by service name — it has to come in through a published port. Bound to
     # loopback: this is a health endpoint for the server beside it, not
@@ -374,7 +350,6 @@ services:
   client:
     image: ghcr.io/gryt-chat/client:${CLIENT_VERSION:-latest}
     container_name: gryt-prod-client
-    logging: *gryt-logging
     profiles: ["web"]
     ports:
       - "${CLIENT_PORT:-3666}:80"

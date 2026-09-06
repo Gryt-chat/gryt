@@ -3,7 +3,54 @@
 ##   docker compose -f prod.yml -f prod.local.yml --env-file .env.prod up -d
 ##
 
+# Logs that survive the container.
+#
+# The default json-file driver keeps its files under the container, so `docker
+# compose up -d` on a new image takes the old container's entire history with
+# it. On 2026-09-06 a voice drop on pp could not be diagnosed for exactly that
+# reason: the server had been up for seventeen hours through the incident, was
+# recreated ten minutes later by a routine deploy, and every line it had written
+# went with it.
+#
+# journald keeps them in the system journal instead, where they outlive the
+# container and are searchable by time across every service at once. `docker
+# logs` still works — the driver supports reading back.
+#
+# This sits in the override and not in the stack file next to it, because the
+# journald driver needs journald on the host. Without systemd — Alpine, a
+# minimal container host, WSL with systemd off — Docker refuses the container
+# with "journald is not enabled on this host" and it never starts at all. The
+# stack file is one self-hosters are pointed at, so a logging choice made there
+# becomes their boot failure. This file is the project's own box, and that box
+# runs systemd.
+#
+# There is no max-size here for the same reason in reverse: log options belong
+# to the driver, and max-size is json-file's. journald rejects it, so a file
+# carrying both would break whichever driver it did not match.
+#
+# Applied to the long-lived services only. The init containers run once and say
+# nothing worth keeping, and MinIO is noisy enough to be worth leaving where it
+# is.
+x-logging: &gryt-logging
+  driver: journald
+  options:
+    tag: "{{.Name}}"
+
 services:
+  # The long-lived services from the stack file, here only to pick up the
+  # journald driver above. Everything else about them stays as it is there.
+  sfu:
+    logging: *gryt-logging
+
+  server:
+    logging: *gryt-logging
+
+  image-worker:
+    logging: *gryt-logging
+
+  client:
+    logging: *gryt-logging
+
   # Override minio-init to also create the NT bucket
   minio-init:
     environment:
@@ -23,6 +70,7 @@ services:
   server-nt:
     image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest}
     container_name: gryt-prod-server-nt
+    logging: *gryt-logging
     ports:
       - "${NT_SERVER_PORT:-5001}:5000"
     environment:
@@ -84,6 +132,7 @@ services:
   image-worker-nt:
     image: ghcr.io/gryt-chat/image-worker:${IMAGE_WORKER_VERSION:-latest}
     container_name: gryt-prod-image-worker-nt
+    logging: *gryt-logging
     # The server runs with host networking, so it cannot reach this container
     # by service name — it has to come in through a published port. Bound to
     # loopback: this is a health endpoint for the server beside it, not

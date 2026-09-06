@@ -203,10 +203,23 @@ executable itself — so the symlink is what keeps the unit free of anybody's ho
 
 ```bash
 sudo ln -sfn "$PWD/ops/internal/refresh-web-client.sh" /usr/local/bin/gryt-web-client-refresh
+sudo ln -sfn "$PWD/ops/internal/pull-superproject.sh" /usr/local/bin/gryt-pull-superproject
 sudo cp ops/internal/systemd/gryt-web-client-refresh.{service,timer} /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now gryt-web-client-refresh.timer
 ```
+
+The second symlink is the same one the sites timer installs. It is on both on purpose, as
+an `ExecStartPre`, so every tick fast-forwards the checkout before anything deploys from
+it.
+
+For a while only the sites timer had it. On 2026-09-06 that timer turned out to be
+disabled, so the checkout had not moved since 2026-09-01 and sat around thirty commits
+behind. This timer kept firing every ten minutes and reporting everything current, which
+was true of the images and not of the compose files it deploys from.
+
+The units themselves are copied rather than symlinked, so changing one means running the
+`cp` and `daemon-reload` again. The scripts they point at update with `git pull`.
 
 It fires every ten minutes and runs as root, which is the usual arrangement for a system
 unit talking to the Docker socket. To run as somebody else, drop in an override with

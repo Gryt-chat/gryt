@@ -1,0 +1,188 @@
+name: Publish to the AUR
+
+# The CachyOS Package Installer, paru and yay all browse the AUR, so this is the
+# only Arch-side listing there is to keep current.
+#
+# This clones the AUR repo rather than using packages/client/aur, and rewrites
+# only pkgver, pkgrel and sha256sums. Structural PKGBUILD changes are made in
+# that submodule and pushed by hand; the next run starts from whatever the AUR
+# holds, so the two do not fight.
+
+on:
+  release:
+    types: [published]
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish, e.g. v1.9.24'
+        required: true
+        type: string
+
+concurrency:
+  group: publish-aur
+  cancel-in-progress: true
+
+jobs:
+  publish-aur:
+    name: Publish to the AUR
+    runs-on: ubuntu-latest
+
+    # A `release` event does not know which dispatch produced it, so the channel
+    # is read off the tag. Betas do not go in `gryt-chat-bin`.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      !contains(github.event.release.tag_name, '-beta')
+
+    # No continue-on-error: GRYT-971 is what a publisher that cannot fail costs.
+    timeout-minutes: 20
+
+    env:
+      OWNER: Gryt-chat
+      REPO: gryt
+      TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+      AUR_PKG: gryt-chat-bin
+
+    steps:
+      - name: Check out the AUR package
+        id: checkout
+        shell: bash
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${AUR_SSH_PRIVATE_KEY:-}" ]]; then
+            echo "AUR_SSH_PRIVATE_KEY is not set, skipping the AUR."
+            echo "active=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+
+          # Pinned rather than ssh-keyscan'd: this pushes a package anyone on
+          # Arch can install, so first-use trust is not good enough.
+          cat >> ~/.ssh/known_hosts <<'HOSTKEY'
+          aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV2nZ+MrNgFvHmVbtfsRQFtu
+          HOSTKEY
+
+          cat >> ~/.ssh/config <<'SSHCONFIG'
+          Host aur.archlinux.org
+            User aur
+            IdentityFile ~/.ssh/aur
+            IdentitiesOnly yes
+          SSHCONFIG
+
+          git clone "ssh://aur@aur.archlinux.org/${AUR_PKG}.git" aur
+
+          echo "active=true" >> "$GITHUB_OUTPUT"
+
+      - name: Rewrite the PKGBUILD for this release
+        if: steps.checkout.outputs.active == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${TAG#v}"
+          DEB="Gryt-Chat-${VERSION}-linux-amd64.deb"
+
+          gh release download "$TAG" \
+            --repo "$OWNER/$REPO" \
+            --pattern "$DEB" \
+            --dir .
+
+          SUM="$(sha256sum "$DEB" | cut -d' ' -f1)"
+
+          cd aur
+
+          # Anchored, so none of these can match the same text inside the URL
+          # further down the file.
+          sed -i \
+            -e "s/^pkgver=.*/pkgver=${VERSION}/" \
+            -e "s/^pkgrel=.*/pkgrel=1/" \
+            -e "s/^sha256sums=.*/sha256sums=('${SUM}')/" \
+            PKGBUILD
+
+          echo "PKGBUILD now says:"
+          grep -E '^(pkgver|pkgrel|sha256sums)=' PKGBUILD
+
+          # A sed that matched nothing leaves the old version in place, which
+          # would publish a package pointing at the wrong release.
+          grep -qx "pkgver=${VERSION}" PKGBUILD
+          grep -qx "sha256sums=('${SUM}')" PKGBUILD
+
+      - name: Regenerate .SRCINFO
+        if: steps.checkout.outputs.active == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # makepkg --printsrcinfo is the only supported way to write this file,
+          # it needs Arch, and it refuses to run as root.
+          docker run --rm -v "$PWD/aur:/pkg" archlinux:base-devel bash -c '
+            useradd -m build
+            chown -R build /pkg
+            cd /pkg
+            su build -c "makepkg --printsrcinfo" > /pkg/.SRCINFO.new
+          '
+
+          mv aur/.SRCINFO.new aur/.SRCINFO
+
+          echo ".SRCINFO now says:"
+          grep -E '^\s+(pkgver|pkgrel|sha256sums|source)' aur/.SRCINFO || true
+
+      - name: Push it to the AUR
+        if: steps.checkout.outputs.active == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${TAG#v}"
+
+          cd aur
+
+          # By name, not -A: the AUR takes these two files and nothing else.
+          git add PKGBUILD .SRCINFO
+
+          if git diff --cached --quiet; then
+            echo "Already at ${VERSION}. Nothing to push."
+            exit 0
+          fi
+
+          git config user.name "Gryt Chat"
+          git config user.email "sivert@gryt.chat"
+
+          git commit -m "Update to ${VERSION}"
+          git push origin master
+
+      - name: Check the AUR is serving it
+        if: always() && steps.checkout.outputs.active == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${TAG#v}"
+
+          for attempt in $(seq 1 6); do
+            LIVE="$(
+              curl -sfS "https://aur.archlinux.org/rpc/v5/info?arg[]=${AUR_PKG}" \
+                | python3 -c "import json,sys; r=json.load(sys.stdin).get('results',[]); print(r[0]['Version'] if r else '')" 2>/dev/null || true
+            )"
+
+            # The RPC reports pkgver-pkgrel, and pkgrel is reset to 1 above.
+            if [[ "$LIVE" == "${VERSION}-1" ]]; then
+              echo "${AUR_PKG} is at $LIVE. Correct."
+              exit 0
+            fi
+
+            echo "Attempt $attempt: ${AUR_PKG} is \"${LIVE:-unknown}\", waiting for ${VERSION}-1."
+            sleep 20
+          done
+
+          echo "::error::The AUR is serving \"${LIVE:-unknown}\" for ${AUR_PKG}, not ${VERSION}-1."
+          echo "See https://aur.archlinux.org/packages/${AUR_PKG}"
+          exit 1

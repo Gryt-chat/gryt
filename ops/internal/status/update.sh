@@ -9,8 +9,10 @@
 
 set -u
 
-SRC="/opt/gryt-src"
-DEST="/opt/gryt-status"
+# Overridable so a change to this script can be exercised against scratch
+# directories before it is trusted with the real ones.
+SRC="${CONSOLE_SRC:-/opt/gryt-src}"
+DEST="${CONSOLE_DEST:-/opt/gryt-status}"
 COMPOSE="$DEST/docker-compose.yml"
 STATE="$DEST/.deployed"
 
@@ -34,12 +36,19 @@ retry_delay() {
 
 # ── The config, which lives in git ───────────────────────────────────────
 
-# The three files the sync owns. Everything else in $DEST is either written by
-# the console or holds the password, and is never touched.
+# The files the sync owns. Everything else in $DEST is either written by the
+# console or holds the password, and is never touched.
+#
+# This script is one of them. Without that, a change to it merges and never
+# runs: the copy in git updates and the copy being executed does not, which is
+# exactly the "merged, deployed nothing" the timer exists to end. The systemd
+# units are not here — changing those needs a daemon-reload, so they stay a
+# documented one-off.
 SYNCED=(
     "docker-compose.yml:$DEST/docker-compose.yml"
     "README.md:$DEST/README.md"
     "config/config.yaml:$DEST/config/config.yaml"
+    "update.sh:$DEST/update.sh"
 )
 
 files_match() {
@@ -96,11 +105,32 @@ update_config() {
     rm -rf /tmp/gatus-validate-config
     cp -r "$SRC/ops/internal/status/config" /tmp/gatus-validate-config
 
-    if ! timeout 40 docker run --rm \
+    # Named and removed explicitly, never `--rm` into a pipe.
+    #
+    # `docker run --rm ... | grep -q` looks right and leaks a container every
+    # time: grep exits on its first match, the SIGPIPE kills the docker client,
+    # and the container it was attached to keeps running. Six of them piled up
+    # on this box in five minutes, and the one from 2026-09-03 has the same
+    # cause — the validate command in this README, which is written that way.
+    local name="gatus-validate-$$"
+    docker rm -f "$name" >/dev/null 2>&1 || true
+
+    docker run -d --name "$name" \
         -v /tmp/gatus-validate-config:/config:ro \
         -v /tmp/gatus-validate-data:/data \
         -e GATUS_CONFIG_PATH=/config \
-        twinproduction/gatus:v5.36.0 2>&1 | grep -q "Validated"; then
+        twinproduction/gatus:v5.36.0 >/dev/null 2>&1 || true
+
+    local ok=1 i
+    for i in $(seq 1 20); do
+        sleep 1
+        if docker logs "$name" 2>&1 | grep -q "Validated"; then ok=0; break; fi
+        docker inspect "$name" --format '{{.State.Running}}' 2>/dev/null | grep -q true || break
+    done
+
+    docker rm -f "$name" >/dev/null 2>&1 || true
+
+    if (( ok != 0 )); then
         echo "[$(date -Is)] [config] the new config did not validate; keeping the old one"
         return 1
     fi
@@ -109,9 +139,19 @@ update_config() {
     # not in git, and a wholesale copy would delete it and lock everybody out of
     # the console. announcements.yaml is written by the console and is not in
     # git either.
-    local pair
+    # Written beside and renamed, never copied over in place. bash reads a
+    # script as it runs, so overwriting this file mid-execution would hand the
+    # running shell the second half of a different one. A rename swaps the
+    # name and leaves the open inode alone.
+    #
+    # It also matters for the Gatus config, which is watched: a half-written
+    # file is a config that does not parse.
+    local pair dest
     for pair in "${SYNCED[@]}"; do
-        cp "$SRC/ops/internal/status/${pair%%:*}" "${pair#*:}"
+        dest="${pair#*:}"
+        cp "$SRC/ops/internal/status/${pair%%:*}" "$dest.incoming"
+        chmod --reference="$dest" "$dest.incoming" 2>/dev/null || true
+        mv "$dest.incoming" "$dest"
     done
 
     if ! docker compose -f "$COMPOSE" up -d; then
@@ -120,6 +160,9 @@ update_config() {
     fi
 
     echo "[$(date -Is)] [config] deployed ${target:0:8}"
+
+    # A new copy of this script takes effect next cycle; this shell goes on
+    # running the code it started with.
 }
 
 # ── The console, which lives in a registry ───────────────────────────────

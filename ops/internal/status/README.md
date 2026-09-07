@@ -129,10 +129,16 @@ body condition shows up as `success=false` before it reaches the live page.
 Don't grep that output for the word `errors`. Every passing line ends in
 `errors=0`.
 
-Use `--rm` and a `timeout`, as above. A validation run on 2026-09-03 was still
-running four days later as `infallible_zhukovsky`, holding
-`config/config.yaml.new` and serving nothing, because it was started without
-either. Check `docker ps` on the VPS after validating.
+**Do not pipe that into `grep -q`.** It looks right and leaks a container every
+time: `grep -q` exits on its first match, the SIGPIPE kills the docker client,
+and the container it was attached to keeps running — `--rm` never gets to do
+anything. Six piled up on this box in five minutes that way, and
+`infallible_zhukovsky`, running since 2026-09-03, is the same mistake made
+once.
+
+`update.sh` does this the safe way: `docker run -d --name`, poll the logs, then
+`docker rm -f`. Copy that rather than the one-liner if you are scripting it.
+Either way, check `docker ps` afterwards.
 
 The console does not need this. It writes JSON, which is valid YAML, so the
 message somebody typed cannot produce a malformed file the way hand-built YAML

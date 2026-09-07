@@ -13,11 +13,19 @@ services:
       - gatus-data:/data
     environment:
       GATUS_CONFIG_PATH: /config
-    healthcheck:
-      test: ["CMD", "/gatus", "--help"]
-      interval: 60s
-      timeout: 5s
-      retries: 3
+    # No healthcheck, because this image cannot hold one. It carries `/gatus`
+    # and nothing else — no shell, no wget, no ls — so every candidate fails on
+    # "executable file not found".
+    #
+    # It used to say `test: ["CMD", "/gatus", "--help"]`. Gatus has no such
+    # flag, so that booted a second copy inside the container, read the config
+    # and exited 1: a failing streak of 48 while the page served perfectly. A
+    # check that only ever says unhealthy is worse than none, because it
+    # teaches you to ignore the word.
+    #
+    # What actually watches this is the thing it is: status.gryt.chat reports
+    # on Gryt from outside, and update.sh below would fail loudly if the
+    # container stopped coming back.
 
   # Posts announcements by writing announcements.yaml into the directory Gatus
   # already reads. Gatus merges every *.yaml there and reloads on its own, so

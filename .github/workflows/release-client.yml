@@ -1253,6 +1253,48 @@ jobs:
             exit 1
           fi
 
+      - name: Relink Linux AppImages onto a FUSE-free runtime
+        if: runner.os == 'Linux'
+        working-directory: packages/client
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ env.OWNER }}
+          REPO: ${{ env.REPO }}
+          VERSION: ${{ env.VERSION }}
+        run: |
+          set -euo pipefail
+
+          # electron-builder 26.x builds AppImages against a runtime that loads
+          # libfuse2, which fuse3-only distros (Arch, Fedora, Ubuntu 24.04+) no
+          # longer ship — so the download does not launch for most Linux users,
+          # it just silently does nothing (GRYT-953). The static "type2" runtime
+          # carries its own fuse; relink-appimage-fuse.mjs reattaches the built
+          # AppImage to it and rewrites the updater manifest's sha512/size.
+          #
+          # Pinned by sha256. "continuous" is the only channel type2-runtime
+          # publishes, so a moved runtime is meant to fail the checksum here
+          # rather than slip a new binary into the release unnoticed. Bump the
+          # pin deliberately when updating it.
+          RUNTIME_URL="https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64"
+          RUNTIME_SHA256="1cc49bcf1e2ccd593c379adb17c9f85a36d619088296504de95b1d06215aebbf"
+          RUNTIME="${RUNNER_TEMP}/appimage-runtime-x86_64"
+          curl -fsSL -o "$RUNTIME" "$RUNTIME_URL"
+          echo "${RUNTIME_SHA256}  ${RUNTIME}" | sha256sum -c -
+
+          node ../../.github/scripts/relink-appimage-fuse.mjs --runtime "$RUNTIME" --dir release
+
+          # electron-builder published with --publish always, to a release that
+          # stays a draft until publish-release flips it live. Overwrite the
+          # AppImage(s) and rewritten manifest(s) on that draft, so nobody ever
+          # sees the libfuse2 build. deb and snap are untouched and left alone.
+          tag="v${VERSION}"
+          shopt -s nullglob
+          for f in release/*-linux-*.AppImage release/*-linux.yml; do
+            echo "clobbering ${f} onto ${tag}"
+            gh release upload "$tag" "$f" --clobber --repo "${OWNER}/${REPO}"
+          done
+
       # The MSIX, built every release and attached to none of them.
       #
       # Built, because a target nobody builds rots. This one went out in v1.9.5

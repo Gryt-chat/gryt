@@ -1,0 +1,72 @@
+# Draft. Carlo submits this to Flathub; nothing here opens a PR against
+# flathub/flathub. See GRYT-969 for why that boundary exists.
+#
+# `url` and `sha256` are rewritten per release, the same way the PKGBUILD and
+# the Homebrew cask are.
+id: chat.gryt.Gryt
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+# 25.08 rather than 26.08: the runtime has to match the Electron base app, and
+# org.electronjs.Electron2.BaseApp has no 26.08 branch. The linter says so as a
+# warning; following it would not build.
+base: org.electronjs.Electron2.BaseApp
+base-version: '25.08'
+command: gryt-chat
+separate-locales: false
+
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --share=network
+  - --socket=pulseaudio
+  # Voice needs a camera for video calls, and the mic arrives over pulseaudio.
+  - --device=all
+  # Screen sharing needs no talk-name: portals are reachable from every sandbox,
+  # and asking for them is an error to flatpak-builder-lint.
+  # Tray icon.
+  - --talk-name=org.kde.StatusNotifierWatcher
+  # electron-updater must not run inside the sandbox: Flathub owns updates here,
+  # and an app that rewrites itself would be replaced on the next flatpak update
+  # anyway. The client reads this to hide its updater UI.
+  - --env=GRYT_MANAGED_UPDATES=1
+
+modules:
+  - name: gryt-chat
+    buildsystem: simple
+    build-commands:
+      - ar x gryt-chat.deb
+      - tar -xf data.tar.xz
+      # The binary lives in a directory with a space in it.
+      - mkdir -p /app/lib/gryt-chat
+      - cp -a "opt/Gryt Chat/." /app/lib/gryt-chat/
+      - install -Dm755 chat.gryt.Gryt.sh /app/bin/gryt-chat
+      - install -Dm644 chat.gryt.Gryt.desktop /app/share/applications/chat.gryt.Gryt.desktop
+      - install -Dm644 chat.gryt.Gryt.metainfo.xml /app/share/metainfo/chat.gryt.Gryt.metainfo.xml
+      # flatpak refuses an icon over 512x512 and the deb ships one 1024x1024,
+      # so the sizes are made here. ffmpeg because the freedesktop SDK has no
+      # ImageMagick. A missing icon is a Flathub rejection, so finding no source
+      # fails the build rather than the review.
+      - |
+        src="$(ls usr/share/icons/hicolor/*/apps/gryt-chat.png | head -1)"
+        test -n "$src"
+        for size in 512 256 128 64 48 32 16; do
+          ffmpeg -loglevel error -i "$src" -vf "scale=${size}:${size}:flags=lanczos" \
+            -frames:v 1 "icon-${size}.png"
+          install -Dm644 "icon-${size}.png" \
+            "/app/share/icons/hicolor/${size}x${size}/apps/chat.gryt.Gryt.png"
+        done
+    sources:
+      - type: file
+        path: chat.gryt.Gryt.sh
+      - type: file
+        path: chat.gryt.Gryt.desktop
+      - type: file
+        path: chat.gryt.Gryt.metainfo.xml
+      - type: file
+        dest-filename: gryt-chat.deb
+        url: https://github.com/Gryt-chat/gryt/releases/download/v0.0.0/Gryt-Chat-0.0.0-linux-amd64.deb
+        sha256: '0000000000000000000000000000000000000000000000000000000000000000'
+        only-arches: [x86_64]

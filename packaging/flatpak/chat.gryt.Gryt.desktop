@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Gryt Chat
+Comment=Real-time voice chat
+Exec=gryt-chat %u
+Icon=chat.gryt.Gryt
+Terminal=false
+Type=Application
+Categories=Network;InstantMessaging;AudioVideo;
+MimeType=x-scheme-handler/gryt;
+StartupWMClass=Gryt Chat

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The app ID is Carlo's to settle before submission. gryt.chat is the domain,
+     so the prefix is chat.gryt. and not the com.gryt. the closed March attempt
+     used. -->
+<component type="desktop-application">
+  <id>chat.gryt.Gryt</id>
+
+  <name>Gryt Chat</name>
+  <summary>Real-time voice chat</summary>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+
+  <developer id="chat.gryt">
+    <name>Gryt</name>
+  </developer>
+
+  <description>
+    <p>
+      Gryt is voice chat you can host yourself. Talk in voice channels, send
+      messages, share your screen, and run the server on your own machine if you
+      want to — or join somebody else's.
+    </p>
+    <p>
+      Every server is separate. You join with a key your device holds rather
+      than an account on someone else's computer, so a server you run answers to
+      you and nobody has to sign up anywhere to talk on it.
+    </p>
+    <p>What it does:</p>
+    <ul>
+      <li>Voice channels, with screen sharing and video</li>
+      <li>Text channels, direct messages and group messages</li>
+      <li>Servers you host yourself, on a LAN or on the internet</li>
+      <li>Roles and permissions, set per server</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">chat.gryt.Gryt.desktop</launchable>
+
+  <url type="homepage">https://gryt.chat/</url>
+  <url type="bugtracker">https://github.com/Gryt-chat/gryt/issues</url>
+  <url type="vcs-browser">https://github.com/Gryt-chat/gryt</url>
+
+  <!-- These are the video posters gryt.chat already serves, so they are real
+       screenshots at a stable URL. Flathub fetches and mirrors them at build
+       time, so an unreachable one fails the build. -->
+  <screenshots>
+    <screenshot type="default">
+      <image>https://gryt.chat/home/client-live.poster.webp</image>
+      <caption>A voice channel, with the member list and chat alongside</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://gryt.chat/home/screen-share.poster.webp</image>
+      <caption>Sharing a screen in a call</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://gryt.chat/home/create-server.poster.webp</image>
+      <caption>Creating a server to host yourself</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://gryt.chat/home/avatar-editor.poster.webp</image>
+      <caption>Designing an owl avatar</caption>
+    </screenshot>
+  </screenshots>
+
+  <categories>
+    <category>Network</category>
+    <category>InstantMessaging</category>
+    <category>AudioVideo</category>
+  </categories>
+
+  <keywords>
+    <keyword>voice</keyword>
+    <keyword>chat</keyword>
+    <keyword>voip</keyword>
+    <keyword>selfhosted</keyword>
+  </keywords>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+
+  <content_rating type="oars-1.1">
+    <!-- People talk to each other and can send each other pictures, and Gryt
+         does not moderate what they say. Everything else is none. -->
+    <content_attribute id="social-chat">intense</content_attribute>
+    <content_attribute id="social-audio">intense</content_attribute>
+  </content_rating>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#968ff8</color>
+    <color type="primary" scheme_preference="dark">#2a2438</color>
+  </branding>
+
+  <!-- Rewritten per release. `date` alone is dropped by appstreamcli compose
+       with "Ignoring release element without timestamp or date", so both go in. -->
+  <releases>
+    <release version="0.0.0" date="2026-01-01" timestamp="1767225600">
+      <url type="details">https://github.com/Gryt-chat/gryt/releases</url>
+    </release>
+  </releases>
+</component>

@@ -3,10 +3,9 @@ name: Publish to the AUR
 # The CachyOS Package Installer, paru and yay all browse the AUR, so this is the
 # only Arch-side listing there is to keep current.
 #
-# This clones the AUR repo rather than using packages/client/aur, and rewrites
-# only pkgver, pkgrel and sha256sums. Structural PKGBUILD changes are made in
-# that submodule and pushed by hand; the next run starts from whatever the AUR
-# holds, so the two do not fight.
+# packaging/aur/PKGBUILD is the source of truth. It is copied over whatever the
+# AUR holds, so a packaging change is a reviewed pull request rather than a push
+# nobody sees. GRYT-975 is what the other way round cost.
 
 on:
   release:
@@ -97,6 +96,26 @@ jobs:
             --dir .
 
           SUM="$(sha256sum "$DEB" | cut -d' ' -f1)"
+
+          # Read at the tag, so a re-run for an older release packages that
+          # release's PKGBUILD rather than whatever main says today. Tags cut
+          # before this file existed fall back to main; without that the first
+          # release after it landed could not publish at all.
+          at() {
+            gh api "repos/$OWNER/$REPO/contents/packaging/aur/PKGBUILD?ref=$1" \
+              --jq '.content' 2>/dev/null | base64 -d
+          }
+
+          if at "$TAG" > pkgbuild.candidate && [[ -s pkgbuild.candidate ]]; then
+            echo "Using packaging/aur/PKGBUILD from $TAG."
+          elif at main > pkgbuild.candidate && [[ -s pkgbuild.candidate ]]; then
+            echo "$TAG predates packaging/aur/PKGBUILD. Using main's."
+          else
+            echo "::error::No packaging/aur/PKGBUILD at $TAG or on main."
+            exit 1
+          fi
+
+          cp pkgbuild.candidate aur/PKGBUILD
 
           cd aur
 

@@ -1,0 +1,169 @@
+name: Publish the Homebrew cask
+
+# packaging/homebrew/gryt-chat.rb is the source of truth. It is copied into the
+# tap, so a packaging change is a reviewed pull request rather than a push
+# nobody sees.
+
+on:
+  release:
+    types: [published]
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish, e.g. v1.9.24'
+        required: true
+        type: string
+
+concurrency:
+  group: publish-homebrew
+  cancel-in-progress: true
+
+jobs:
+  publish-homebrew:
+    name: Publish the Homebrew cask
+    runs-on: ubuntu-latest
+
+    # A `release` event does not know which dispatch produced it, so the channel
+    # is read off the tag.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      !contains(github.event.release.tag_name, '-beta')
+
+    # No continue-on-error: GRYT-971 is what a publisher that cannot fail costs.
+    timeout-minutes: 15
+
+    env:
+      OWNER: Gryt-chat
+      REPO: gryt
+      TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+      TAP_REPO: Gryt-chat/homebrew-tap
+      CASK: gryt-chat
+
+    steps:
+      - name: Check out the tap
+        id: checkout
+        shell: bash
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${HOMEBREW_TAP_TOKEN:-}" ]]; then
+            echo "HOMEBREW_TAP_TOKEN is not set, skipping the tap."
+            echo "active=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git clone --depth 1 \
+            "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${TAP_REPO}.git" tap
+
+          echo "active=true" >> "$GITHUB_OUTPUT"
+
+      - name: Rewrite the cask for this release
+        if: steps.checkout.outputs.active == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${TAG#v}"
+          DMG="Gryt-Chat-${VERSION}-mac-arm64-slim.dmg"
+
+          # From the release's own SHA256SUMS.txt rather than by downloading a
+          # 110MB disk image to hash it.
+          gh release download "$TAG" --repo "$OWNER/$REPO" \
+            --pattern 'SHA256SUMS.txt' --dir .
+
+          SUM="$(awk -v f="$DMG" '$2 == f { print $1 }' SHA256SUMS.txt)"
+
+          if [[ -z "$SUM" ]]; then
+            echo "::error::SHA256SUMS.txt for $TAG has no entry for $DMG."
+            echo "Either the macOS build did not upload, or its name changed."
+            exit 1
+          fi
+
+          # Read at the tag, so a re-run for an older release packages that
+          # release's cask. Tags cut before this file existed fall back to main.
+          at() {
+            gh api "repos/$OWNER/$REPO/contents/packaging/homebrew/${CASK}.rb?ref=$1" \
+              --jq '.content' 2>/dev/null | base64 -d
+          }
+
+          if at "$TAG" > cask.candidate && [[ -s cask.candidate ]]; then
+            echo "Using packaging/homebrew/${CASK}.rb from $TAG."
+          elif at main > cask.candidate && [[ -s cask.candidate ]]; then
+            echo "$TAG predates packaging/homebrew/${CASK}.rb. Using main's."
+          else
+            echo "::error::No packaging/homebrew/${CASK}.rb at $TAG or on main."
+            exit 1
+          fi
+
+          mkdir -p tap/Casks
+          cp cask.candidate "tap/Casks/${CASK}.rb"
+
+          # Anchored, so neither can match the same text inside the url further
+          # down the file.
+          sed -i \
+            -e "s/^  version \".*\"/  version \"${VERSION}\"/" \
+            -e "s/^  sha256 \".*\"/  sha256 \"${SUM}\"/" \
+            "tap/Casks/${CASK}.rb"
+
+          echo "The cask now says:"
+          grep -E '^  (version|sha256) ' "tap/Casks/${CASK}.rb"
+
+          # A sed that matched nothing leaves the placeholder in place, which
+          # would publish a cask pointing at version 0.0.0.
+          grep -qx "  version \"${VERSION}\"" "tap/Casks/${CASK}.rb"
+          grep -qx "  sha256 \"${SUM}\"" "tap/Casks/${CASK}.rb"
+
+      - name: Push it to the tap
+        if: steps.checkout.outputs.active == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${TAG#v}"
+
+          cd tap
+          git add "Casks/${CASK}.rb"
+
+          if git diff --cached --quiet; then
+            echo "Already at ${VERSION}. Nothing to push."
+            exit 0
+          fi
+
+          git config user.name "Gryt Chat"
+          git config user.email "sivert@gryt.chat"
+
+          git commit -m "${CASK} ${VERSION}"
+          git push
+
+      # GRYT-971 is what a publisher that only checks its own upload costs. Read
+      # back over plain HTTPS, the same view a `brew update` gets, so this cannot
+      # pass on something only the pusher can see.
+      - name: Check the tap is serving it
+        if: always() && steps.checkout.outputs.active == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${TAG#v}"
+          RAW="https://raw.githubusercontent.com/${TAP_REPO}/HEAD/Casks/${CASK}.rb"
+
+          for attempt in $(seq 1 10); do
+            LIVE="$(curl -sfS "$RAW" 2>/dev/null | sed -n 's/^  version "\(.*\)"$/\1/p' || true)"
+
+            if [[ "$LIVE" == "$VERSION" ]]; then
+              echo "${TAP_REPO} is serving ${CASK} $LIVE. Correct."
+              exit 0
+            fi
+
+            echo "Attempt $attempt: the tap says \"${LIVE:-unknown}\", waiting for ${VERSION}."
+            sleep 20
+          done
+
+          echo "::error::${TAP_REPO} is serving \"${LIVE:-unknown}\" for ${CASK}, not ${VERSION}."
+          echo "See https://github.com/${TAP_REPO}/blob/HEAD/Casks/${CASK}.rb"
+          exit 1

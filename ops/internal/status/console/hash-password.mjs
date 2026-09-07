@@ -27,5 +27,8 @@ process.stdin.on("end", () => {
   const salt = randomBytes(16);
   const hash = scryptSync(password, salt, 32);
 
-  console.log(`scrypt$${salt.toString("base64")}$${hash.toString("base64")}`);
+  /* Colon-delimited, not $. Docker Compose interpolates $ in a .env value, so
+     a $-delimited hash arrives with the salt and hash substituted away as
+     undefined variables. Base64 never contains a colon. */
+  console.log(`scrypt:${salt.toString("base64")}:${hash.toString("base64")}`);
 });

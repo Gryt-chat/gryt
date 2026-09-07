@@ -1,0 +1,104 @@
+name: API reference
+
+# Checks that the three generated reference pages in the docs still say what
+# the source says.
+#
+# `docs/server/plugin-api`, `docs/client/addon-api` and `docs/bot/api-reference`
+# are written by .github/scripts/generate-api-reference.mjs out of the
+# TypeScript that defines each API. Nothing in the docs repository can tell when
+# one of those APIs moves, and nothing in server, client or bot can tell that a
+# page in another repository now describes something that is gone.
+#
+# This lives in the superproject for the same reason Permission labels does:
+# it is the only place that can see all four at once. The failure it exists for
+# has already happened once on the site — /developers printed the whole of
+# `pluginApi.ts` with a comment above it saying it had to be kept current, and
+# went on printing `window.gryt` for weeks after GRYT-930 deleted that file.
+
+on:
+  # Time-based, like Permission labels and Avatar parity. The commit that
+  # changes which versions ship together is the gitlink bump from Update
+  # Submodules, and that carries [skip ci], so anything hung off `push` would
+  # skip exactly the commits worth checking.
+  schedule:
+    - cron: "17 7 * * *"
+
+  workflow_dispatch:
+
+  # So a change to the generator is exercised by the pull request that makes it
+  # rather than first running at 07:17 the next morning.
+  pull_request:
+    paths:
+      - .github/scripts/generate-api-reference.mjs
+      - .github/workflows/api-reference.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-reference-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    name: Compare the reference pages against the source
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout monorepo
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Clone the four sides
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Each repository's own main, cloned from the URL rather than resolved
+          # from the recorded gitlink — matching Permission labels and Avatar
+          # parity. What ships is main; the gitlink is a snapshot of it, usually
+          # current and sometimes an hour behind.
+          #
+          # A path-limited checkout on a blobless clone fetches the few blobs
+          # each side needs and nothing else. docs takes the whole content tree
+          # because the generator writes into it and then diffs what it wrote.
+          for entry in \
+            "server:src/plugins" \
+            "client:src/packages/addons/src" \
+            "bot:src" \
+            "docs:content/docs"
+          do
+            repo="${entry%%:*}"
+            path="${entry#*:}"
+
+            # actions/checkout leaves an empty directory for each gitlink, and
+            # clone refuses a directory that has anything in it.
+            rm -rf "packages/${repo}"
+
+            git clone --quiet --filter=blob:none --no-checkout \
+              "https://github.com/Gryt-chat/${repo}.git" "packages/${repo}"
+            git -C "packages/${repo}" checkout --quiet origin/main -- "${path}"
+            echo "${repo}: $(git -C "packages/${repo}" rev-parse --short origin/main)"
+          done
+
+      - name: Install the parser
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # The generator reads TypeScript with the TypeScript compiler's own
+          # parser rather than with regexes, so it needs the package. Installed
+          # into packages/docs because that is where the generator looks first,
+          # and because a path-limited checkout of docs has no package.json for
+          # `npm i` to disagree with.
+          mkdir -p packages/docs
+          npm install --no-save --prefix packages/docs typescript@5
+
+      - name: Compare
+        shell: bash
+        run: node .github/scripts/generate-api-reference.mjs --check

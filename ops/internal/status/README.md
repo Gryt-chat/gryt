@@ -46,10 +46,63 @@ scp -r ops/internal/status/* vps:/opt/gryt-status/
 ssh vps 'cd /opt/gryt-status && docker compose up -d'
 ```
 
-Gatus reads the config at start, so a change needs a restart:
+Gatus reloads the config on its own when a file in the directory changes, so a
+config edit needs nothing else. It only needs a restart when the compose file or
+the image changes:
 
 ```bash
-ssh vps 'cd /opt/gryt-status && docker compose restart'
+ssh vps 'cd /opt/gryt-status && docker compose up -d'
+```
+
+This file used to say a change needed a restart. It doesn't, and the console
+below depends on that being true.
+
+## Announcing an outage
+
+The console at `status.gryt.chat/console` posts announcements — Gatus renders
+them at the top of the page, and the Gryt client shows the same words as a
+banner to everybody signed in. One place to post, so the page and the banner
+cannot disagree.
+
+It writes `config/announcements.yaml`, which Gatus merges with `config.yaml`
+because `GATUS_CONFIG_PATH` is a directory and arrays are appended. Nothing
+touches `config.yaml`, and nothing restarts.
+
+**Resolve** archives what's up and posts an `operational` notice. That closes
+the incident on the page and stops the client banner in one write, because the
+client skips the all-clear.
+
+### Setting the password
+
+Generate a strong one in Bitwarden, then hash it. Password only, and
+deliberately so: the obvious alternative is Keycloak, which runs on the machine
+most likely to be down when somebody needs to post here.
+
+```bash
+printf '%s' 'the-password-from-bitwarden' |   node ops/internal/status/console/hash-password.mjs
+```
+
+Put the output in `/opt/gryt-status/.env` on the VPS:
+
+```
+CONSOLE_PASSWORD_HASH=scrypt$...$...
+```
+
+The hash goes on the VPS, the password goes in Bitwarden, and neither is in this
+repository. Changing the password invalidates every open session, because the
+session key is derived from the hash.
+
+### Routing the tunnel to it
+
+The console listens on `127.0.0.1:3002`. The tunnel on this VPS is token-based,
+so the route is added in the Cloudflare dashboard rather than in a file here:
+a public hostname for `status.gryt.chat` with path `/console`, pointing at
+`http://localhost:3002`.
+
+Until that route exists the console is reachable only over ssh:
+
+```bash
+ssh -L 3002:127.0.0.1:3002 vps
 ```
 
 ## Validate before you deploy
@@ -69,6 +122,15 @@ body condition shows up as `success=false` before it reaches the live page.
 
 Don't grep that output for the word `errors`. Every passing line ends in
 `errors=0`.
+
+Use `--rm` and a `timeout`, as above. A validation run on 2026-09-03 was still
+running four days later as `infallible_zhukovsky`, holding
+`config/config.yaml.new` and serving nothing, because it was started without
+either. Check `docker ps` on the VPS after validating.
+
+The console does not need this. It writes JSON, which is valid YAML, so the
+message somebody typed cannot produce a malformed file the way hand-built YAML
+quoting can.
 
 ## Reading it
 

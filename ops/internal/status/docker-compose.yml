@@ -19,5 +19,25 @@ services:
       timeout: 5s
       retries: 3
 
+  # Posts announcements by writing announcements.yaml into the directory Gatus
+  # already reads. Gatus merges every *.yaml there and reloads on its own, so
+  # this never touches config.yaml and never restarts anything.
+  #
+  # It mounts the same directory read-write while Gatus keeps it read-only.
+  console:
+    build: ./console
+    container_name: gryt-status-console
+    restart: unless-stopped
+    # Loopback only, same as Gatus. The Cloudflare tunnel reaches it from this
+    # host and nothing else should — this is the one door to the status page.
+    ports:
+      - "127.0.0.1:3002:3002"
+    volumes:
+      - ./config:/config
+    environment:
+      CONSOLE_PASSWORD_HASH: ${CONSOLE_PASSWORD_HASH:?set it in .env, see README}
+    depends_on:
+      - gatus
+
 volumes:
   gatus-data:

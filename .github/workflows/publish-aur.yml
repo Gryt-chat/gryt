@@ -188,6 +188,11 @@ jobs:
           git commit -m "Update to ${VERSION}"
           git push origin master
 
+      # The RPC is what paru, yay and the CachyOS installer actually read, so it
+      # is the thing worth holding to — but it is cached behind the database it
+      # reports on. Measured on the first successful publish: the package page
+      # showed 1.9.24-1 immediately and the RPC kept saying 1.1.24-1 for about
+      # five minutes. Six 20-second attempts called that a failed publish.
       - name: Check the AUR is serving it
         if: always() && steps.checkout.outputs.active == 'true'
         shell: bash
@@ -196,7 +201,7 @@ jobs:
 
           VERSION="${TAG#v}"
 
-          for attempt in $(seq 1 6); do
+          for attempt in $(seq 1 15); do
             LIVE="$(
               curl -sfS "https://aur.archlinux.org/rpc/v5/info?arg[]=${AUR_PKG}" \
                 | python3 -c "import json,sys; r=json.load(sys.stdin).get('results',[]); print(r[0]['Version'] if r else '')" 2>/dev/null || true
@@ -209,9 +214,11 @@ jobs:
             fi
 
             echo "Attempt $attempt: ${AUR_PKG} is \"${LIVE:-unknown}\", waiting for ${VERSION}-1."
-            sleep 20
+            sleep 30
           done
 
           echo "::error::The AUR is serving \"${LIVE:-unknown}\" for ${AUR_PKG}, not ${VERSION}-1."
+          echo "The push may still have worked and the RPC be lagging further than"
+          echo "usual — the package page is the database, the RPC is a cache of it."
           echo "See https://aur.archlinux.org/packages/${AUR_PKG}"
           exit 1

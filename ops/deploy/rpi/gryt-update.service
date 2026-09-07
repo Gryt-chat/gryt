@@ -1,0 +1,20 @@
+[Unit]
+Description=Update Gryt site and docs
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=sivert
+WorkingDirectory=/home/sivert/gryt
+ExecStart=/home/sivert/gryt/update.sh
+
+# The backstop for a hang the script's own `timeout` does not cover.
+#
+# `Type=oneshot` defaults to TimeoutStartSec=infinity, which is why the run on
+# 2026-09-07 sat "activating" for an hour and three quarters with the machine
+# idle at 0.78 load. Two hours is comfortably longer than a full pass — three
+# source builds at up to forty minutes each is bounded by the script — so
+# reaching this means something outside a build is stuck.
+TimeoutStartSec=2h

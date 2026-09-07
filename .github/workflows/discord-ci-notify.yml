@@ -11,6 +11,7 @@ name: Discord CI notification
 on:
   workflow_run:
     workflows:
+      - API reference
       - Avatar parity
       - Changelog style
       - Permission labels

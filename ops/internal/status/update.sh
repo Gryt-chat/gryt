@@ -34,6 +34,24 @@ retry_delay() {
 
 # ── The config, which lives in git ───────────────────────────────────────
 
+# The three files the sync owns. Everything else in $DEST is either written by
+# the console or holds the password, and is never touched.
+SYNCED=(
+    "docker-compose.yml:$DEST/docker-compose.yml"
+    "README.md:$DEST/README.md"
+    "config/config.yaml:$DEST/config/config.yaml"
+)
+
+files_match() {
+    local pair src dest
+    for pair in "${SYNCED[@]}"; do
+        src="$SRC/ops/internal/status/${pair%%:*}"
+        dest="${pair#*:}"
+        cmp -s "$src" "$dest" || return 1
+    done
+    return 0
+}
+
 update_config() {
     local head target
 
@@ -53,17 +71,24 @@ update_config() {
     head="$(git -C "$SRC" rev-parse HEAD)"
     target="$(git -C "$SRC" rev-parse origin/main)"
 
-    if [[ "$head" == "$target" ]]; then
-        echo "[$(date -Is)] [config] current ${head:0:8}"
+    if [[ "$head" != "$target" ]]; then
+        if ! git -C "$SRC" merge --ff-only --quiet origin/main; then
+            echo "[$(date -Is)] [config] not a fast-forward; leaving it alone"
+            return 1
+        fi
+        echo "[$(date -Is)] [config] ${head:0:8} -> ${target:0:8}"
+    fi
+
+    # What is deployed, not what git did. A clone made at the current commit
+    # never moves, so a check on git alone would call the box current while it
+    # ran something else entirely — which is how a fresh install would sit
+    # undeployed forever, silently, saying "current" every five minutes.
+    if files_match; then
+        echo "[$(date -Is)] [config] current ${target:0:8}"
         return 0
     fi
 
-    if ! git -C "$SRC" merge --ff-only --quiet origin/main; then
-        echo "[$(date -Is)] [config] not a fast-forward; leaving it alone"
-        return 1
-    fi
-
-    echo "[$(date -Is)] [config] ${head:0:8} -> ${target:0:8}"
+    echo "[$(date -Is)] [config] deployed files differ from ${target:0:8}"
 
     # Gatus exits on a config it cannot parse, and the status page goes with it.
     # Checking a copy first costs 25 seconds and the alternative is the page
@@ -84,9 +109,10 @@ update_config() {
     # not in git, and a wholesale copy would delete it and lock everybody out of
     # the console. announcements.yaml is written by the console and is not in
     # git either.
-    cp "$SRC/ops/internal/status/docker-compose.yml" "$COMPOSE"
-    cp "$SRC/ops/internal/status/README.md" "$DEST/README.md"
-    cp "$SRC/ops/internal/status/config/config.yaml" "$DEST/config/config.yaml"
+    local pair
+    for pair in "${SYNCED[@]}"; do
+        cp "$SRC/ops/internal/status/${pair%%:*}" "${pair#*:}"
+    done
 
     if ! docker compose -f "$COMPOSE" up -d; then
         echo "[$(date -Is)] [config] deploy failed"

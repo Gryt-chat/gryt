@@ -85,7 +85,16 @@ printf '%s' 'the-password-from-bitwarden' |   node ops/internal/status/console/h
 Put the output in `/opt/gryt-status/.env` on the VPS:
 
 ```
-CONSOLE_PASSWORD_HASH=scrypt$...$...
+CONSOLE_PASSWORD_HASH=scrypt:...:...
+```
+
+The separator is a colon because Docker Compose interpolates `$` in a `.env`
+value. The first version of this used `$`, and the salt and hash arrived at the
+container substituted away as undefined variables — every password wrong, with
+nothing saying why. Compose does warn, on `docker compose config`:
+
+```
+warning: The "jPZaAtOEGAA3u7hRr92SrQ" variable is not set. Defaulting to a blank string.
 ```
 
 The hash goes on the VPS, the password goes in Bitwarden, and neither is in this

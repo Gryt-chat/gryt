@@ -30,10 +30,25 @@ const TYPES = ["outage", "warning", "information", "operational"];
 
 /* ── Password ─────────────────────────────────────────────────────────── */
 
-/** `scrypt$<salt base64>$<hash base64>`, as printed by `--hash`. */
+/**
+ * `scrypt:<salt base64>:<hash base64>`, as printed by hash-password.mjs.
+ *
+ * `$` is still accepted because the first version of this used it, but never
+ * emitted: Docker Compose interpolates `$` in a .env value, so a $-delimited
+ * hash reaches the container with the salt and hash substituted away as
+ * undefined variables, and every password is wrong for a reason nothing says
+ * out loud.
+ */
+function parseHash() {
+  const parts = PASSWORD_HASH.includes(":")
+    ? PASSWORD_HASH.split(":")
+    : PASSWORD_HASH.split("$");
+  return parts.length === 3 && parts[0] === "scrypt" ? parts : null;
+}
+
 function verifyPassword(password) {
-  const parts = PASSWORD_HASH.split("$");
-  if (parts.length !== 3 || parts[0] !== "scrypt") return false;
+  const parts = parseHash();
+  if (!parts) return false;
 
   const salt = Buffer.from(parts[1], "base64");
   const expected = Buffer.from(parts[2], "base64");
@@ -222,6 +237,16 @@ createServer(async (req, res) => {
     if (throttled(ip)) return send(res, 429, page(false, "Too many attempts. Wait 15 minutes."));
     if (!PASSWORD_HASH) return send(res, 500, page(false, "CONSOLE_PASSWORD_HASH is not set."));
 
+    /* Says the hash is broken rather than the password is wrong. The two look
+       identical from here and only one of them is the person's fault. */
+    if (!parseHash()) {
+      return send(
+        res,
+        500,
+        page(false, `CONSOLE_PASSWORD_HASH is malformed (${PASSWORD_HASH.length} chars). Re-run hash-password.mjs.`),
+      );
+    }
+
     if (!verifyPassword(form.get("password") || "")) {
       recordFailure(ip);
       return send(res, 401, page(false, "Wrong password."));
@@ -267,4 +292,9 @@ createServer(async (req, res) => {
 }).listen(PORT, "0.0.0.0", () => {
   console.log(`status console on :${PORT}, writing ${FILE}`);
   if (!PASSWORD_HASH) console.warn("CONSOLE_PASSWORD_HASH is not set — nobody can sign in.");
+  else if (!parseHash())
+    console.warn(
+      `CONSOLE_PASSWORD_HASH is malformed (${PASSWORD_HASH.length} chars) — nobody can sign in. ` +
+        "If it contains $, Docker Compose ate it; re-run hash-password.mjs for a colon-delimited one.",
+    );
 });

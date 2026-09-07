@@ -771,6 +771,10 @@ jobs:
       BASE_VERSION: ${{ needs.prepare-release.outputs.base_version }}
       CHANNEL: ${{ needs.prepare-release.outputs.channel }}
       RELEASE_TYPE: ${{ needs.prepare-release.outputs.release_type }}
+      # 'true' only once the Store submission secrets exist. The Store steps
+      # below gate on it, so they stay dormant — and a release stays green —
+      # until Partner Center is wired up. GRYT-960.
+      HAS_STORE_CREDS: ${{ secrets.AZURE_AD_APPLICATION_CLIENT_ID != '' }}
 
     steps:
       - name: Checkout release tag
@@ -1348,6 +1352,51 @@ jobs:
           path: packages/client/release/*.appx
           retention-days: 30
           if-no-files-found: error
+
+      # Push the MSIX to the Microsoft Store, so a Store install actually gets
+      # the update. The Store owns updates for its own build — the in-app
+      # updater stands down there (process.windowsStore, GRYT-850) — so without
+      # this, a Store install would sit forever on the version it was submitted
+      # with. That is the whole reason not to make the Store the default Windows
+      # download until this runs (GRYT-954 waits on it).
+      #
+      # Stable only: a beta must not reach the public listing. Dormant until the
+      # AZURE_AD_* / SELLER_ID secrets exist (HAS_STORE_CREDS), so shipping this
+      # ahead of Partner Center leaves every release exactly as it was. Gryt is a
+      # free product, which is all the msstore GitHub path supports today.
+      #
+      # The submission is asynchronous: this hands the package to certification
+      # and returns. It does not wait for the listing to go live, and it does not
+      # gate publish-release — a Store rejection must not hold back the .exe,
+      # AppImage and dmg that do not depend on it.
+      - name: Set up the Microsoft Store CLI
+        if: runner.os == 'Windows' && matrix.variant == 'full' && env.CHANNEL == 'latest' && env.HAS_STORE_CREDS == 'true'
+        uses: microsoft/microsoft-store-apppublisher@v1.1
+
+      - name: Submit the MSIX to the Microsoft Store
+        if: runner.os == 'Windows' && matrix.variant == 'full' && env.CHANNEL == 'latest' && env.HAS_STORE_CREDS == 'true'
+        continue-on-error: true
+        working-directory: packages/client
+        shell: pwsh
+        env:
+          AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+          AZURE_AD_APPLICATION_CLIENT_ID: ${{ secrets.AZURE_AD_APPLICATION_CLIENT_ID }}
+          AZURE_AD_APPLICATION_SECRET: ${{ secrets.AZURE_AD_APPLICATION_SECRET }}
+          SELLER_ID: ${{ secrets.SELLER_ID }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          # The 12-character Store ID from the listing URL,
+          # apps.microsoft.com/detail/<id>.
+          $productId = "9PKPT1C2M95Q"
+          $appx = Get-ChildItem -Path "release" -Filter "*.appx" | Select-Object -First 1
+          if (-not $appx) { throw "No .appx in release/ to submit." }
+          Write-Host "Submitting $($appx.Name) to the Microsoft Store ($productId)"
+          msstore reconfigure `
+            --tenantId $env:AZURE_AD_TENANT_ID `
+            --sellerId $env:SELLER_ID `
+            --clientId $env:AZURE_AD_APPLICATION_CLIENT_ID `
+            --clientSecret $env:AZURE_AD_APPLICATION_SECRET
+          msstore publish $appx.FullName -id $productId
 
       - name: Package macOS app
         if: runner.os == 'macOS'

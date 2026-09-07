@@ -19,6 +19,17 @@ import { createServer } from "node:http";
 import { readFileSync, renameSync, writeFileSync, existsSync, copyFileSync } from "node:fs";
 import { join } from "node:path";
 
+/* @gryt/ui's published stylesheet, fetched at image build time. It carries the
+   token system this page is styled from, so the console looks like Gryt rather
+   than like something invented beside it. */
+const STYLESHEET = (() => {
+  try {
+    return readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+  } catch {
+    return "";
+  }
+})();
+
 const CONFIG_DIR = process.env.CONSOLE_CONFIG_DIR || "/config";
 const FILE = join(CONFIG_DIR, "announcements.yaml");
 const PORT = Number(process.env.PORT || 3002);
@@ -122,70 +133,180 @@ function writeAnnouncements(list) {
 
 /* ── HTTP ─────────────────────────────────────────────────────────────── */
 
-function page(session, error) {
-  const live = session ? readAnnouncements().filter((a) => !a.archived) : [];
-  const current = live.length
-    ? `<p class="live"><strong>Live:</strong> ${escapeHtml(live[live.length - 1].message)}</p>`
-    : `<p class="quiet">Nothing announced. The banner is silent.</p>`;
-
-  const form = session
-    ? `${current}
-      <form method="post">
-        <input type="hidden" name="do" value="announce">
-        <textarea name="message" maxlength="${MAX_MESSAGE}" rows="3" required
-          placeholder="An issue has appeared and we are investigating it."></textarea>
-        <div class="row">
-          <select name="type">
-            <option value="outage">Outage</option>
-            <option value="warning">Warning</option>
-            <option value="information">Information</option>
-          </select>
-          <button type="submit">Post</button>
-        </div>
-      </form>
-      <form method="post">
-        <input type="hidden" name="do" value="resolve">
-        <button type="submit" class="secondary">Resolve — post the all-clear and stop the banner</button>
-      </form>`
-    : `<form method="post">
-        <input type="hidden" name="do" value="login">
-        <input type="password" name="password" placeholder="Password" autofocus required>
-        <button type="submit">Sign in</button>
-      </form>`;
-
-  return `<!doctype html><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Gryt status console</title>
-<style>
-  :root { color-scheme: dark }
-  body { font: 15px/1.5 system-ui, sans-serif; background:#0f1115; color:#e6e8ec;
-         margin:0; display:grid; place-items:center; min-height:100vh; padding:20px }
-  main { width:100%; max-width:520px }
-  h1 { font-size:18px; margin:0 0 4px }
-  .sub { color:#8b90a0; margin:0 0 20px; font-size:13px }
-  form { display:grid; gap:10px; margin:0 0 14px }
-  textarea, input, select, button { font:inherit; padding:10px 12px; border-radius:8px;
-    border:1px solid #2a2f3a; background:#171a21; color:inherit; width:100%; box-sizing:border-box }
-  .row { display:flex; gap:10px }
-  .row select { flex:1 } .row button { flex:0 0 auto }
-  button { background:#4b5bdc; border-color:#4b5bdc; cursor:pointer; font-weight:600 }
-  .secondary { background:#171a21; border-color:#2a2f3a; font-weight:500 }
-  .error { color:#ff8080; font-size:13px; margin:0 0 12px }
-  .live { background:#2a1d1d; border:1px solid #5a2c2c; padding:10px 12px; border-radius:8px }
-  .quiet { color:#8b90a0; font-size:13px }
-</style>
-<main>
-  <h1>Status console</h1>
-  <p class="sub">Posts to status.gryt.chat and to the banner in every signed-in client.</p>
-  ${error ? `<p class="error">${escapeHtml(error)}</p>` : ""}
-  ${form}
-</main>`;
-}
+const NAV = [{ href: "", label: "Announcements", active: true }];
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
   );
+}
+
+/**
+ * The page, under whatever prefix the tunnel routes on.
+ *
+ * `base` is the request's own path, so every URL this emits — the stylesheet,
+ * the nav — resolves correctly at /console and at /. GRYT-987 was this bug in
+ * the form actions; the same trap catches every other link.
+ */
+function layout(base, { session, error, content }) {
+  const nav = session
+    ? NAV.map(
+        (n) =>
+          `<a class="nav-item${n.active ? " is-active" : ""}" href="${base}${n.href}">${n.label}</a>`,
+      ).join("")
+    : "";
+
+  return `<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Status console — Gryt</title>
+<link rel="stylesheet" href="${base}styles.css">
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--gryt-neutral-1);
+    color: var(--gryt-neutral-12);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .shell { max-width: 640px; margin: 0 auto; padding: 40px 20px 64px }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px }
+  .mark {
+    width: 30px; height: 30px; border-radius: var(--gryt-radius-full);
+    background: var(--gryt-accent-9); flex: 0 0 auto;
+  }
+  h1 { font-size: 19px; font-weight: 650; margin: 0; letter-spacing: -0.01em }
+  .sub { color: var(--gryt-neutral-11); font-size: 13.5px; margin: 0 0 26px 42px }
+  nav { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--gryt-neutral-6) }
+  .nav-item {
+    padding: 8px 13px; font-size: 13.5px; text-decoration: none; font-weight: 500;
+    color: var(--gryt-neutral-11); border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .nav-item:hover { color: var(--gryt-neutral-12) }
+  .nav-item.is-active { color: var(--gryt-accent-11); border-bottom-color: var(--gryt-accent-9) }
+  .panel {
+    background: var(--gryt-neutral-2); border: 1px solid var(--gryt-neutral-6);
+    border-radius: var(--gryt-radius-lg); padding: 20px;
+  }
+  .panel + .panel { margin-top: 14px }
+  h2 { font-size: 14px; font-weight: 600; margin: 0 0 3px }
+  .hint { color: var(--gryt-neutral-11); font-size: 13px; margin: 0 0 16px }
+  form { display: grid; gap: 11px; margin: 0 }
+  textarea, input, select {
+    font: inherit; width: 100%; box-sizing: border-box; padding: 10px 12px;
+    background: var(--gryt-neutral-1); color: var(--gryt-neutral-12);
+    border: 1px solid var(--gryt-neutral-7); border-radius: var(--gryt-radius-input);
+  }
+  textarea { resize: vertical; min-height: 78px }
+  textarea:focus, input:focus, select:focus {
+    outline: none; border-color: var(--gryt-accent-8);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--gryt-accent-9) 22%, transparent);
+  }
+  .row { display: flex; gap: 10px }
+  .row select { flex: 1 }
+  .row button { flex: 0 0 auto }
+  button {
+    font: inherit; font-weight: 600; padding: 10px 18px; cursor: pointer;
+    border-radius: var(--gryt-radius-input); border: 1px solid var(--gryt-accent-9);
+    background: var(--gryt-accent-9); color: var(--gryt-accent-contrast, #fff);
+  }
+  button:hover { background: var(--gryt-accent-10); border-color: var(--gryt-accent-10) }
+  button.secondary {
+    background: transparent; color: var(--gryt-neutral-12);
+    border-color: var(--gryt-neutral-7); font-weight: 500; width: 100%;
+  }
+  button.secondary:hover { background: var(--gryt-neutral-3) }
+  .banner { border-radius: var(--gryt-radius-md); padding: 11px 13px; font-size: 13.5px; margin: 0 0 16px }
+  .banner.live {
+    background: color-mix(in oklab, var(--gryt-danger-9) 11%, transparent);
+    border: 1px solid color-mix(in oklab, var(--gryt-danger-9) 26%, transparent);
+  }
+  .banner.quiet {
+    background: var(--gryt-neutral-3); border: 1px solid var(--gryt-neutral-6);
+    color: var(--gryt-neutral-11);
+  }
+  .banner.error {
+    background: color-mix(in oklab, var(--gryt-danger-9) 13%, transparent);
+    border: 1px solid color-mix(in oklab, var(--gryt-danger-9) 30%, transparent);
+    color: var(--gryt-danger-11);
+  }
+  .stamp { color: var(--gryt-neutral-11); font-size: 12px; display: block; margin-top: 3px }
+</style>
+<div class="shell">
+  <header><div class="mark"></div><h1>Status console</h1></header>
+  <p class="sub">Posts to status.gryt.chat and to every signed-in Gryt client.</p>
+  ${nav ? `<nav>${nav}</nav>` : ""}
+  ${error ? `<div class="banner error">${escapeHtml(error)}</div>` : ""}
+  ${content}
+</div>`;
+}
+
+/** UTC and spelled out, because the server's clock is not the reader's. */
+function when(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString("en-GB", {
+    day: "numeric", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", timeZone: "UTC",
+  }) + " UTC";
+}
+
+function announcementsPanel() {
+  const live = readAnnouncements().filter((a) => !a.archived && a.type !== "operational");
+  const current = live[live.length - 1];
+
+  const state = current
+    ? `<div class="banner live"><strong>Live now.</strong> ${escapeHtml(current.message)}
+         <span class="stamp">Posted ${escapeHtml(when(current.timestamp))}</span></div>`
+    : `<div class="banner quiet">Nothing announced. No banner is showing in the client.</div>`;
+
+  return `<div class="panel">
+    <h2>Announcement</h2>
+    <p class="hint">Everyone signed in sees this until you resolve it.</p>
+    ${state}
+    <form method="post">
+      <input type="hidden" name="do" value="announce">
+      <textarea name="message" maxlength="${MAX_MESSAGE}" required
+        placeholder="An issue has appeared and we are investigating it."></textarea>
+      <div class="row">
+        <select name="type">
+          <option value="outage">Outage</option>
+          <option value="warning">Warning</option>
+          <option value="information">Information</option>
+        </select>
+        <button type="submit">Post</button>
+      </div>
+    </form>
+  </div>
+  ${current ? `<div class="panel">
+    <h2>Resolve</h2>
+    <p class="hint">Marks it over on the status page and stops the banner.</p>
+    <form method="post">
+      <input type="hidden" name="do" value="resolve">
+      <button type="submit" class="secondary">Post the all-clear</button>
+    </form>
+  </div>` : ""}`;
+}
+
+function loginPanel() {
+  return `<div class="panel">
+    <h2>Sign in</h2>
+    <p class="hint">The password is in Bitwarden.</p>
+    <form method="post">
+      <input type="hidden" name="do" value="login">
+      <input type="password" name="password" placeholder="Password" autofocus required>
+      <div class="row"><button type="submit">Sign in</button></div>
+    </form>
+  </div>`;
+}
+
+function page(base, session, error) {
+  return layout(base, {
+    session,
+    error,
+    content: session ? announcementsPanel() : loginPanel(),
+  });
 }
 
 function body(req) {
@@ -218,24 +339,36 @@ const cookieFrom = (req) =>
 
 createServer(async (req, res) => {
   const path = new URL(req.url, "http://x").pathname;
+
+  /* Every URL the page emits hangs off the path it was served at, so the page
+     works at /console and at / without knowing which. */
+  const base = path.endsWith("/") ? path : `${path}/`;
   const ip = req.headers["cf-connecting-ip"] || req.socket.remoteAddress || "?";
   const session = validSession(cookieFrom(req));
+
+  if (req.method === "GET" && path.endsWith("/styles.css")) {
+    res.writeHead(200, {
+      "content-type": "text/css; charset=utf-8",
+      "cache-control": "public, max-age=3600",
+    });
+    return res.end(STYLESHEET);
+  }
 
   if (req.method === "GET" && path.endsWith("/health")) {
     res.writeHead(200, { "content-type": "text/plain" });
     return res.end("ok");
   }
 
-  if (req.method === "GET") return send(res, 200, page(session));
+  if (req.method === "GET") return send(res, 200, page(base, session));
 
-  if (req.method !== "POST") return send(res, 405, page(session, "Not allowed"));
+  if (req.method !== "POST") return send(res, 405, page(base, session, "Not allowed"));
 
   const form = await body(req);
   const action = form.get("do");
 
   if (action === "login") {
-    if (throttled(ip)) return send(res, 429, page(false, "Too many attempts. Wait 15 minutes."));
-    if (!PASSWORD_HASH) return send(res, 500, page(false, "CONSOLE_PASSWORD_HASH is not set."));
+    if (throttled(ip)) return send(res, 429, page(base, false, "Too many attempts. Wait 15 minutes."));
+    if (!PASSWORD_HASH) return send(res, 500, page(base, false, "CONSOLE_PASSWORD_HASH is not set."));
 
     /* Says the hash is broken rather than the password is wrong. The two look
        identical from here and only one of them is the person's fault. */
@@ -243,25 +376,25 @@ createServer(async (req, res) => {
       return send(
         res,
         500,
-        page(false, `CONSOLE_PASSWORD_HASH is malformed (${PASSWORD_HASH.length} chars). Re-run hash-password.mjs.`),
+        page(base, false, `CONSOLE_PASSWORD_HASH is malformed (${PASSWORD_HASH.length} chars). Re-run hash-password.mjs.`),
       );
     }
 
     if (!verifyPassword(form.get("password") || "")) {
       recordFailure(ip);
-      return send(res, 401, page(false, "Wrong password."));
+      return send(res, 401, page(base, false, "Wrong password."));
     }
 
     attempts.delete(ip);
     const cookie = `session=${issueSession()}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${SESSION_HOURS * 3600}`;
-    return send(res, 200, page(true), cookie);
+    return send(res, 200, page(base, true), cookie);
   }
 
-  if (!session) return send(res, 401, page(false, "Sign in first."));
+  if (!session) return send(res, 401, page(base, false, "Sign in first."));
 
   if (action === "announce") {
     const message = (form.get("message") || "").trim().slice(0, MAX_MESSAGE);
-    if (!message) return send(res, 400, page(true, "Say what is wrong."));
+    if (!message) return send(res, 400, page(base, true, "Say what is wrong."));
 
     const type = TYPES.includes(form.get("type")) ? form.get("type") : "outage";
 
@@ -271,7 +404,7 @@ createServer(async (req, res) => {
     list.push({ timestamp: new Date().toISOString(), type, message });
     writeAnnouncements(list);
 
-    return send(res, 200, page(true));
+    return send(res, 200, page(base, true));
   }
 
   if (action === "resolve") {
@@ -285,10 +418,10 @@ createServer(async (req, res) => {
     });
     writeAnnouncements(list);
 
-    return send(res, 200, page(true));
+    return send(res, 200, page(base, true));
   }
 
-  return send(res, 404, page(session, "No such thing."));
+  return send(res, 404, page(base, session, "No such thing."));
 }).listen(PORT, "0.0.0.0", () => {
   console.log(`status console on :${PORT}, writing ${FILE}`);
   if (!PASSWORD_HASH) console.warn("CONSOLE_PASSWORD_HASH is not set — nobody can sign in.");

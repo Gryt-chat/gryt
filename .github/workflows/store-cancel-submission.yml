@@ -1,0 +1,45 @@
+name: Store cancel pending submission
+
+# One-off / incident tool. Deletes the current pending Microsoft Store
+# submission for the Gryt listing — used when a release auto-submitted a build
+# that must not go live (a client cut ahead of its server, v1.9.23). Hand-run.
+# Placeholder sellerId for the same reason as the release step: the submission
+# API is scoped by the app credentials, not a seller.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cancel:
+    name: Cancel the pending Microsoft Store submission
+    runs-on: windows-latest
+    steps:
+      - name: Set up the Microsoft Store CLI
+        uses: microsoft/microsoft-store-apppublisher@v1.1
+
+      - name: Reconfigure, show status, delete the pending submission
+        shell: pwsh
+        env:
+          AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+          AZURE_AD_APPLICATION_CLIENT_ID: ${{ secrets.AZURE_AD_APPLICATION_CLIENT_ID }}
+          AZURE_AD_APPLICATION_SECRET: ${{ secrets.AZURE_AD_APPLICATION_SECRET }}
+        run: |
+          $ErrorActionPreference = "Continue"
+          $productId = "9PKPT1C2M95Q"
+          msstore reconfigure `
+            --tenantId $env:AZURE_AD_TENANT_ID `
+            --sellerId 0 `
+            --clientId $env:AZURE_AD_APPLICATION_CLIENT_ID `
+            --clientSecret $env:AZURE_AD_APPLICATION_SECRET
+
+          Write-Host "=== submission status BEFORE ==="
+          msstore submission status $productId -v
+
+          Write-Host "=== delete pending submission ==="
+          msstore submission delete $productId --no-confirm -v
+
+          Write-Host "=== submission status AFTER ==="
+          msstore submission status $productId -v

@@ -24,8 +24,11 @@ services:
   # this never touches config.yaml and never restarts anything.
   #
   # It mounts the same directory read-write while Gatus keeps it read-only.
+  #
+  # Built and pushed by Gryt-chat/console, not here: it is a React app, and this
+  # box has two cores.
   console:
-    build: ./console
+    image: ghcr.io/gryt-chat/console:latest
     container_name: gryt-status-console
     restart: unless-stopped
     # Loopback only, same as Gatus. The Cloudflare tunnel reaches it from this

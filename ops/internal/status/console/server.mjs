@@ -115,7 +115,8 @@ function page(session, error) {
 
   const form = session
     ? `${current}
-      <form method="post" action="announce">
+      <form method="post">
+        <input type="hidden" name="do" value="announce">
         <textarea name="message" maxlength="${MAX_MESSAGE}" rows="3" required
           placeholder="An issue has appeared and we are investigating it."></textarea>
         <div class="row">
@@ -127,10 +128,12 @@ function page(session, error) {
           <button type="submit">Post</button>
         </div>
       </form>
-      <form method="post" action="resolve">
+      <form method="post">
+        <input type="hidden" name="do" value="resolve">
         <button type="submit" class="secondary">Resolve — post the all-clear and stop the banner</button>
       </form>`
-    : `<form method="post" action="login">
+    : `<form method="post">
+        <input type="hidden" name="do" value="login">
         <input type="password" name="password" placeholder="Password" autofocus required>
         <button type="submit">Sign in</button>
       </form>`;
@@ -199,12 +202,11 @@ const cookieFrom = (req) =>
   ).session;
 
 createServer(async (req, res) => {
-  /* The tunnel may route a path prefix to this service, so strip it. */
-  const path = new URL(req.url, "http://x").pathname.replace(/^\/console/, "") || "/";
+  const path = new URL(req.url, "http://x").pathname;
   const ip = req.headers["cf-connecting-ip"] || req.socket.remoteAddress || "?";
   const session = validSession(cookieFrom(req));
 
-  if (req.method === "GET" && path === "/health") {
+  if (req.method === "GET" && path.endsWith("/health")) {
     res.writeHead(200, { "content-type": "text/plain" });
     return res.end("ok");
   }
@@ -214,8 +216,9 @@ createServer(async (req, res) => {
   if (req.method !== "POST") return send(res, 405, page(session, "Not allowed"));
 
   const form = await body(req);
+  const action = form.get("do");
 
-  if (path === "/login") {
+  if (action === "login") {
     if (throttled(ip)) return send(res, 429, page(false, "Too many attempts. Wait 15 minutes."));
     if (!PASSWORD_HASH) return send(res, 500, page(false, "CONSOLE_PASSWORD_HASH is not set."));
 
@@ -231,7 +234,7 @@ createServer(async (req, res) => {
 
   if (!session) return send(res, 401, page(false, "Sign in first."));
 
-  if (path === "/announce") {
+  if (action === "announce") {
     const message = (form.get("message") || "").trim().slice(0, MAX_MESSAGE);
     if (!message) return send(res, 400, page(true, "Say what is wrong."));
 
@@ -246,7 +249,7 @@ createServer(async (req, res) => {
     return send(res, 200, page(true));
   }
 
-  if (path === "/resolve") {
+  if (action === "resolve") {
     /* `operational` is Gatus's all-clear, and the client skips it — so this
        closes the incident on the page and stops the banner in one write. */
     const list = readAnnouncements().map((a) => ({ ...a, archived: true }));

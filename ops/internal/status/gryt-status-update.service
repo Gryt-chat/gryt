@@ -1,0 +1,17 @@
+[Unit]
+Description=Update the Gryt status page and console
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/gryt-status/update.sh
+
+# Type=oneshot defaults to TimeoutStartSec=infinity, so a wedged docker pull
+# would hold this unit open forever and every later run would exit on the
+# flock. The Pi learned this the expensive way — six merged pull requests sat
+# undeployed for an hour and three quarters.
+TimeoutStartSec=15min
+
+[Install]
+WantedBy=multi-user.target

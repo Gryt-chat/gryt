@@ -1,0 +1,49 @@
+name: Store auth check
+
+# A hand-run check that the Microsoft Store publishing credentials work, and a
+# way to answer one question the docs are vague on: whether `msstore` needs a
+# sellerId at all, or authenticates from tenant + client + secret alone. It
+# reconfigures WITHOUT sellerId on purpose, then lists the account's apps. If
+# that succeeds, the release step (GRYT-960) does not need SELLER_ID; if it
+# fails asking for a seller, we know we have to find one. Reads secrets, prints
+# no secret — msstore info shows the stored config (tenant/seller/client), never
+# the client secret.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check Microsoft Store credentials
+    runs-on: windows-latest
+    steps:
+      - name: Set up the Microsoft Store CLI
+        uses: microsoft/microsoft-store-apppublisher@v1.1
+
+      - name: Reconfigure without a sellerId, then probe the account
+        shell: pwsh
+        env:
+          AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+          AZURE_AD_APPLICATION_CLIENT_ID: ${{ secrets.AZURE_AD_APPLICATION_CLIENT_ID }}
+          AZURE_AD_APPLICATION_SECRET: ${{ secrets.AZURE_AD_APPLICATION_SECRET }}
+        run: |
+          $ErrorActionPreference = "Continue"
+
+          Write-Host "=== reconfigure (no --sellerId) ==="
+          msstore reconfigure `
+            --tenantId $env:AZURE_AD_TENANT_ID `
+            --clientId $env:AZURE_AD_APPLICATION_CLIENT_ID `
+            --clientSecret $env:AZURE_AD_APPLICATION_SECRET
+          Write-Host "reconfigure exit code: $LASTEXITCODE"
+
+          Write-Host "=== msstore info (stored config; no secret) ==="
+          msstore info -v
+
+          Write-Host "=== msstore apps list ==="
+          msstore apps list -v
+
+          Write-Host "=== msstore apps get 9PKPT1C2M95Q (the Gryt listing) ==="
+          msstore apps get 9PKPT1C2M95Q -v

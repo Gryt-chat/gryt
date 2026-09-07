@@ -64,55 +64,22 @@ them at the top of the page, and the Gryt client shows the same words as a
 banner to everybody signed in. One place to post, so the page and the banner
 cannot disagree.
 
-It writes `config/announcements.yaml`, which Gatus merges with `config.yaml`
-because `GATUS_CONFIG_PATH` is a directory and arrays are appended. Nothing
-touches `config.yaml`, and nothing restarts.
+It lives in its own repository, [Gryt-chat/console][console], and is pulled
+here as an image rather than built on this box. It writes
+`config/announcements.yaml`, which Gatus merges with `config.yaml` because
+`GATUS_CONFIG_PATH` is a directory and arrays are appended. Nothing touches
+`config.yaml`, and nothing restarts.
 
-**Resolve** archives what's up and posts an `operational` notice. That closes
-the incident on the page and stops the client banner in one write, because the
-client skips the all-clear.
+[console]: https://github.com/Gryt-chat/console
 
-### Setting the password
-
-Generate a strong one in Bitwarden, then hash it. Password only, and
-deliberately so: the obvious alternative is Keycloak, which runs on the machine
-most likely to be down when somebody needs to post here.
+Updating it:
 
 ```bash
-printf '%s' 'the-password-from-bitwarden' |   node ops/internal/status/console/hash-password.mjs
+ssh vps 'cd /opt/gryt-status && docker compose pull console && docker compose up -d console'
 ```
 
-Put the output in `/opt/gryt-status/.env` on the VPS:
-
-```
-CONSOLE_PASSWORD_HASH=scrypt:...:...
-```
-
-The separator is a colon because Docker Compose interpolates `$` in a `.env`
-value. The first version of this used `$`, and the salt and hash arrived at the
-container substituted away as undefined variables — every password wrong, with
-nothing saying why. Compose does warn, on `docker compose config`:
-
-```
-warning: The "jPZaAtOEGAA3u7hRr92SrQ" variable is not set. Defaulting to a blank string.
-```
-
-The hash goes on the VPS, the password goes in Bitwarden, and neither is in this
-repository. Changing the password invalidates every open session, because the
-session key is derived from the hash.
-
-### Routing the tunnel to it
-
-The console listens on `127.0.0.1:3002`. The tunnel on this VPS is token-based,
-so the route is added in the Cloudflare dashboard rather than in a file here:
-a public hostname for `status.gryt.chat` with path `/console`, pointing at
-`http://localhost:3002`.
-
-Until that route exists the console is reachable only over ssh:
-
-```bash
-ssh -L 3002:127.0.0.1:3002 vps
-```
+The password, the tunnel route and how the path prefix works are all documented
+in that repository's README.
 
 ## Validate before you deploy
 

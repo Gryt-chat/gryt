@@ -143,14 +143,23 @@ jobs:
 
           # makepkg --printsrcinfo is the only supported way to write this file,
           # it needs Arch, and it refuses to run as root.
-          docker run --rm -v "$PWD/aur:/pkg" archlinux:base-devel bash -c '
-            useradd -m build
-            chown -R build /pkg
-            cd /pkg
-            su build -c "makepkg --printsrcinfo" > /pkg/.SRCINFO.new
-          '
+          #
+          # Mounted read-only and copied inside, because `chown -R build` on a
+          # writable bind mount changes the owner of the host's files too, and
+          # the runner is then locked out of the directory it has to commit in.
+          docker run --rm -v "$PWD/aur:/pkg:ro" archlinux:base-devel bash -c '
+            set -e
+            useradd -m build >&2
+            cp -r /pkg /tmp/pkg >&2
+            chown -R build /tmp/pkg >&2
+            cd /tmp/pkg
+            su build -c "makepkg --printsrcinfo"
+          ' > srcinfo.new
 
-          mv aur/.SRCINFO.new aur/.SRCINFO
+          # An empty file here would commit a .SRCINFO that tells the AUR nothing.
+          [[ -s srcinfo.new ]] && grep -q '^pkgbase = ' srcinfo.new
+
+          mv srcinfo.new aur/.SRCINFO
 
           echo ".SRCINFO now says:"
           grep -E '^\s+(pkgver|pkgrel|sha256sums|source)' aur/.SRCINFO || true

@@ -13,13 +13,14 @@ on:
     workflows:
       - API reference
       - Avatar parity
-      - Changelog style
       - Permission labels
+      - Publish snap to the Snap Store
       - Release Client
       - Release Server
+      - Store auth check
+      - Store cancel pending submission
       - Sync Vikunja task
       - Update Submodules
-      - Windows build probe
     types: [completed]
 
 jobs:

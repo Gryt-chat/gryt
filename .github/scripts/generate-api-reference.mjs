@@ -356,6 +356,40 @@ function cell(value) {
   return String(value).replace(/\|/g, "\\|");
 }
 
+/**
+ * An interface as a table of its fields, with what each one is for.
+ *
+ * The doc comment on a field is the whole reason this is worth generating. The
+ * first version printed name and type only, and `GrytBotOptions` came out as
+ * ten rows of `string` — while the source had a four-line warning on `wants`
+ * saying the first run's declaration is fixed from then on. That is the single
+ * most useful sentence in the file and the page dropped it.
+ *
+ * Optionality goes on the name as a `?` rather than into a column of its own.
+ * It is TypeScript's own spelling, everybody reading this has seen it, and a
+ * fourth column would push the descriptions into a two-word ribbon.
+ *
+ * The whole doc, not the first paragraph. Cutting at the paragraph break was
+ * the second version and it lost the sentence that matters most in
+ * `GrytBotOptions`: `wants` explains what it is in one paragraph and then says
+ * a later run asking for more gets the first run's answer. A long cell is a
+ * smaller problem than a reference that quietly drops the warning.
+ */
+function fieldTable(members, extra) {
+  return table(
+    ["Field", "Type", "What it is"],
+    members.map((f) => {
+      const optional = f.signature.startsWith("?");
+      const type = f.signature.replace(/^\??:\s*/, "") || "—";
+      return [
+        `\`${f.name}${optional ? "?" : ""}\``,
+        `\`${type}\``,
+        (extra?.(f) ?? "") + f.doc.replace(/\s+/g, " ").trim(),
+      ];
+    }),
+  );
+}
+
 function table(headings, rows) {
   if (rows.length === 0) return "";
   return [
@@ -421,14 +455,7 @@ function serverPage() {
     "",
     "`manifest.json`, beside your entry point.",
     "",
-    table(
-      ["Field", "Type", "Required"],
-      manifest.map((f) => [
-        `\`${f.name}\``,
-        `\`${f.signature.replace(/^\??:\s*/, "")}\``,
-        f.signature.startsWith("?") ? "no" : "yes",
-      ]),
-    ),
+    fieldTable(manifest),
     "",
     "## `api`",
     "",
@@ -463,17 +490,7 @@ function serverPage() {
         "```",
         "",
         fields.length > 0
-          ? table(
-              ["Field", "Type", ""],
-              fields.map((f) => [
-                `\`${f.name}\``,
-                `\`${f.signature.replace(/^\??:\s*/, "")}\``,
-                /* One line: a table cell is not the place for four sentences,
-                   and the ones that have four are explaining a decision rather
-                   than the field. */
-                f.doc.split("\n\n")[0].replace(/\s+/g, " "),
-              ]),
-            )
+          ? fieldTable(fields)
           : `\`\`\`ts\n// payload: ${event.signature.replace(/^:\s*/, "")}\n\`\`\``,
         "",
       ].join("\n");
@@ -497,17 +514,12 @@ function serverPage() {
     "",
     "### What a handler is given",
     "",
-    table(
-      ["Field", "Type", "Where it comes from"],
-      incoming.map((f) => [
-        `\`${f.name}\``,
-        `\`${f.signature.replace(/^\??:\s*/, "")}\``,
-        f.name === "data"
-          ? "**the member's own bytes — check it**"
-          : f.name === "topic"
-            ? "the sender picked it, within the limits below"
-            : "the connection, so it cannot be faked",
-      ]),
+    fieldTable(incoming, (f) =>
+      f.name === "data"
+        ? "**The member's own bytes — check it.** "
+        : f.name === "topic"
+          ? "**The sender picked it**, within the limits below. "
+          : "**From the connection**, so it cannot be faked. ",
     ),
     "",
     "### What Gryt drops before you see it",
@@ -586,14 +598,7 @@ function clientPage() {
     "",
     "`manifest.json`, in your addon's folder.",
     "",
-    table(
-      ["Field", "Type", "Required"],
-      manifest.map((f) => [
-        `\`${f.name}\``,
-        `\`${f.signature.replace(/^\??:\s*/, "")}\``,
-        f.signature.startsWith("?") ? "no" : "yes",
-      ]),
-    ),
+    fieldTable(manifest),
     "",
     "## `gryt`",
     "",
@@ -644,13 +649,8 @@ function botPage() {
           `### \`${entry.name}\``,
           doc ? `\n${doc}` : "",
           "",
-          table(
-            ["Field", "Type"],
-            interfaceMembers(decl).map((f) => [
-              `\`${f.name}\``,
-              `\`${f.signature.replace(/^\??:\s*/, "") || "—"}\``,
-            ]),
-          ),
+          fieldTable(interfaceMembers(decl)),
+          "",
         ].join("\n"),
       );
     } else if (ts.isClassDeclaration(decl)) {

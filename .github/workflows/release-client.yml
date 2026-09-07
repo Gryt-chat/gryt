@@ -792,16 +792,6 @@ jobs:
           git submodule sync -- packages/client packages/server packages/sfu packages/image-worker
           git submodule update --init --force -- packages/client packages/server packages/sfu packages/image-worker
 
-      - name: Checkout AUR submodule
-        if: runner.os == 'Linux'
-        working-directory: packages/client
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          git submodule sync -- aur
-          git submodule update --init --force -- aur
-
       - name: Verify packaged client version
         shell: bash
         run: |

@@ -15,6 +15,7 @@ on:
       - Avatar parity
       - Permission labels
       - Publish snap to the Snap Store
+      - Publish to the AUR
       - Release Client
       - Release Server
       - Store auth check

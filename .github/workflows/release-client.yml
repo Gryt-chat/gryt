@@ -1361,9 +1361,9 @@ jobs:
       # download until this runs (GRYT-954 waits on it).
       #
       # Stable only: a beta must not reach the public listing. Dormant until the
-      # AZURE_AD_* / SELLER_ID secrets exist (HAS_STORE_CREDS), so shipping this
-      # ahead of Partner Center leaves every release exactly as it was. Gryt is a
-      # free product, which is all the msstore GitHub path supports today.
+      # AZURE_AD_* secrets exist (HAS_STORE_CREDS), so shipping this ahead of
+      # Partner Center leaves every release exactly as it was. Gryt is a free
+      # product, which is all the msstore GitHub path supports today.
       #
       # The submission is asynchronous: this hands the package to certification
       # and returns. It does not wait for the listing to go live, and it does not
@@ -1382,7 +1382,6 @@ jobs:
           AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
           AZURE_AD_APPLICATION_CLIENT_ID: ${{ secrets.AZURE_AD_APPLICATION_CLIENT_ID }}
           AZURE_AD_APPLICATION_SECRET: ${{ secrets.AZURE_AD_APPLICATION_SECRET }}
-          SELLER_ID: ${{ secrets.SELLER_ID }}
         run: |
           $ErrorActionPreference = "Stop"
           # The 12-character Store ID from the listing URL,
@@ -1391,9 +1390,16 @@ jobs:
           $appx = Get-ChildItem -Path "release" -Filter "*.appx" | Select-Object -First 1
           if (-not $appx) { throw "No .appx in release/ to submit." }
           Write-Host "Submitting $($appx.Name) to the Microsoft Store ($productId)"
+          # sellerId is a placeholder on purpose. reconfigure refuses to run
+          # non-interactively without one, but the submission API is the
+          # `.../v1.0/my/applications/<productId>` endpoint, scoped by the app
+          # credentials rather than the seller — verified with store-auth-check,
+          # where `apps get` returned the listing with a placeholder seller. So
+          # there is no real Seller ID to find (this account never surfaced one),
+          # and no SELLER_ID secret is needed.
           msstore reconfigure `
             --tenantId $env:AZURE_AD_TENANT_ID `
-            --sellerId $env:SELLER_ID `
+            --sellerId 0 `
             --clientId $env:AZURE_AD_APPLICATION_CLIENT_ID `
             --clientSecret $env:AZURE_AD_APPLICATION_SECRET
           msstore publish $appx.FullName -id $productId

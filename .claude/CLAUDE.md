@@ -392,6 +392,10 @@ This reverses what this file used to say. It claimed the comments here were load
 and long on purpose, and that was true of some of them and became an excuse for the rest.
 The result is code you have to read around.
 
+The scale of it, measured on 2026-09-07: `packages/mobile` carries **8517 comment lines
+against 37520 lines of TypeScript**, so 23% of it. `src/connection/useConnection.ts` is
+39% comments and `src/shell/tabs.ts` is 70%.
+
 Delete on sight:
 
 - **Narration.** A comment that says what the next line says. `// increment the counter`.
@@ -413,4 +417,10 @@ Keep, and let it run past two lines if it has to:
 - **A decision that will otherwise be re-litigated.** Not the history of it — the
   conclusion, once, where the code is.
 
-The test: **would somebody make a mistake without it?** Not "is this interesting", not "did
+The test: **would somebody make a mistake without it?** Not "is this interesting", not
+"did I think hard about this". If nobody trips without it, it goes in the commit message,
+or nowhere.
+
+This applies to workflow YAML, shell scripts and config as much as to TypeScript. Those
+are where the longest blocks end up, because they are the files where an agent feels least
+sure and writes an essay to compensate.

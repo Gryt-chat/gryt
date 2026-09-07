@@ -38,24 +38,54 @@ has a reason to see the state of. Tracked as GRYT-873.
 
 ## Deploying
 
-It lives at `/opt/gryt-status` on the VPS. Copy this folder there and bring it
-up:
+It polls, like the Pi does. Merge to `main` and the box picks it up within five
+minutes — `gryt-status-update.timer` runs `update.sh`, which fast-forwards a
+clone at `/opt/gryt-src`, copies the config and compose file across, and pulls
+`ghcr.io/gryt-chat/console`. Nothing is built here.
+
+This used to be `scp`, and merging changed nothing on the box until somebody
+remembered. Gryt-chat/gryt#223 merged and the VPS carried on running the old
+compose file, which is what prompted the timer.
+
+First-time setup, or after changing the units:
 
 ```bash
-scp -r ops/internal/status/* vps:/opt/gryt-status/
-ssh vps 'cd /opt/gryt-status && docker compose up -d'
+ssh vps 'git clone --depth 1 https://github.com/Gryt-chat/gryt.git /opt/gryt-src'
+scp ops/internal/status/update.sh vps:/opt/gryt-status/update.sh
+scp ops/internal/status/gryt-status-update.{service,timer} vps:/tmp/
+ssh -t vps 'sudo mv /tmp/gryt-status-update.{service,timer} /etc/systemd/system/ \
+  && sudo systemctl daemon-reload \
+  && sudo systemctl enable --now gryt-status-update.timer'
 ```
 
-Gatus reloads the config on its own when a file in the directory changes, so a
-config edit needs nothing else. It only needs a restart when the compose file or
-the image changes:
+Watching it:
 
 ```bash
-ssh vps 'cd /opt/gryt-status && docker compose up -d'
+ssh vps 'systemctl list-timers gryt-status-update --all'
+ssh vps 'journalctl -u gryt-status-update -n 40 --no-pager'
 ```
 
-This file used to say a change needed a restart. It doesn't, and the console
-below depends on that being true.
+To force a cycle rather than wait:
+
+```bash
+ssh vps 'sudo systemctl start gryt-status-update'
+```
+
+### What it will not touch
+
+`.env` and `config/announcements.yaml`. The first holds
+`CONSOLE_PASSWORD_HASH`, the second is written by the console, and neither is
+in git — so the sync copies named files rather than the directory. A wholesale
+copy would delete the password hash and lock everybody out of the console
+during whatever it was that needed announcing.
+
+### It validates before it replaces
+
+A bad config stops Gatus and the status page goes with it, so `update.sh` runs
+the new config in a throwaway container first and keeps the old one if it does
+not come back with `Validated`. Checked on the VPS in both directions: a good
+config passes the gate, a config with broken YAML is rejected, and `--rm` means
+neither leaves a container behind.
 
 ## Announcing an outage
 

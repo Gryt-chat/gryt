@@ -328,6 +328,10 @@ went out saying "Worth doing rather than skipping past".
 On product copy, run both, slop first. They compose: one gets the AI out, the other gets
 the starch out.
 
+A third, [`.claude/skills/caveman/`](skills/caveman/SKILL.md), is about replies in
+chat rather than about anything that ships. Terse, technical substance kept, filler
+gone. It does not touch committed prose — that still goes through the two above.
+
 `packages/site/design.md` has a Voice section carrying the same rules for the site
 specifically, with worked before-and-after examples from the pass that produced them.
 

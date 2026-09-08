@@ -17,9 +17,10 @@ on:
       - Publish snap to the Snap Store
       - Publish the Homebrew cask
       - Publish to the AUR
+      - Publish to winget
       - Release Client
       - Release Server
-      - Skills shipped
+      - Repo checks
       - Store auth check
       - Store cancel pending submission
       - Sync Vikunja task

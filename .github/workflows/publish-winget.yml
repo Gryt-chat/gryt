@@ -1,0 +1,109 @@
+name: Publish to winget
+
+# packaging/winget/ is the source of truth. The three manifests are copied and
+# their version, URL and checksum rewritten, then wingetcreate opens a pull
+# request against microsoft/winget-pkgs.
+#
+# Unlike the AUR and the tap, the far end is somebody else's review queue. The
+# first submission of a new package is read by a person, and Gryt has a history
+# there worth not repeating: GRYT-969.
+
+on:
+  release:
+    types: [published]
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish, e.g. v1.9.24'
+        required: true
+        type: string
+
+concurrency:
+  group: publish-winget
+  cancel-in-progress: true
+
+jobs:
+  publish-winget:
+    name: Publish to winget
+    runs-on: windows-latest
+
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      !contains(github.event.release.tag_name, '-beta')
+
+    timeout-minutes: 20
+
+    env:
+      OWNER: Gryt-chat
+      REPO: gryt
+      TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+      PACKAGE: Gryt.GrytChat
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the manifests for this release
+        id: build
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${TAG#v}"
+          EXE="Gryt-Chat-${VERSION}-win-x64-slim.exe"
+
+          gh release download "$TAG" --repo "$OWNER/$REPO" \
+            --pattern 'SHA256SUMS.txt' --dir .
+
+          SUM="$(awk -v f="$EXE" '$2 == f { print $1 }' SHA256SUMS.txt)"
+
+          if [[ -z "$SUM" ]]; then
+            echo "::error::SHA256SUMS.txt for $TAG has no entry for $EXE."
+            exit 1
+          fi
+
+          # winget wants the date the release went out, not the day this runs.
+          DATE="$(gh release view "$TAG" --repo "$OWNER/$REPO" --json publishedAt --jq '.publishedAt[:10]')"
+
+          mkdir -p out
+          cp packaging/winget/*.yaml out/
+
+          # Uppercase, because that is what a sha256 field is checked against.
+          SUM_UPPER="$(echo "$SUM" | tr 'a-f' 'A-F')"
+
+          for f in out/*.yaml; do
+            sed -i \
+              -e "s|0\.0\.0|${VERSION}|g" \
+              -e "s|0\{64\}|${SUM_UPPER}|" \
+              -e "s|1970-01-01|${DATE}|" \
+              "$f"
+          done
+
+          echo "Manifests now say:"
+          grep -hE 'PackageVersion|InstallerUrl|InstallerSha256|ReleaseDate' out/*.yaml
+
+          # A sed that matched nothing leaves a placeholder, which would submit
+          # a manifest pointing at version 0.0.0.
+          ! grep -qE '0\.0\.0|0{64}|1970-01-01' out/*.yaml
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Submit to microsoft/winget-pkgs
+        shell: bash
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_PKGS_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${WINGET_TOKEN:-}" ]]; then
+            echo "WINGET_PKGS_TOKEN is not set, skipping winget."
+            echo "The manifests were built and validated; nothing was submitted."
+            exit 0
+          fi
+
+          winget install --id Microsoft.WingetCreate --exact --silent \
+            --accept-source-agreements --accept-package-agreements
+
+          wingetcreate submit --token "$WINGET_TOKEN" out

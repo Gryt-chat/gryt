@@ -13,6 +13,12 @@ snapcraft-creds
 # Claude Code local settings (CLAUDE.md itself is tracked)
 .claude/settings.local.json
 
+# `npx skills add` writes these into whatever directory it runs in. The skills
+# that ship live in .claude/skills/ and are tracked; a per-machine install is
+# not, and untracked files here get swept up by a stray `git add -A`.
+.agents/
+skills-lock.json
+
 # Env files (never commit secrets)
 .env
 .env.*

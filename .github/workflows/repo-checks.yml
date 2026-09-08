@@ -1,7 +1,8 @@
 name: Repo checks
 
-# Small checks on things nothing else reads: the skills CLAUDE.md requires, and
-# the winget manifests, which are otherwise only validated at submission.
+# Small checks on things nothing else reads: the skills CLAUDE.md requires, the
+# winget manifests, which are otherwise only validated at submission, and the two
+# AUR PKGBUILDs, which are the same package twice and drift silently.
 
 on:
   pull_request:
@@ -9,8 +10,10 @@ on:
       - .claude/CLAUDE.md
       - .claude/skills/**
       - packaging/winget/**
+      - packaging/aur/**
       - .github/scripts/check-skills-shipped.mjs
       - .github/scripts/check-winget-manifests.mjs
+      - .github/scripts/check-aur-pkgbuilds.mjs
       - .github/workflows/repo-checks.yml
 
   push:
@@ -19,6 +22,7 @@ on:
       - .claude/CLAUDE.md
       - .claude/skills/**
       - packaging/winget/**
+      - packaging/aur/**
 
   workflow_dispatch:
 
@@ -38,3 +42,4 @@ jobs:
           node-version: 24
       - run: node .github/scripts/check-skills-shipped.mjs
       - run: node .github/scripts/check-winget-manifests.mjs
+      - run: node .github/scripts/check-aur-pkgbuilds.mjs

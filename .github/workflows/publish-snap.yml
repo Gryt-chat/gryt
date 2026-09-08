@@ -113,27 +113,43 @@ jobs:
           snapcraft --version
 
       # A snap name is global and has to be registered in the Store before
-      # anything can be pushed to it. Checked against the public API rather than
-      # discovered as an upload failure, so an unregistered variant skips with a
+      # anything can be pushed to it, so an unregistered variant skips with a
       # notice instead of turning every release red.
+      #
+      # Asked as the publisher, not through the public API. api.snapcraft.io only
+      # knows about snaps that are public and have a released revision, so a name
+      # that is registered but private answers 404 there — which is exactly the
+      # state a new variant is in before its first upload. Measured on
+      # gryt-chat-slim on 2026-09-08: registered, private, 404. The public check
+      # this replaces would have skipped it on every release forever, and the
+      # skip is what stops the upload that would let it be made public.
       - name: Is this snap name registered
         id: registered
         shell: bash
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         run: |
           set -euo pipefail
 
-          # The status code, not curl's -f. 200 is registered, 404 is not, and
-          # anything else is the Store having a bad day rather than an answer.
-          CODE="$(curl -s -o /dev/null -w '%{http_code}' \
-            -H 'Snap-Device-Series: 16' \
-            "https://api.snapcraft.io/v2/snaps/info/${SNAP_NAME}")"
+          if [[ -z "${SNAPCRAFT_STORE_CREDENTIALS:-}" ]]; then
+            echo "yes=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SNAPCRAFT_STORE_CREDENTIALS is not set, skipping the Store."
+            exit 0
+          fi
 
-          if [[ "$CODE" == "200" ]]; then
+          snapcraft names > names.txt
+
+          echo "Names registered to this account:"
+          cat names.txt
+
+          # Column 1 is the name in both the table and its header. Matched as a
+          # whole field so gryt-chat does not match gryt-chat-slim.
+          if awk -v n="$SNAP_NAME" '$1 == n { found = 1 } END { exit !found }' names.txt; then
             echo "yes=true" >> "$GITHUB_OUTPUT"
           else
             echo "yes=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::${SNAP_NAME} is not registered in the Snap Store (HTTP ${CODE}), skipping."
-            echo "Register it with: snapcraft register ${SNAP_NAME}"
+            echo "::notice::${SNAP_NAME} is not registered to this account, skipping."
+            echo "Register it at https://snapcraft.io/account/register-snap"
           fi
 
       - name: Download the snap from the release
@@ -299,21 +315,55 @@ jobs:
           VERSION="${TAG#v}"
 
           # The Store's own caches take a moment to catch up with a release.
+          SEEN=""
           for attempt in $(seq 1 10); do
-            LIVE="$(
-              curl -sfS -H "Snap-Device-Series: 16" \
-                "https://api.snapcraft.io/v2/snaps/info/$SNAP_NAME?fields=version" \
-                | python3 -c "import json,sys; m=json.load(sys.stdin).get('channel-map',[]); print(next((c['version'] for c in m if c['channel']['name']=='stable' and c['channel']['architecture']=='amd64'), ''))" 2>/dev/null || true
-            )"
+            CODE="$(curl -s -o info.json -w '%{http_code}' \
+              -H "Snap-Device-Series: 16" \
+              "https://api.snapcraft.io/v2/snaps/info/$SNAP_NAME?fields=version")"
+
+            if [[ "$CODE" == "200" ]]; then
+              SEEN=yes
+              LIVE="$(
+                python3 -c "import json,sys; m=json.load(open('info.json')).get('channel-map',[]); print(next((c['version'] for c in m if c['channel']['name']=='stable' and c['channel']['architecture']=='amd64'), ''))" 2>/dev/null || true
+              )"
+
+              if [[ "$LIVE" == "$VERSION" ]]; then
+                echo "latest/stable on amd64 is $LIVE. Correct."
+                exit 0
+              fi
+
+              echo "Attempt $attempt: latest/stable is \"${LIVE:-unknown}\", waiting for $VERSION."
+            else
+              echo "Attempt $attempt: the public API answers HTTP $CODE for $SNAP_NAME."
+            fi
+
+            sleep 30
+          done
+
+          # Never a 200, so this snap is not public and the check above cannot
+          # see it however long it waits. Ask as the publisher instead.
+          if [[ -z "$SEEN" ]]; then
+            snapcraft status "$SNAP_NAME" --arch amd64 > status.txt
+
+            echo "Publisher view:"
+            cat status.txt
+
+            # Channel then Version, so the field after "stable" is the version.
+            # Read that way rather than by column number because the Track and
+            # Arch columns are only printed on some rows.
+            LIVE="$(awk '{ for (i = 1; i <= NF; i++) if ($i == "stable") { print $(i + 1); exit } }' status.txt)"
 
             if [[ "$LIVE" == "$VERSION" ]]; then
               echo "latest/stable on amd64 is $LIVE. Correct."
+              echo "::notice::$SNAP_NAME is not public, so only the publisher can see this."
+              echo "Make it public at https://snapcraft.io/$SNAP_NAME/settings"
               exit 0
             fi
 
-            echo "Attempt $attempt: latest/stable is \"${LIVE:-unknown}\", waiting for $VERSION."
-            sleep 30
-          done
+            echo "::error::latest/stable holds \"${LIVE:-nothing}\" for $SNAP_NAME, not $VERSION."
+            echo "See https://snapcraft.io/$SNAP_NAME/releases"
+            exit 1
+          fi
 
           echo "::error::The Snap Store is serving \"${LIVE:-unknown}\" on latest/stable, not $VERSION."
           echo "The revision was uploaded but never reached the channel, so anyone who"

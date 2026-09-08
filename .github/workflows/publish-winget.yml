@@ -106,6 +106,24 @@ jobs:
             exit 0
           fi
 
+          # One at a time. A first submission is reviewed by a person, which took
+          # days here, and every release opening another buries that queue.
+          OPEN=$(GH_TOKEN="$WINGET_TOKEN" gh pr list \
+            --repo microsoft/winget-pkgs \
+            --author "@me" --state open \
+            --search "Gryt.GrytChat in:title" \
+            --json number,title \
+            --jq '.[] | "#\(.number) \(.title)"')
+
+          if [[ -n "$OPEN" ]]; then
+            echo "Already waiting on microsoft/winget-pkgs, so nothing was submitted:"
+            echo "$OPEN"
+            echo
+            echo "That one has to land or be closed first. Closing it here would"
+            echo "throw away a review that has already passed validation."
+            exit 0
+          fi
+
           winget install --id Microsoft.WingetCreate --exact --silent \
             --accept-source-agreements --accept-package-agreements
 

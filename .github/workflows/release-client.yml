@@ -1386,21 +1386,13 @@ jobs:
           echo "Sums:"
           sed 's/^/  /' SHA256SUMS.txt
 
-      # An attestation is the part that is not a promise. It says, in a public
-      # append-only log run by somebody who is not us, that these exact bytes
-      # came out of this workflow at this commit. A self-published hash next to
-      # a self-published binary proves only that the two were made by the same
-      # person; this is what a reader can check without trusting that person.
-      #
-      # `@gryt/voice` has done this on npm since GRYT-344, so the mechanism is
-      # already proven in this org. It was simply never on the client, which is
-      # the artifact anybody actually runs.
+      # An attestation is the part that is not a promise: a public append-only log run by
+      # somebody who is not us, saying these bytes came out of this workflow at this commit.
       - name: Attest the release artifacts
         uses: actions/attest-build-provenance@v4
         with:
-          # Every installer, plus the sums file. Attesting the sums covers the
-          # blockmaps and the three channel `.yml` files transitively — they are
-          # listed in it, so a statement about it is a statement about them.
+          # Every installer, plus the sums file. Attesting the sums covers the blockmaps and
+          # the three channel `.yml` files transitively, since they are listed in it.
           subject-path: |
             dist/*.exe
             dist/*.AppImage
@@ -1430,17 +1422,12 @@ jobs:
 
           TAG="v$VERSION"
 
-          # Appended to whatever the notes already say rather than replacing
-          # them. They are generated from the manifest earlier in the release
-          # and this runs after that.
+          # Appended to whatever the notes already say rather than replacing them: they are
+          # generated from the manifest earlier, and this runs after that.
           gh release view "$TAG" --repo "$OWNER/$REPO" --json body --jq .body > notes.md
 
-          # `printf` rather than a heredoc. Everything in this file is indented
-          # to sit inside a YAML block scalar, and a heredoc terminator has to
-          # start at column zero — `NOTES` at this indentation is not a
-          # terminator, so the whole block runs to end of file and the word
-          # itself lands in the release notes. One argument per line has no
-          # such rule.
+          # `printf` rather than a heredoc: everything here is indented inside a YAML block
+          # scalar, and a terminator has to start at column zero or the block runs to EOF.
           printf '%s\n' \
             "" \
             "---" \
@@ -1471,11 +1458,8 @@ jobs:
 
           gh release edit "$TAG" --repo "$OWNER/$REPO" --notes-file notes.md
 
-      # A backstop now rather than the moment of release. Every leg publishes
-      # the release once its own assets are up, so by here it is almost always
-      # live already and this is a no-op. It stays because "almost always" is
-      # not always: a leg that uploaded its assets but could not reach the API
-      # to flip the draft would otherwise leave a finished release unpublished.
+      # A backstop now rather than the moment of release: every leg publishes once its own
+      # assets are up. It stays for the leg that uploads and then cannot reach the API.
       - name: Publish the release
         shell: bash
         env:
@@ -1486,31 +1470,14 @@ jobs:
           gh release edit "v$VERSION" --repo "$OWNER/$REPO" --draft=false
           echo "v$VERSION is published."
 
-      # Every publisher listens for `release: published`, and that event does
-      # not fire when the release was created with GITHUB_TOKEN — which is what
-      # the step above uses. So none of them starts on its own.
-      #
-      # `workflow_dispatch` is one of the two events GitHub exempts from that
-      # rule, so dispatching them here does start a run.
-      #
-      # All four, because this step carried only the snap: the AUR, Homebrew and
-      # winget publishers were written later and nobody came back here. v1.10.1
-      # went out with the snap dispatched and the other three never run, leaving
-      # the AUR and the tap a release behind with nothing red to show for it.
-      #
-      # Dispatched rather than made a job of this workflow. Release Client
-      # shares its concurrency group with Release Server, a job holds that group
-      # until it finishes, and sitting in the group waiting out a Snap Store
-      # review is the exact thing the snap was split out to stop doing.
-      #
-      # Stable only, which is publish-snap.yml's own rule but not one it can
-      # apply here: it treats any dispatch as deliberate and skips its beta
-      # check, so the channel gate has to be on this side.
-      #
-      # `continue-on-error` because the Store is not part of the release's
-      # availability contract. Everything a person can install has already
-      # shipped by this point, so a failure to even start the upload must not
-      # turn a finished release red.
+      # Every publisher listens for `release: published`, which does not fire for a release
+      # created with GITHUB_TOKEN. `workflow_dispatch` is exempt, so dispatching them works.
+
+      # All four, because this carried only the snap and v1.10.1 left three unrun. Dispatched
+      # rather than made jobs here, or they would hold the shared concurrency group.
+
+      # Stable only, since publish-snap.yml treats any dispatch as deliberate and skips its
+      # own check. `continue-on-error`, because the Store is not part of availability.
       - name: Start the store publishers
         if: needs.prepare-release.outputs.channel == 'latest'
         continue-on-error: true
@@ -1538,9 +1505,8 @@ jobs:
             fi
           done
 
-      # Moved here from the Linux build leg. Announcing from there fired while
-      # macOS was still signing, so #releases advertised a build that Mac users
-      # could not yet install.
+      # Moved here from the Linux build leg. Announcing from there fired while macOS was
+      # still signing, so #releases advertised a build Mac users could not install.
       - name: Notify Discord
         shell: bash
         env:
@@ -1594,33 +1560,17 @@ jobs:
             -d "$PAYLOAD" \
             "$WEBHOOK_URL"
 
-  # After the release is out, not before it. The Snap Store scans an upload
-  # before it accepts it, and that review has repeatedly taken tens of minutes.
-  # Take back what a failed release left lying around.
-  #
-  # A run that dies after "Prepare release" has already pushed the tag and
-  # created the draft, so a failure in any build leaves both behind. v1.6.21
-  # failed in Windows packaging and stranded a tag, a draft, the Linux
-  # installers and half the macOS upload. GRYT-466.
-  #
-  # Draft only, and that is the whole safety argument: a draft has been seen by
-  # nobody. `publish-release` flips it live as the last thing it does, so
-  # anything still in draft when this job runs never reached a client, never
-  # answered an update check, and is not in anybody's download history. A
-  # release that did go live is left strictly alone, whatever else failed.
-  #
-  # What deliberately survives: the release.json and package.json bumps, and the
-  # "release: vX.Y.Z" commits carrying them. Reverting commits on two mains is a
-  # much bigger hammer than this problem deserves, and leaving them costs
-  # nothing — release.json sitting at a version with no tag is exactly what a
-  # re-dispatch with bump=none wants to find.
+  # Take back what a failed release left lying around: a run that dies after "Prepare release"
+  # has already pushed the tag and created the draft (GRYT-466).
+
+  # Draft only, and that is the whole safety argument: a draft has been seen by nobody. The
+  # release.json and package.json bumps survive, which is what a re-dispatch wants to find.
   cleanup-failed-release:
     name: Clean up a failed release
     needs: [prepare-release, build-electron, publish-release]
 
-    # Not `failure()`: publish-release may be skipped rather than failed when a
-    # build dies, so the condition is written out. It runs when the version is
-    # known and something after it went wrong.
+    # Not `failure()`: publish-release may be skipped rather than failed when a build dies,
+    # so the condition is written out. It runs when the version is known.
     if: >-
       always() &&
       needs.prepare-release.result == 'success' &&

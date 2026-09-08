@@ -4,5 +4,5 @@ contact_links:
     url: https://docs.gryt.chat
     about: Check the docs — your question might already be answered.
   - name: Troubleshooting Guide
-    url: https://docs.gryt.chat/docs/guide/troubleshooting
+    url: https://docs.gryt.chat/docs/use/troubleshooting
     about: Common issues and fixes for self-hosting.

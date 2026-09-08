@@ -721,7 +721,7 @@ function botPage() {
   return (
     [
       frontmatter({
-        title: "API reference",
+        title: "Bot API",
         description: "Everything @gryt/bot exports, generated from the source",
         icon: "Braces",
       }),

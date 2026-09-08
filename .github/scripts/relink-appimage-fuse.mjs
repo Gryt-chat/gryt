@@ -1,54 +1,32 @@
 #!/usr/bin/env node
 /**
  * Relink the Linux AppImages onto a runtime that does not need libfuse2.
- *
- * electron-builder 26.x builds AppImages with a runtime that dynamically loads
- * libfuse.so.2. Modern distributions ship fuse3 and no longer install fuse2, so
- * a fresh Arch/CachyOS, Fedora, or Ubuntu 24.04+ machine cannot launch the file
- * at all: double-clicking does nothing, and a terminal shows
- *
- *   dlopen(): error loading libfuse.so.2
- *   AppImages require FUSE to run.
- *
- * The file manager swallows that stderr, so to a normal user the download is
- * simply dead. This is most Linux users, not an edge case. The static runtime
- * that fixes it is only the default from electron-builder v27, which is still
- * alpha — and a bump there has broken our updater before (GRYT-953). So instead
- * of moving electron-builder, this reattaches the finished AppImage to the
- * FUSE3-static "type2" runtime after the build.
- *
- * An AppImage is just an ELF runtime with a squashfs filesystem concatenated
- * after it. Swapping the runtime is therefore a byte-for-byte copy of the
- * payload (the squashfs, plus electron-builder's appended block-map trailer)
- * onto a different header. The app itself is not rebuilt or recompressed, so
- * nothing inside it can change. Only the file's leading bytes differ, which
- * means its sha512 and size change and the updater metadata has to follow.
- *
- * What it rewrites in latest-linux.yml / slim-linux.yml for each AppImage:
- *   - files[].sha512 and files[].size          (the download the updater fetches)
- *   - top-level sha512 / size when path is it  (the default entry)
- *   - removes files[].blockMapSize             (see below)
- *
- * blockMapSize is dropped rather than recomputed. The appended block map still
- * describes the old header bytes, and rather than regenerate it — which would
- * pull app-builder into this step for a differential-download optimisation — we
- * let the updater fall back to a full download, which it verifies against the
- * sha512 we just wrote. AppImage updates were full downloads in practice
- * anyway. Correctness over a few saved megabytes, in the one area we have been
- * burned.
- *
- * The caller hands us a runtime file it has already downloaded and checksum-
- * verified, so this script does no network and runs anywhere with Node. The
- * workflow then re-uploads the rewritten AppImages and ymls over the draft
- * release, which no one can see until a later job publishes it.
- *
- * Usage:
- *   node relink-appimage-fuse.mjs --runtime <static-runtime> --dir <releaseDir>
- *
- * Run from packages/client (js-yaml resolves from its node_modules). Exits
- * non-zero, and changes nothing, if it finds no Linux AppImage to relink — a
- * silent no-op here would ship the broken file.
  */
+
+/* electron-builder 26.x builds a runtime that dlopens libfuse.so.2, and modern
+   distributions ship fuse3 only, so the download is simply dead on most Linux. */
+
+/* The static runtime that fixes it is the default only from electron-builder v27,
+   still alpha, and a bump there has broken our updater before (GRYT-953). */
+
+/* An AppImage is an ELF runtime with a squashfs after it, so this copies the
+   payload onto a different header. Only the leading bytes change. */
+
+/* In latest-linux.yml / slim-linux.yml per AppImage: files[].sha512 and
+   files[].size, the top-level pair when path is it, and files[].blockMapSize goes. */
+
+/* blockMapSize is dropped rather than recomputed: regenerating it would pull
+   app-builder in, and the updater falls back to a full download it verifies. */
+
+/* The caller hands over a runtime it has already checksum-verified, so this does no
+   network. The workflow re-uploads over the draft release, which nobody can see. */
+
+/*
+ *   node relink-appimage-fuse.mjs --runtime <static-runtime> --dir <releaseDir>
+ */
+
+/* Run from packages/client, where js-yaml resolves. Exits non-zero and changes
+   nothing if it finds no AppImage: a silent no-op would ship the broken file. */
 
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
@@ -78,9 +56,8 @@ if (!fs.existsSync(releaseDir)) {
 
 const runtime = fs.readFileSync(runtimePath);
 
-// electron-builder's Linux AppImages, both the full build and the -slim one.
-// Only x86_64 is built (the release matrix has a single Linux leg), so a plain
-// suffix match is enough; anything else in here (deb, snap) is left untouched.
+// electron-builder's Linux AppImages, full and -slim. Only x86_64 is built, so a
+// suffix match is enough; deb and snap in here are left untouched.
 const appImages = fs
   .readdirSync(releaseDir)
   .filter((n) => n.includes("-linux-") && n.toLowerCase().endsWith(".appimage"));
@@ -95,9 +72,8 @@ function sha512b64(buf) {
   return crypto.createHash("sha512").update(buf).digest("base64");
 }
 
-// The offset of the squashfs payload is the size of the current runtime. Ask
-// the AppImage itself rather than parsing the ELF; --appimage-offset runs the
-// bundled runtime's own reporting path and needs no FUSE.
+// The payload offset is the size of the current runtime. Ask the AppImage rather
+// than parsing the ELF: --appimage-offset needs no FUSE.
 function payloadOffset(file) {
   // Absolute path: a bare name would be looked up in $PATH, and the exec bit
   // because a copied-in artifact may have lost it.
@@ -111,11 +87,11 @@ function payloadOffset(file) {
   return offset;
 }
 
-// Every Linux updater manifest in the dir. Their names vary by channel
-// (latest-linux.yml, beta-linux.yml) and by variant (slim-linux.yml), so an
-// AppImage is matched to its manifest by what the manifest points at, not by a
-// name we guessed. A beta build writes beta-linux.yml, and guessing "latest"
-// would leave it unpatched while shipping an AppImage with a new sha512.
+// Every Linux updater manifest in the dir. Names vary by channel and variant, so
+// an AppImage is matched to its manifest by what the manifest points at.
+
+// A beta build writes beta-linux.yml, and guessing "latest" would leave it
+// unpatched while shipping an AppImage with a new sha512.
 const ymlDocs = fs
   .readdirSync(releaseDir)
   .filter((n) => n.endsWith("-linux.yml"))

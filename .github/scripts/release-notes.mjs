@@ -2,35 +2,22 @@
 
 /**
  * What changed between two releases, as the body of a GitHub release.
- *
- * Every other repository in the org gets this for free from
- * `generate_release_notes: true`, which lists the pull requests merged since the
- * previous tag. That does nothing useful here. The superproject's own commits
- * between two releases are `chore: update all submodules on main [skip ci]` and
- * a version bump — the work is in four other repositories, and GitHub cannot
- * see across them.
- *
- * So this builds the same thing by hand. Both manifests name the exact commit
- * each component was built from, so the range per component is a subtraction,
- * and every merged pull request in that range is one line of `git log`.
- *
- * The alternative it replaces was a release body that said "see manifest.json
- * for the exact commits". True, and nobody has ever done it.
- *
- *   node .github/scripts/release-notes.mjs \
- *     --previous <manifest.json> --current <manifest.json> [--repo-root .] \
- *     [--title "Gryt Server"] [--details <file>]
- *
- * `--title` names the product in the first line, because two workflows use
- * this and one of them is releasing the server rather than Gryt itself.
- * `--details` is a file of markdown dropped in under the channel line, which
- * is where the server release puts its image tag and its bundle names —
- * before the list of changes, since somebody opening that page came for the
- * download.
- *
- * Writes markdown to stdout. Missing a previous manifest is not an error — the
- * first release of a line has nothing to diff against and says so.
  */
+
+/* `generate_release_notes: true` does nothing useful here: this repository's own
+   commits between releases are gitlink bumps, and GitHub cannot see across four. */
+
+/* Both manifests name the commit each component was built from, so the range per
+   component is a subtraction and each merged PR in it is one line of `git log`. */
+
+/* node .github/scripts/release-notes.mjs --previous <manifest.json>
+   --current <manifest.json> [--repo-root .] [--title ...] [--details <file>] */
+
+/* `--title` names the product, because one caller releases the server rather than
+   Gryt. `--details` is markdown under the channel line, above the changes. */
+
+/* Writes markdown to stdout. A missing previous manifest is not an error — the
+   first release of a line has nothing to diff against and says so. */
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
@@ -85,12 +72,10 @@ function has(cwd, commit) {
 
 /**
  * Commits between two points, first parent only.
- *
- * `--first-parent` is what turns a branch's worth of commits into one line per
- * pull request. Without it a squash-merge repository reads correctly and a
- * merge-commit one lists every intermediate commit somebody pushed while
- * working, which is not what a release note is.
  */
+
+/* `--first-parent` is what turns a branch's worth of commits into one line per
+   pull request, rather than everything somebody pushed while working. */
 function commits(cwd, from, to) {
   const out = git(cwd, [
     "log",
@@ -111,17 +96,13 @@ function commits(cwd, from, to) {
 
 /**
  * The pull request a commit came from, if it names one.
- *
- * Two shapes appear in these repositories. A squash merge — which is how
- * everything lands now — puts the number on the end of the subject:
- * `Say when a join failed (GRYT-559) (#234)`. Older commits came through merge
- * commits, `Merge pull request #68 from Gryt-chat/…`, whose real title is the
- * first line of the body.
- *
- * Anything with no number at all is still listed. A commit pushed straight to
- * main is exactly the kind of thing worth seeing in a release note, and
- * dropping it because it skipped review would be the wrong way round.
  */
+
+/* Two shapes here. A squash merge puts the number on the end of the subject; older
+   merge commits carry their real title on the first line of the body. */
+
+/* Anything with no number is still listed: a commit pushed straight to main is
+   exactly the kind of thing worth seeing in a release note. */
 function describe(commit) {
   const squashed = /^(.*)\s+\(#(\d+)\)\s*$/.exec(commit.subject);
   if (squashed) return { title: squashed[1].trim(), pr: Number(squashed[2]) };
@@ -136,10 +117,8 @@ function describe(commit) {
 }
 
 /**
- * Commits that are about cutting a release rather than about the product.
- *
- * The version bump each component makes on its own release is noise in a note
- * about what changed, and it is always there.
+ * Commits that are about cutting a release rather than about the product. The
+ * version bump each component makes on its own release is always there.
  */
 function isRelease(title) {
   return /^(release|chore\(release\)):/i.test(title) || /^v?\d+\.\d+\.\d+/.test(title);

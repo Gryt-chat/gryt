@@ -20,6 +20,9 @@ on:
       - .github/workflows/publish-*.yml
       - .github/workflows/release-client.yml
       - .github/workflows/repo-checks.yml
+      - ops/**
+      - .github/scripts/**
+      - .github/workflows/**
 
   push:
     branches: [main]
@@ -30,6 +33,9 @@ on:
       - packaging/homebrew/**
       - .github/workflows/publish-*.yml
       - .github/workflows/release-client.yml
+      - ops/**
+      - .github/scripts/**
+      - .github/workflows/**
 
   workflow_dispatch:
 
@@ -51,3 +57,4 @@ jobs:
       - run: node .github/scripts/check-winget-manifests.mjs
       - run: node .github/scripts/check-homebrew-casks.mjs
       - run: node .github/scripts/check-publishers-dispatched.mjs
+      - run: node .github/scripts/check-comment-length.mjs

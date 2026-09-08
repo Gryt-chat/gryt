@@ -26,15 +26,23 @@ and nothing else, so a page that wasn't the service passed.
 If you add an endpoint, give it a body condition. To check the condition does
 any work, break it on purpose and confirm the endpoint goes red.
 
+Pick a field that changes when the service breaks, not one that changes when
+somebody makes a decision. The community server check asserted on its `name`
+until GRYT-1047; the server was renamed and the check went red and stayed
+there while the service was fine. Names, descriptions and titles are editorial — the
+community server's name is seasonal on purpose. `has([BODY].field) == true` on
+something structural proves an error page isn't standing in for the service
+without pinning anything a human might reasonably edit.
+
 ## What it deliberately doesn't watch
 
 Only hosts under `gryt.chat`. Nothing personal, nothing on another domain.
 
 The demo server is for store review. This page is for people using Gryt.
 
-The community server belongs here once it has a DNS record. It's the default
-server in the client and it's named on the site, so it's the one server a user
-has a reason to see the state of. Tracked as GRYT-873.
+The community server is watched — it got its DNS record and went in under
+GRYT-873. It's the default server in the client and it's named on the site, so
+it's the one server a user has a reason to see the state of.
 
 ## Deploying
 

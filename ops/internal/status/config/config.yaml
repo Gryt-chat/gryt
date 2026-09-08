@@ -52,16 +52,24 @@ endpoints:
   # Its SFU is not checked. Voice is not expected on this server, and a red
   # light for something nobody uses trains people to ignore the page.
   #
-  # No serverId assertion: /info reports it as null on this deployment, so the
-  # name is what distinguishes the real service from anything else answering
-  # on the hostname.
+  # No serverId assertion: /info reports it as null on this deployment. What
+  # distinguishes the real service is the shape of the answer — an edge error
+  # page returns HTML, and nothing else answering on this hostname returns an
+  # /info body with these fields in it.
+  #
+  # Deliberately not the name. It used to assert `name == Gryt Chat (OFFICIAL)`,
+  # the server was renamed to "Gryt Chat", and the check went red and stayed
+  # there — a rename is not an outage, and this page is the thing people look at
+  # to find out which it was. The name is also seasonal: a pumpkin in October is
+  # a change to the server's title, not to whether anybody can reach it.
   - name: "Community server"
     group: "Talking"
     url: "https://community.gryt.chat/info"
     interval: 60s
     conditions:
       - "[STATUS] == 200"
-      - "[BODY].name == Gryt Chat (OFFICIAL)"
+      - "has([BODY].joinPolicy) == true"
+      - "has([BODY].identityTiers) == true"
 
   # ── Apps ────────────────────────────────────────────────────────
   - name: "Web client"

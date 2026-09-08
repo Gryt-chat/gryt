@@ -3,9 +3,8 @@ services:
     image: twinproduction/gatus:v5.36.0
     container_name: gryt-status
     restart: unless-stopped
-    # Loopback only. The Cloudflare tunnel reaches it from this host; nothing
-    # else should. It also keeps it clear of the 1024:65000 DNAT that forwards
-    # this box's public ports to the WireGuard peer at home.
+    # Loopback only: the Cloudflare tunnel reaches it from this host. It also
+    # keeps clear of the 1024:65000 DNAT forwarding to the peer at home.
     ports:
       - "127.0.0.1:3001:8080"
     volumes:
@@ -13,28 +12,20 @@ services:
       - gatus-data:/data
     environment:
       GATUS_CONFIG_PATH: /config
-    # No healthcheck, because this image cannot hold one. It carries `/gatus`
-    # and nothing else — no shell, no wget, no ls — so every candidate fails on
-    # "executable file not found".
-    #
-    # It used to say `test: ["CMD", "/gatus", "--help"]`. Gatus has no such
-    # flag, so that booted a second copy inside the container, read the config
-    # and exited 1: a failing streak of 48 while the page served perfectly. A
-    # check that only ever says unhealthy is worse than none, because it
-    # teaches you to ignore the word.
-    #
-    # What actually watches this is the thing it is: status.gryt.chat reports
-    # on Gryt from outside, and update.sh below would fail loudly if the
-    # container stopped coming back.
+    # No healthcheck, because this image cannot hold one: it carries `/gatus` and
+    # nothing else, so every candidate fails on "executable file not found".
+
+    # `test: ["CMD", "/gatus", "--help"]` booted a second copy inside the container
+    # and exited 1 — a failing streak of 48 while the page served perfectly.
+
+    # What actually watches this is status.gryt.chat reporting on Gryt from outside,
+    # and update.sh below fails loudly if the container stops coming back.
 
   # Posts announcements by writing announcements.yaml into the directory Gatus
-  # already reads. Gatus merges every *.yaml there and reloads on its own, so
-  # this never touches config.yaml and never restarts anything.
-  #
-  # It mounts the same directory read-write while Gatus keeps it read-only.
-  #
-  # Built and pushed by Gryt-chat/console, not here: it is a React app, and this
-  # box has two cores.
+  # already reads: it merges every *.yaml there and reloads on its own.
+
+  # It mounts that directory read-write while Gatus keeps it read-only. Built and
+  # pushed by Gryt-chat/console, not here — it is a React app and this box has two cores.
   console:
     image: ghcr.io/gryt-chat/console:latest
     container_name: gryt-status-console
@@ -45,15 +36,11 @@ services:
       - "127.0.0.1:3002:3002"
     volumes:
       - ./config:/config
-      # Who has been getting the password wrong, and who is banned. Its own
-      # volume rather than a corner of ./config, because Gatus merges every
-      # *.yaml it finds in that directory into its own configuration — console
-      # state in there is one filename away from the status page refusing to
-      # start, during the outage it was meant to report.
-      #
-      # It has to survive a restart. An in-memory lockout is defeated by
-      # whatever restarts the container, and a container that restarts on a
-      # crash is exactly what somebody guessing gets to provoke.
+      # Who has been getting the password wrong, and who is banned. Its own volume
+      # rather than a corner of ./config, which Gatus merges every *.yaml from.
+
+      # It has to survive a restart: an in-memory lockout is defeated by whatever
+      # restarts the container, which is what somebody guessing gets to provoke.
       - console-data:/data
     environment:
       CONSOLE_PASSWORD_HASH: ${CONSOLE_PASSWORD_HASH:?set it in .env, see README}

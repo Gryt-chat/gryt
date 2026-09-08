@@ -11,9 +11,11 @@ on:
       - .claude/skills/**
       - packaging/winget/**
       - packaging/aur/**
+      - packaging/homebrew/**
       - .github/scripts/check-skills-shipped.mjs
       - .github/scripts/check-winget-manifests.mjs
       - .github/scripts/check-aur-pkgbuilds.mjs
+      - .github/scripts/check-homebrew-casks.mjs
       - .github/workflows/repo-checks.yml
 
   push:
@@ -23,6 +25,7 @@ on:
       - .claude/skills/**
       - packaging/winget/**
       - packaging/aur/**
+      - packaging/homebrew/**
 
   workflow_dispatch:
 
@@ -43,3 +46,4 @@ jobs:
       - run: node .github/scripts/check-skills-shipped.mjs
       - run: node .github/scripts/check-winget-manifests.mjs
       - run: node .github/scripts/check-aur-pkgbuilds.mjs
+      - run: node .github/scripts/check-homebrew-casks.mjs

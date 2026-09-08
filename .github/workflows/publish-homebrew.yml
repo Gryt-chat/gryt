@@ -21,8 +21,22 @@ concurrency:
 
 jobs:
   publish-homebrew:
-    name: Publish the Homebrew cask
+    name: Publish the ${{ matrix.variant }} Homebrew cask
     runs-on: ubuntu-latest
+
+    # Both variants. The tap is ours, so a second cask needs no account work.
+    #
+    # Independent jobs: slim failing must not stop full publishing.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: full
+            cask: gryt-chat
+            suffix: ""
+          - variant: slim
+            cask: gryt-chat-slim
+            suffix: "-slim"
 
     # A `release` event does not know which dispatch produced it, so the channel
     # is read off the tag.
@@ -38,7 +52,8 @@ jobs:
       REPO: gryt
       TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
       TAP_REPO: Gryt-chat/homebrew-tap
-      CASK: gryt-chat
+      CASK: ${{ matrix.cask }}
+      SUFFIX: ${{ matrix.suffix }}
 
     steps:
       - name: Check out the tap
@@ -69,20 +84,32 @@ jobs:
           set -euo pipefail
 
           VERSION="${TAG#v}"
-          DMG="Gryt-Chat-${VERSION}-mac-arm64-slim.dmg"
 
-          # From the release's own SHA256SUMS.txt rather than by downloading a
-          # 110MB disk image to hash it.
+          # From the release's own SHA256SUMS.txt rather than by downloading two
+          # disk images to hash them.
           gh release download "$TAG" --repo "$OWNER/$REPO" \
             --pattern 'SHA256SUMS.txt' --dir .
 
-          SUM="$(awk -v f="$DMG" '$2 == f { print $1 }' SHA256SUMS.txt)"
+          sum_for() {
+            local dmg="Gryt-Chat-${VERSION}-mac-$1${SUFFIX}.dmg"
+            local sum
 
-          if [[ -z "$SUM" ]]; then
-            echo "::error::SHA256SUMS.txt for $TAG has no entry for $DMG."
-            echo "Either the macOS build did not upload, or its name changed."
-            exit 1
-          fi
+            sum="$(awk -v f="$dmg" '$2 == f { print $1 }' SHA256SUMS.txt)"
+
+            if [[ -z "$sum" ]]; then
+              echo "::error::SHA256SUMS.txt for $TAG has no entry for $dmg." >&2
+              echo "Either that macOS build did not upload, or its name changed." >&2
+              return 1
+            fi
+
+            printf '%s' "$sum"
+          }
+
+          # Releases before Intel support have no x64 DMG, so a dispatch for one
+          # of those tags fails here rather than publishing a cask that 404s for
+          # half the people who install it.
+          SUM_ARM="$(sum_for arm64)"
+          SUM_INTEL="$(sum_for x64)"
 
           # Read at the tag, so a re-run for an older release packages that
           # release's cask. Tags cut before this file existed fall back to main.
@@ -103,20 +130,23 @@ jobs:
           mkdir -p tap/Casks
           cp cask.candidate "tap/Casks/${CASK}.rb"
 
-          # Anchored, so neither can match the same text inside the url further
-          # down the file.
+          # Anchored on the label rather than on a column, so the indentation of
+          # the continuation line is not load-bearing, and so none of these can
+          # match the same text inside the url further down the file.
           sed -i \
             -e "s/^  version \".*\"/  version \"${VERSION}\"/" \
-            -e "s/^  sha256 \".*\"/  sha256 \"${SUM}\"/" \
+            -e "s/^\( *sha256 arm: *\)\".*\",/\\1\"${SUM_ARM}\",/" \
+            -e "s/^\( *intel: *\)\".*\"/\\1\"${SUM_INTEL}\"/" \
             "tap/Casks/${CASK}.rb"
 
           echo "The cask now says:"
-          grep -E '^  (version|sha256) ' "tap/Casks/${CASK}.rb"
+          grep -E '^ *(version |sha256 arm:|intel:)' "tap/Casks/${CASK}.rb"
 
           # A sed that matched nothing leaves the placeholder in place, which
           # would publish a cask pointing at version 0.0.0.
           grep -qx "  version \"${VERSION}\"" "tap/Casks/${CASK}.rb"
-          grep -qx "  sha256 \"${SUM}\"" "tap/Casks/${CASK}.rb"
+          grep -q "sha256 arm: *\"${SUM_ARM}\"," "tap/Casks/${CASK}.rb"
+          grep -q "intel: *\"${SUM_INTEL}\"" "tap/Casks/${CASK}.rb"
 
       - name: Push it to the tap
         if: steps.checkout.outputs.active == 'true'

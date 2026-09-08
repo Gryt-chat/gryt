@@ -1392,7 +1392,9 @@ jobs:
             --sellerId 0 `
             --clientId $env:AZURE_AD_APPLICATION_CLIENT_ID `
             --clientSecret $env:AZURE_AD_APPLICATION_SECRET
-          msstore publish $appx.FullName -id $productId
+          # The argument is the project root, not the package: pointing it at
+          # the .appx makes it look there for a project and find no publisher.
+          msstore publish . --inputFile $appx.FullName -id $productId
 
       - name: Package macOS app
         if: runner.os == 'macOS'

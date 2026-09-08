@@ -10,6 +10,11 @@ const EMPTY = /^(\/\*+|\*+\/?|\/\/|#)$|[─=]{3,}\s*\*?\/?$/;
 /* Paths not swept yet. Delete an entry once that directory is clean. */
 const NOT_YET = [];
 
+/* Commented-out example config is code, not prose. `check-comment-length: off`
+   suspends the check and `: on` resumes it. Only for blocks somebody uncomments. */
+const OFF = /check-comment-length:\s*off/;
+const ON = /check-comment-length:\s*on/;
+
 const ROOTS = ["ops", "scripts", ".github/workflows"];
 const SKIP = new Set(["node_modules", "dist", "build", "out", "coverage", ".git"]);
 const CODE = /\.(ts|tsx|js|mjs|cjs|jsx)$/;
@@ -34,6 +39,7 @@ function runs(text, hash) {
   let start = -1;
   let length = 0;
   let inBlock = false;
+  let skipping = false;
 
   const close = () => {
     if (length > LIMIT) found.push({ line: start + 1, length });
@@ -44,6 +50,16 @@ function runs(text, hash) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     let comment = false;
+
+    if (skipping) {
+      if (ON.test(line)) skipping = false;
+      continue;
+    }
+    if (OFF.test(line)) {
+      skipping = true;
+      if (start !== -1) close();
+      continue;
+    }
 
     if (inBlock) {
       comment = true;

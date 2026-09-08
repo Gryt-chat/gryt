@@ -51,18 +51,14 @@ on:
 permissions:
   contents: write
   packages: write
-  # Both for `actions/attest-build-provenance`, which signs a statement about
-  # this build into sigstore's public transparency log (GRYT-760, after
-  # GRYT-723 did the same for the client). `id-token` is how the runner proves
-  # to sigstore which workflow it is, and `attestations` is what lets it store
-  # the result against this repository.
+  # `id-token` proves to sigstore which workflow this is and `attestations` lets
+  # it store the result here, both for attest-build-provenance (GRYT-760).
   id-token: write
   attestations: write
 
 concurrency:
-  # Shared with release-client.yml on purpose. Both workflows commit to the same
-  # branch, so a per-workflow group only serialised releases of the same kind and
-  # let a client release and a server release race for the push.
+  # Shared with release-client.yml on purpose. Both commit to the same branch, so
+  # a per-workflow group let a client release and a server release race.
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
@@ -89,10 +85,7 @@ jobs:
           set -euo pipefail
 
           # Clone from the .gitmodules URL rather than resolving the recorded
-          # gitlink. A pointer at a commit that is not on the remote kills the
-          # job before it reaches anything that could repair it — the failure
-          # that forced #48 to be done by hand. Every one of these is moved to
-          # its own main below, so the recorded value is discarded anyway.
+          # gitlink: a pointer at a commit not on the remote kills the job (#48).
           for path in packages/server packages/sfu packages/image-worker; do
             if [[ -e "$path/.git" ]]; then
               continue
@@ -139,16 +132,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Release from what is on each submodule's main, not from the
-          # superproject's gitlink.
-          #
-          # The gitlink only moves when update-submodules.yml runs. That sweep no
-          # longer shares this workflow's concurrency group, so it is far less
-          # likely to be delayed now, but a release should not depend on it
-          # having run at all — releasing off a stale pointer ships a server and
-          # SFU that silently disagree with the client.
-          #
-          # release-client.yml already did this for packages/client.
+          # Release from what is on each submodule's main, not the superproject's
+          # gitlink — a stale pointer ships a server and SFU the client disagrees
+          # with, and the gitlink only moves when update-submodules.yml runs.
           for path in packages/server packages/sfu packages/image-worker; do
             git -C "$path" fetch origin main
             git -C "$path" checkout -B main origin/main
@@ -181,8 +167,7 @@ jobs:
           set -euo pipefail
 
           # Picked at dispatch rather than read off the branch, matching
-          # release-client.yml. See that workflow for why the branch was never
-          # a meaningful signal here.
+          # release-client.yml. The branch was never a meaningful signal here.
           CHANNEL="${{ github.event.inputs.channel }}"
 
           if [[ "$CHANNEL" != "latest" && "$CHANNEL" != "beta" ]]; then
@@ -305,10 +290,8 @@ jobs:
               ;;
           esac
 
-          # Refuse to publish behind what has already shipped. See the same guard
-          # in release-client.yml for why: release.json used to be per-branch, and
-          # merging the beta line into main can leave it trailing the tags.
-          # Base versions only, so beta.N increments stay fine.
+          # Refuse to publish behind what has already shipped: release.json used
+          # to be per-branch. Base versions only, so beta.N increments stay fine.
           HIGHEST_BASE="$(git -C packages/server tag --list 'v*' | sed 's/^v//; s/-.*$//' | sort -V | tail -n 1 || true)"
 
           if [[ -n "$HIGHEST_BASE" && "$BASE_VERSION" != "$HIGHEST_BASE" ]]; then
@@ -484,14 +467,11 @@ jobs:
             ARGS+=(-t "$TAG_VALUE")
           done
 
-          # Same retry as the client workflow, for the same reason: a refused
-          # push is usually GitHub's secondary rate limit, and this job failing
-          # costs the whole release rather than the one tag that was refused.
-          # See v1.5.0-beta.1, where the client image went up half published.
-          # The digest is written out so the image can be attested by it
-          # (GRYT-760). `subject-path` is for files; a registry image is named
-          # by its digest, and this build does not go through
-          # `docker/build-push-action`, which would have emitted one.
+          # A refused push is usually GitHub's secondary rate limit, and failing
+          # here costs the whole release rather than the one refused tag.
+
+          # The digest is written out because a registry image is attested by it
+          # rather than by `subject-path`, which is for files (GRYT-760).
           METADATA="${RUNNER_TEMP}/buildx-metadata.json"
 
           pushed=""
@@ -526,21 +506,16 @@ jobs:
           echo "Image digest: $DIGEST"
           echo "image_digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
-      # Says, in a log run by somebody who is not us, that this image came out
-      # of this workflow at this commit. An operator can check it before pulling
-      # something onto a machine they run:
-      #
-      #   gh attestation verify oci://ghcr.io/gryt-chat/server:1.6.4 \
-      #     --repo Gryt-chat/gryt
+      # Says, in a log run by somebody who is not us, that this image came out of
+      # this workflow: `gh attestation verify oci://ghcr.io/gryt-chat/server:1.6.4`.
       - name: Attest the server image
         if: github.event.inputs.push_docker == 'true'
         uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.SERVER_IMAGE }}
           subject-digest: ${{ steps.docker.outputs.image_digest }}
-          # Stored alongside the image in GHCR as well as in the log, so
-          # `gh attestation verify oci://...` works without knowing which
-          # repository built it.
+          # Stored alongside the image in GHCR as well as in the log, so verify
+          # works without knowing which repository built it.
           push-to-registry: true
 
       - name: Build Windows self-hosted server bundle
@@ -663,16 +638,11 @@ jobs:
 
           cat .release/server/manifest.json
 
-      # Same reasoning as release-client.yml: `generate_release_notes: true`
-      # lists the pull requests merged in *this* repository since the previous
-      # tag, and this repository's commits between two server releases are
-      # gitlink bumps. The work is in three others GitHub cannot see across.
-      #
-      # The previous manifest comes out of the release asset rather than out of
-      # a tag, which is the one way this differs from the client. That workflow
-      # commits its manifest, so it can read the old one back with `git show`.
-      # This one never has — the only copy of the last release's component
-      # commits is the file attached to that release.
+      # `generate_release_notes: true` would list this repository's own merged
+      # PRs, and between two server releases those are gitlink bumps.
+
+      # The previous manifest comes out of the release asset rather than a tag,
+      # which is the one way this differs from the client: it never commits one.
       - name: Build release notes
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}
@@ -690,9 +660,7 @@ jobs:
           DETAILS="${RUNNER_TEMP}/release-details.md"
 
           # What somebody came to this page for, so it goes above the changes.
-          # Only the bundles that were actually built: both were listed
-          # unconditionally before, and the two build inputs can be turned off
-          # one at a time, so the note promised a zip nobody uploaded.
+          # Only the bundles built — the note used to promise a zip nobody uploaded.
           {
             printf '%s\n' "Docker image:" "ghcr.io/gryt-chat/server:${VERSION}" ""
             if [[ "$BUILD_WINDOWS" == "true" || "$BUILD_LINUX" == "true" ]]; then
@@ -707,15 +675,11 @@ jobs:
             fi
           } > "$DETAILS"
 
-          # The newest stable tag whichever channel this is, so a beta lists
-          # everything since the last thing most people are running. The same
-          # choice release-client.yml makes, and what patch-notes-style.md asks
-          # of the written note: one covering only beta.4..beta.5 describes a
-          # build nobody is on.
-          #
-          # `Fetch server tags` ran long before this and the new tag is not
-          # created until two steps below, so this cannot pick itself. The
-          # grep is there for a rerun that arrives with the tag already local.
+          # Newest stable tag whichever channel this is, so a beta lists everything
+          # since the last build most people are on. As release-client.yml does.
+
+          # The new tag is created two steps below, so this cannot pick itself. The
+          # grep is for a rerun that arrives with the tag already local.
           PREVIOUS_TAG="$(git -C packages/server tag --list 'v*' --sort=-v:refname \
             | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
             | grep -vx "$TAG" \
@@ -736,24 +700,18 @@ jobs:
             echo "Comparing against $PREVIOUS_TAG"
             ARGS+=(--previous "$PREVIOUS_MANIFEST")
           else
-            # Reachable for a release line older than the manifest asset itself,
-            # and for one whose release was deleted. Worth degrading rather than
-            # failing: a release with no list of changes still installs.
+            # Reachable for a release line older than the manifest asset, and for
+            # one whose release was deleted. A note with no changes still installs.
             echo "No manifest to compare against — the notes will say so."
             rm -f "$PREVIOUS_MANIFEST"
           fi
 
           node .github/scripts/release-notes.mjs "${ARGS[@]}" > "${RUNNER_TEMP}/release-notes.md"
 
-          # How to check what you just downloaded, or what you are about to pull
-          # onto a machine you run (GRYT-760).
-          #
-          # `printf` with one argument per line rather than a heredoc.
-          # Everything here is indented to sit inside a YAML block scalar, and a
-          # heredoc terminator has to start at column zero — an indented one is
-          # not a terminator, the block runs to end of file, and the word itself
-          # lands in the release notes. That is not hypothetical; it happened
-          # while writing the client's half of this.
+          # How to check what you just downloaded (GRYT-760).
+
+          # `printf` rather than a heredoc: this is indented inside a YAML block
+          # scalar, and an indented terminator does not terminate.
           {
             printf '%s\n' \
               "" \
@@ -798,12 +756,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          # This branch can move under us between checkout and here — a merged PR,
-          # or a client release that got past the concurrency group. Rebasing our
-          # commit is not enough: release.json is four lines and the client writes
-          # "version" while we write "server", so the two hunks overlap and a
-          # replay conflicts even though the edits are independent.
-          #
+          # This branch can move under us between checkout and here, and a replay
+          # conflicts because the client writes "version" where we write "server".
+
           # So re-apply our own key to whatever the branch holds now, and retry.
           # Same edit as "Update monorepo release.json" above; keep them in step.
           apply_server_version() {
@@ -822,12 +777,11 @@ jobs:
 
           for attempt in 1 2 3 4 5; do
             apply_server_version
-            # Gitlinks go in alongside release.json so a release also brings
-            # the superproject's pointers up to date rather than leaving it to
-            # a sweep that may be cancelled. The `git reset --hard` below
-            # rewinds the superproject only — the submodule checkouts stay on
-            # their main, so re-staging after a rejected push picks up the same
-            # commits.
+            # Gitlinks go in alongside release.json so a release also brings the
+            # superproject's pointers up to date rather than leaving it to a sweep.
+
+            # The `git reset --hard` below rewinds the superproject only, so the
+            # submodule checkouts stay on their main and re-staging picks them up.
             git add release.json packages/server packages/sfu packages/image-worker
 
             if git diff --cached --quiet; then
@@ -857,17 +811,11 @@ jobs:
 
           TAG="${{ steps.version.outputs.tag }}"
 
-          # A retried release arrives here with the tag already on the remote.
-          # That is not an edge case, it is what `bump=none` is for: after a run
-          # that failed somewhere later, `Determine server version` reads the
-          # version back out of release.json and redoes it. Everything else in
-          # that path is idempotent — the Docker push overwrites, the zips get
-          # rebuilt — and this step was the one that stopped, on "tag already
-          # exists", under `set -euo pipefail`. GRYT-300.
-          #
-          # So accept a tag that already names this commit and refuse one that
-          # names a different commit, rather than force-moving a tag people may
-          # already have fetched.
+          # A retried release arrives with the tag already on the remote — that is
+          # what `bump=none` is for, and this step stopped there under set -e.
+
+          # So accept a tag that already names this commit and refuse one naming a
+          # different commit, rather than force-moving a tag people have. GRYT-300.
           HEAD_SHA="$(git -C packages/server rev-parse HEAD)"
           REMOTE_SHA="$(git -C packages/server ls-remote origin "refs/tags/${TAG}" | awk '{ print $1 }')"
 
@@ -885,10 +833,8 @@ jobs:
             exit 1
           fi
 
-          # Nothing on the remote, so any local tag of that name is a leftover
-          # and safe to overwrite — `Fetch server tags` runs before the version
-          # is even chosen, so it can have brought in a tag that was later
-          # deleted from the remote by hand.
+          # Nothing on the remote, so any local tag of that name is a leftover:
+          # `Fetch server tags` can have brought in one since deleted by hand.
           git -C packages/server tag -f "$TAG" "$HEAD_SHA"
           git -C packages/server push origin "$TAG"
 
@@ -915,24 +861,18 @@ jobs:
             ASSETS+=("packages/server/dist-selfhosted/gryt-server-linux-x64-v${VERSION}.zip")
           fi
 
-          # Something to check a download against (GRYT-760, after GRYT-723 did
-          # the same for the client). A self-hosted bundle is a file somebody
-          # downloads and runs on a machine they own, so it gets what the
-          # desktop app gets.
-          #
-          # The assets are staged into one directory first, because the sums
-          # have to name the files the way somebody who downloaded them has
-          # them — bare, in whatever folder they landed in. Written with the
-          # paths they have here, `sha256sum --check` would look for
-          # `packages/server/dist-selfhosted/` and find nothing.
+          # Something to check a download against (GRYT-760). A self-hosted bundle
+          # is a file somebody downloads and runs on a machine they own.
+
+          # Staged into one directory first because the sums have to name the files
+          # bare — with the paths they have here, `--check` would find nothing.
           STAGE="${RUNNER_TEMP}/assets"
           rm -rf "$STAGE"
           mkdir -p "$STAGE"
           cp -- "${ASSETS[@]}" "$STAGE/"
 
           # `--` and a glob rather than `ls`, so a filename with a space in it
-          # stays one argument. Globs come out sorted, which keeps the file
-          # stable between runs.
+          # stays one argument. Globs come out sorted, which keeps this stable.
           ( cd "$STAGE" && sha256sum -- * > "${RUNNER_TEMP}/SHA256SUMS.txt" )
           cp "${RUNNER_TEMP}/SHA256SUMS.txt" "$STAGE/"
 

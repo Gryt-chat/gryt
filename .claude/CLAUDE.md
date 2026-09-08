@@ -293,6 +293,23 @@ docker compose -f docker-compose.keycloak.yml -p auth run --rm --no-deps \
 `--no-deps` matters: without it Compose starts what the service depends on, and that is how
 an import gets triggered by accident.
 
+## Interface rules
+
+Sivert's, given once in passing and easy to lose, so they live here rather than in a
+stylesheet nobody opens.
+
+**Every link in running text is underlined.** At rest, not on hover. A link that only
+underlines under the pointer reads as coloured text, and on a touch screen it never
+resolves at all. In the client that is `.gryt-link` in `packages/client/src/style.css`,
+and `yarn test:link-underline` fails on `hover:underline` with nothing behind it.
+
+This is about links in prose. A nav item, a card and a button that happen to be an `<a>`
+are read by their position and shape, and an underline makes those worse.
+
+The site does not follow it yet. `packages/site/src/index.css` sets
+`a { text-decoration: none }` in its base layer and four stylesheets add the underline
+back per page, so a new prose link there starts wrong. That is GRYT-1094.
+
 ## Style
 
 Match the surrounding code, with one exception: comment density. Most of what is in the

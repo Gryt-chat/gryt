@@ -1,15 +1,12 @@
 /* eslint-env node */
 
 /**
- * Every publish-*.yml is dispatched by Release Client.
- *
- * They listen for `release: published`, which never fires for a release
- * GITHUB_TOKEN published, so the release dispatches them by hand. A publisher
- * that is not in that list simply never runs, and nothing goes red — v1.10.1
- * shipped with the AUR, Homebrew and winget publishers untouched and two stores
- * a release behind, because they were written after the dispatch step and
- * nobody came back to it. GRYT-1058.
+ * Every publish-*.yml is dispatched by Release Client. They listen for
+ * `release: published`, which never fires for a release GITHUB_TOKEN published.
  */
+
+/* A publisher missing from that list never runs and nothing goes red: v1.10.1
+   shipped with AUR, Homebrew and winget untouched, two stores behind. GRYT-1058. */
 
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";

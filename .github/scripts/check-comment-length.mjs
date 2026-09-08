@@ -15,7 +15,7 @@ const NOT_YET = [];
 const OFF = /check-comment-length:\s*off/;
 const ON = /check-comment-length:\s*on/;
 
-const ROOTS = ["ops", "scripts", ".github/workflows"];
+const ROOTS = ["ops", ".github/scripts", ".github/workflows"];
 const SKIP = new Set(["node_modules", "dist", "build", "out", "coverage", ".git"]);
 const CODE = /\.(ts|tsx|js|mjs|cjs|jsx)$/;
 const HASH = /\.(ya?ml|sh|conf|env)$/;

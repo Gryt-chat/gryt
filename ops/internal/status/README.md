@@ -89,10 +89,15 @@ neither leaves a container behind.
 
 ## Announcing an outage
 
-The console at `status.gryt.chat/console` posts announcements — Gatus renders
-them at the top of the page, and the Gryt client shows the same words as a
-banner to everybody signed in. One place to post, so the page and the banner
-cannot disagree.
+The console at [console.gryt.chat](https://console.gryt.chat) posts
+announcements — Gatus renders them at the top of the page, and the Gryt client
+shows the same words as a banner to everybody signed in. One place to post, so
+the page and the banner cannot disagree.
+
+It used to be at `status.gryt.chat/console`, which was a path nobody could
+remember at the moment they needed it. That route is gone. The app still works
+under a prefix, because it emits relative URLs and the server injects a
+`<base href>` to match, so nothing had to change to move it.
 
 It lives in its own repository, [Gryt-chat/console][console], and is pulled
 here as an image rather than built on this box. It writes

@@ -25,8 +25,22 @@ concurrency:
 
 jobs:
   publish-winget:
-    name: Publish to winget
+    name: Publish ${{ matrix.variant }} to winget
     runs-on: windows-latest
+
+    # Both variants, as two winget packages. Each is its own pull request
+    # against microsoft/winget-pkgs, so slim being held in review must not stop
+    # full going out.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: full
+            package: Gryt.GrytChat
+            suffix: ""
+          - variant: slim
+            package: Gryt.GrytChat.Slim
+            suffix: "-slim"
 
     if: >-
       github.event_name == 'workflow_dispatch' ||
@@ -38,7 +52,8 @@ jobs:
       OWNER: Gryt-chat
       REPO: gryt
       TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
-      PACKAGE: Gryt.GrytChat
+      PACKAGE: ${{ matrix.package }}
+      SUFFIX: ${{ matrix.suffix }}
 
     steps:
       - uses: actions/checkout@v4
@@ -52,7 +67,7 @@ jobs:
           set -euo pipefail
 
           VERSION="${TAG#v}"
-          EXE="Gryt-Chat-${VERSION}-win-x64-slim.exe"
+          EXE="Gryt-Chat-${VERSION}-win-x64${SUFFIX}.exe"
 
           gh release download "$TAG" --repo "$OWNER/$REPO" \
             --pattern 'SHA256SUMS.txt' --dir .
@@ -68,13 +83,16 @@ jobs:
           DATE="$(gh release view "$TAG" --repo "$OWNER/$REPO" --json publishedAt --jq '.publishedAt[:10]')"
 
           mkdir -p out
-          cp packaging/winget/*.yaml out/
+          cp "packaging/winget/${PACKAGE}"/*.yaml out/
 
           # Uppercase, because that is what a sha256 field is checked against.
           SUM_UPPER="$(echo "$SUM" | tr 'a-f' 'A-F')"
 
+          # The comments are notes to whoever edits packaging/winget, and these
+          # files go into somebody else's repository. Dropped on the way out.
           for f in out/*.yaml; do
             sed -i \
+              -e '/^#/d' \
               -e "s|0\.0\.0|${VERSION}|g" \
               -e "s|0\{64\}|${SUM_UPPER}|" \
               -e "s|1970-01-01|${DATE}|" \

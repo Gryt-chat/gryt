@@ -1,0 +1,26 @@
+# The slim build: same client, no embedded server. Only PackageIdentifier and
+# InstallerUrl differ from ../Gryt.GrytChat/Gryt.GrytChat.installer.yaml, and
+# check-winget-manifests.mjs holds them to that.
+#
+# Installer manifest. publish-winget.yml rewrites PackageVersion,
+# InstallerUrl and InstallerSha256.
+#
+# The installers are unsigned until GRYT-848 buys a certificate, so there is no
+# SignatureSha256 and SmartScreen warns on first run.
+PackageIdentifier: Gryt.GrytChat.Slim
+PackageVersion: 0.0.0
+InstallerType: nullsoft
+# electron-builder builds oneClick with perMachine false, so it installs into
+# the user profile and never asks for elevation.
+Scope: user
+InstallModes:
+  - interactive
+  - silent
+UpgradeBehavior: install
+ReleaseDate: "1970-01-01"
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/Gryt-chat/gryt/releases/download/v0.0.0/Gryt-Chat-0.0.0-win-x64-slim.exe
+    InstallerSha256: "0000000000000000000000000000000000000000000000000000000000000000"
+ManifestType: installer
+ManifestVersion: 1.6.0

@@ -15,9 +15,11 @@ on:
       - Avatar parity
       - Permission labels
       - Publish snap to the Snap Store
+      - Publish the Homebrew cask
       - Publish to the AUR
       - Release Client
       - Release Server
+      - Skills shipped
       - Store auth check
       - Store cancel pending submission
       - Sync Vikunja task

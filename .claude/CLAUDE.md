@@ -316,10 +316,10 @@ trying to hold the lists in your head; that is the failure mode. On 2026-08-21 `
 was installed, used once on a Discord message, and the docs written an hour later still
 went out saying "Worth doing rather than skipping past".
 
-- `no-ai-slop`, at `~/.claude/skills/no-ai-slop/`. For writing that sounds **generated** —
+- `no-ai-slop`, at [`.claude/skills/no-ai-slop/`](skills/no-ai-slop/SKILL.md). For writing that sounds **generated** —
   binary contrasts, faux-insight openers, importance puffery, fake-profound kickers. It
   protects a distinctive voice while removing the tells.
-- `natural-writing`, at `~/.claude/skills/natural-writing/`. For writing that sounds
+- `natural-writing`, at [`.claude/skills/natural-writing/`](skills/natural-writing/SKILL.md). For writing that sounds
   **stiff** — long sentences carrying three clauses, no contractions, "the operator" where
   a person would say "whoever runs the server". Sivert's own rules, given on 2026-08-28
   after the site's pages read like an essay rather than like somebody talking. His summary
@@ -352,7 +352,11 @@ is a guess"), a sentence announcing its own importance, two negative-listing pai
 eight em dashes. The natural-writing pass then found the whole page had been written
 without a single contraction.
 
-This file also named a `humanizer` skill until 2026-08-22. It was never on the Windows
+Both live in this repository now, next to `changelog-notes`, which is what makes
+the rule above true on a machine nobody has set up. They used to be installed per
+machine, and that went wrong twice.
+
+This file named a `humanizer` skill until 2026-08-22. It was never on the Windows
 machine and is not in the catalog, so nothing was running it.
 
 `natural-writing` had the same problem for longer, and this file didn't say so.
@@ -365,9 +369,11 @@ no contractions anywhere across 1700 characters, and with "persistent channels"
 still in it. That exact phrase is in the skill's own examples, with the fix next
 to it.
 
-Both are installed now. If `Skill` says a name is unknown, it isn't registered
-in this session rather than missing from the machine. Read its `SKILL.md`, and
-say that is what you did.
+`check-skills-shipped.mjs` fails if this file names a skill the repository does
+not carry, so the next one cannot go missing quietly.
+
+If `Skill` says a name is unknown, it isn't registered in this session rather
+than missing. Read its `SKILL.md`, and say that is what you did.
 
 One caveat when running it over an existing page. `git blame` will not tell you who
 wrote a line: every commit in these repositories is authored `Sivert`, including the ones

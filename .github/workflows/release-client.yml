@@ -1201,7 +1201,7 @@ jobs:
           # everyone who downloads it. See packages/client/scripts/sign-windows.cjs
           # for the HRESULTs and GRYT-848 for the certificate.
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            TARGETS="--linux AppImage deb snap"
+            TARGETS="--linux AppImage deb rpm snap"
           elif [[ "$RUNNER_OS" == "Windows" ]]; then
             TARGETS="--win nsis portable"
           else
@@ -1709,6 +1709,7 @@ jobs:
             dist/*.exe
             dist/*.AppImage
             dist/*.deb
+            dist/*.rpm
             dist/*.snap
             dist/*.dmg
             dist/*.zip
@@ -1789,14 +1790,17 @@ jobs:
           gh release edit "v$VERSION" --repo "$OWNER/$REPO" --draft=false
           echo "v$VERSION is published."
 
-      # publish-snap.yml listens for `release: published`, and that event does
+      # Every publisher listens for `release: published`, and that event does
       # not fire when the release was created with GITHUB_TOKEN — which is what
-      # the step above uses. So it never started on its own, and every stable
-      # release since it was split out has needed somebody to dispatch it by
-      # hand afterwards. It had two runs in total by v1.9.19, both manual.
+      # the step above uses. So none of them starts on its own.
       #
       # `workflow_dispatch` is one of the two events GitHub exempts from that
-      # rule, so dispatching it here does start a run.
+      # rule, so dispatching them here does start a run.
+      #
+      # All four, because this step carried only the snap: the AUR, Homebrew and
+      # winget publishers were written later and nobody came back here. v1.10.1
+      # went out with the snap dispatched and the other three never run, leaving
+      # the AUR and the tap a release behind with nothing red to show for it.
       #
       # Dispatched rather than made a job of this workflow. Release Client
       # shares its concurrency group with Release Server, a job holds that group
@@ -1811,7 +1815,7 @@ jobs:
       # availability contract. Everything a person can install has already
       # shipped by this point, so a failure to even start the upload must not
       # turn a finished release red.
-      - name: Start the Snap Store publish
+      - name: Start the store publishers
         if: needs.prepare-release.outputs.channel == 'latest'
         continue-on-error: true
         shell: bash
@@ -1820,12 +1824,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          gh workflow run publish-snap.yml \
-            --repo "$OWNER/$REPO" \
-            --ref main \
-            -f tag="v$VERSION"
-
-          echo "Dispatched publish-snap.yml for v$VERSION."
+          # One at a time, and a failure to dispatch one must not stop the rest.
+          for WF in \
+            publish-snap.yml \
+            publish-aur.yml \
+            publish-homebrew.yml \
+            publish-winget.yml
+          do
+            if gh workflow run "$WF" \
+              --repo "$OWNER/$REPO" \
+              --ref main \
+              -f tag="v$VERSION"
+            then
+              echo "Dispatched $WF for v$VERSION."
+            else
+              echo "::warning::Could not dispatch $WF for v$VERSION."
+            fi
+          done
 
       # Moved here from the Linux build leg. Announcing from there fired while
       # macOS was still signing, so #releases advertised a build that Mac users

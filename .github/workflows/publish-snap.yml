@@ -240,7 +240,7 @@ jobs:
 
           VERSION="${TAG#v}"
 
-          snapcraft list-revisions "$SNAP_NAME" --arch amd64 > revisions.txt
+          snapcraft revisions "$SNAP_NAME" --arch amd64 > revisions.txt
           echo "Newest revisions on the Store:"
           head -6 revisions.txt
 

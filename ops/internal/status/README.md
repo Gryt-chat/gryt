@@ -107,6 +107,12 @@ here as an image rather than built on this box. It writes
 
 [console]: https://github.com/Gryt-chat/console
 
+The console keeps its lockout ledger — failed sign-ins, lockouts, bans — on the
+`console-data` volume rather than in `config/`, because Gatus merges every
+`*.yaml` in that directory into its own configuration and console state there is
+one filename away from stopping the status page. It has to survive a restart, or
+whatever restarts the container forgives every lockout.
+
 `config/` has to be writable by uid 1000. The image runs as `node`, Docker
 doesn't chown a bind mount, and a root-owned directory means announcements
 can't post. `update.sh` chowns it on every cycle, so there's nothing to do by

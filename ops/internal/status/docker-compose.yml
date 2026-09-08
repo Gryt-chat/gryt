@@ -45,6 +45,16 @@ services:
       - "127.0.0.1:3002:3002"
     volumes:
       - ./config:/config
+      # Who has been getting the password wrong, and who is banned. Its own
+      # volume rather than a corner of ./config, because Gatus merges every
+      # *.yaml it finds in that directory into its own configuration — console
+      # state in there is one filename away from the status page refusing to
+      # start, during the outage it was meant to report.
+      #
+      # It has to survive a restart. An in-memory lockout is defeated by
+      # whatever restarts the container, and a container that restarts on a
+      # crash is exactly what somebody guessing gets to provoke.
+      - console-data:/data
     environment:
       CONSOLE_PASSWORD_HASH: ${CONSOLE_PASSWORD_HASH:?set it in .env, see README}
     depends_on:
@@ -52,3 +62,4 @@ services:
 
 volumes:
   gatus-data:
+  console-data:

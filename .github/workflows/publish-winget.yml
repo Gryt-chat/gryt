@@ -93,6 +93,19 @@ jobs:
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      # Kept whether or not the submit below runs. Without a token the step
+      # skips, and the manifests it just built and validated would otherwise
+      # exist only in the log -- so submitting by hand meant rebuilding them by
+      # hand. Downloading three files and opening the pull request yourself is
+      # the whole alternative to giving CI a token that can write to every
+      # public repository you own.
+      - name: Keep the manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: winget-manifests-${{ steps.build.outputs.version }}
+          path: out/
+          if-no-files-found: error
+
       - name: Submit to microsoft/winget-pkgs
         shell: bash
         env:

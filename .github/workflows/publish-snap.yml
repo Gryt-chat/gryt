@@ -36,8 +36,24 @@ concurrency:
 
 jobs:
   publish-snap:
-    name: Publish snap to the Snap Store
+    name: Publish ${{ matrix.variant }} snap to the Snap Store
     runs-on: ubuntu-latest
+
+    # Both variants. Every release builds both, and this used to download both
+    # and then pick with `find -print -quit`, so whichever the filesystem
+    # returned first is what Snap users got. Nobody chose it.
+    #
+    # Independent jobs on purpose: slim failing must not stop full publishing.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: full
+            snap: gryt-chat
+            suffix: ""
+          - variant: slim
+            snap: gryt-chat-slim
+            suffix: "-slim"
 
     # Stable only. Every upload waits on the Store's automated review, and betas
     # ship often. Linux beta testers already have the AppImage, .deb and .snap
@@ -82,7 +98,8 @@ jobs:
       OWNER: Gryt-chat
       REPO: gryt
       TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
-      SNAP_NAME: gryt-chat
+      SNAP_NAME: ${{ matrix.snap }}
+      SUFFIX: ${{ matrix.suffix }}
 
     steps:
       - name: Install Snapcraft
@@ -95,20 +112,50 @@ jobs:
           echo "Snapcraft version:"
           snapcraft --version
 
+      # A snap name is global and has to be registered in the Store before
+      # anything can be pushed to it. Checked against the public API rather than
+      # discovered as an upload failure, so an unregistered variant skips with a
+      # notice instead of turning every release red.
+      - name: Is this snap name registered
+        id: registered
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # The status code, not curl's -f. 200 is registered, 404 is not, and
+          # anything else is the Store having a bad day rather than an answer.
+          CODE="$(curl -s -o /dev/null -w '%{http_code}' \
+            -H 'Snap-Device-Series: 16' \
+            "https://api.snapcraft.io/v2/snaps/info/${SNAP_NAME}")"
+
+          if [[ "$CODE" == "200" ]]; then
+            echo "yes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "yes=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::${SNAP_NAME} is not registered in the Snap Store (HTTP ${CODE}), skipping."
+            echo "Register it with: snapcraft register ${SNAP_NAME}"
+          fi
+
       - name: Download the snap from the release
+        if: steps.registered.outputs.yes == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
+          VERSION="${TAG#v}"
+          SNAP="Gryt-Chat-${VERSION}-linux-amd64${SUFFIX}.snap"
+
+          # By name, not a glob. Both variants are on the release and they differ
+          # only by the suffix.
           gh release download "$TAG" \
             --repo "$OWNER/$REPO" \
-            --pattern '*.snap' \
+            --pattern "$SNAP" \
             --dir .
 
-          echo "Downloaded snap:"
-          ls -lah ./*.snap
+          echo "Downloaded:"
+          ls -lah "./$SNAP"
 
       # Foreground, and it waits.
       #
@@ -128,6 +175,7 @@ jobs:
       # Nothing caught it because the step exited 0 on the acknowledgement, which
       # it read as the release having happened.
       - name: Upload to the Snap Store
+        if: steps.registered.outputs.yes == 'true'
         shell: bash
 
         # Both of these matter, and they do different jobs.
@@ -153,10 +201,11 @@ jobs:
             exit 0
           fi
 
-          SNAP="$(find . -maxdepth 1 -type f -name '*.snap' -print -quit)"
+          VERSION="${TAG#v}"
+          SNAP="Gryt-Chat-${VERSION}-linux-amd64${SUFFIX}.snap"
 
-          if [[ -z "$SNAP" ]]; then
-            echo "::error::No .snap file was downloaded from $TAG."
+          if [[ ! -f "$SNAP" ]]; then
+            echo "::error::$SNAP was not downloaded from $TAG."
             exit 1
           fi
 
@@ -178,7 +227,7 @@ jobs:
       # puts the current version on latest/stable without anyone touching the web
       # UI.
       - name: Put the revision on latest/stable if the upload did not
-        if: always()
+        if: always() && steps.registered.outputs.yes == 'true'
         shell: bash
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
@@ -233,7 +282,7 @@ jobs:
       # the same answer a user's snapd gets — so it cannot pass on a view only
       # the publisher can see.
       - name: Check the Store is serving it
-        if: always()
+        if: always() && steps.registered.outputs.yes == 'true'
         shell: bash
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}

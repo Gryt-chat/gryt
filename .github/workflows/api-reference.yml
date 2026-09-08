@@ -66,9 +66,11 @@ jobs:
           #
           # A path-limited checkout on a blobless clone fetches the few blobs
           # each side needs and nothing else. docs takes the whole content tree
-          # because the generator writes into it and then diffs what it wrote.
+          # because the generator writes into it and then diffs what it wrote,
+          # and server takes all of src because the socket coverage check has to
+          # find handlers and emits across every handler file, not just plugins.
           for entry in \
-            "server:src/plugins" \
+            "server:src" \
             "client:src/packages/addons/src" \
             "bot:src" \
             "docs:content/docs"
@@ -102,3 +104,10 @@ jobs:
       - name: Compare
         shell: bash
         run: node .github/scripts/generate-api-reference.mjs --check
+
+      # server-api is the one reference page still written by hand, so nothing
+      # stops it falling behind. It had reached 114 of 211 socket events with
+      # whole features missing before anybody counted.
+      - name: Check the socket API is still fully described
+        shell: bash
+        run: node .github/scripts/check-socket-coverage.mjs

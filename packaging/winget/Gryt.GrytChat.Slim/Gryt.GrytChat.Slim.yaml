@@ -1,0 +1,10 @@
+# The slim build: same client, no embedded server. Only PackageIdentifier differs
+# from ../Gryt.GrytChat/Gryt.GrytChat.yaml, and check-winget-manifests.mjs holds
+# them to that.
+#
+# Version manifest. publish-winget.yml rewrites PackageVersion.
+PackageIdentifier: Gryt.GrytChat.Slim
+PackageVersion: 0.0.0
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0

@@ -26,9 +26,10 @@ S3_ENV="S3_ENDPOINT=http://127.0.0.1:9000 S3_REGION=us-east-1 S3_ACCESS_KEY_ID=$
 
 S3_DISABLE_ENV="DISABLE_S3=true"
 
-# The server hands SFU_PUBLIC_HOST straight to the client, which dials it — so
-# a placeholder here isn't inert, it guarantees a failed voice connect. Default
-# to this machine's LAN address so another machine can reach the SFU too;
+# The server hands SFU_PUBLIC_HOST straight to the client, which dials it, so a
+# placeholder guarantees a failed voice connect.
+
+# Default to this machine's LAN address so another machine can reach the SFU.
 # SFU_WS_HOST stays loopback because that hop is server-to-SFU on this box.
 detect_lan_ip() {
   if command -v ipconfig >/dev/null 2>&1; then
@@ -45,9 +46,8 @@ STUN_SERVERS="${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.c
 # 3666 is the Vite dev server port (packages/client/vite.config.ts); the server
 # matches Origin exactly, so it must be listed verbatim.
 CORS_ORIGIN="${CORS_ORIGIN:-http://127.0.0.1:15738,http://localhost:3666,http://127.0.0.1:3666,https://app.gryt.chat}"
-# Loopback by default so a dev server isn't exposed on whatever network you
-# happen to be on. Set HOST=0.0.0.0 in ops/.env to test LAN discovery, where
-# another machine has to reach ws1/ws2 over the wire.
+# Loopback by default so a dev server is not exposed on whatever network you are
+# on. HOST=0.0.0.0 in ops/.env to test LAN discovery.
 HOST="${HOST:-127.0.0.1}"
 GRYT_AUTH_MODE="${GRYT_AUTH_MODE:-required}"
 GRYT_OIDC_AUDIENCE="${GRYT_OIDC_AUDIENCE:-gryt-web}"
@@ -56,19 +56,16 @@ GRYT_OIDC_AUDIENCE="${GRYT_OIDC_AUDIENCE:-gryt-web}"
 GRYT_IDENTITY_TIERS="${GRYT_IDENTITY_TIERS:-account}"
 
 # ── Local auth ───────────────────────────────────────────────────────
-#
-# Dev used to authenticate against production: real Keycloak, real identity
-# CA, real accounts. That made every dev session depend on prod being up, and
-# left no way to make a throwaway account without making a real one.
-#
-# Keycloak and its Postgres run in containers because they have to. The
-# identity CA runs on the host, and that is deliberate rather than
-# inconsistent: it has to reach Keycloak at the same URL string that appears in
-# the token's `iss` claim, and "localhost:18080" means different things on
-# either side of a container boundary. In Docker that forces the issuer to be
-# the machine's LAN address, which then breaks every time you change network.
-# On the host it is plain localhost and the problem does not exist.
-#
+
+# Dev used to authenticate against production, so every session depended on prod
+# and a throwaway account meant a real one.
+
+# The identity CA runs on the host rather than in a container because it has to
+# reach Keycloak at the same URL string that appears in the token's `iss` claim.
+
+# In Docker that forces the issuer to be the machine's LAN address, which breaks
+# on every network change. On the host it is plain localhost.
+
 # Set DEV_WITH_AUTH=0 in ops/.env to go back to production auth.
 DEV_WITH_AUTH="${DEV_WITH_AUTH:-1}"
 KEYCLOAK_PORT="${KEYCLOAK_PORT:-18080}"
@@ -173,16 +170,16 @@ if [[ "$DEV_WITH_AUTH" == "1" ]]; then
   else
     echo "Starting local auth (Keycloak + Postgres)..."
     # The compose file defaults to the production hostname, which Keycloak
-    # enforces — it has to be told it is being reached on localhost or every
-    # request 404s. GRYT_IMPORT_REALM=1 so a fresh database gets the gryt
-    # realm; on subsequent starts the import is a no-op.
+    # enforces, so it has to be told it is reached on localhost or requests 404.
+
+    # GRYT_IMPORT_REALM=1 so a fresh database gets the gryt realm; on subsequent
+    # starts the import is a no-op.
     export GRYT_KEYCLOAK_PORT="$KEYCLOAK_PORT"
     export GRYT_KEYCLOAK_HOSTNAME_URL="http://localhost:${KEYCLOAK_PORT}"
     export GRYT_KEYCLOAK_HOSTNAME_ADMIN_URL="http://localhost:${KEYCLOAK_PORT}"
     export GRYT_IMPORT_REALM=1
-    # Point the realm's SMTP at Mailpit, so verification and password-reset
-    # mail is catchable instead of undeliverable. Keycloak reaches it by
-    # service name on the compose network, not through the published port.
+    # Point the realm's SMTP at Mailpit so verification mail is catchable.
+    # Keycloak reaches it by service name, not through the published port.
     export GRYT_MAILPIT_UI_PORT="$MAILPIT_UI_PORT"
     export GRYT_MAILPIT_SMTP_PORT="$MAILPIT_SMTP_PORT"
     export GRYT_SMTP_HOST="mailpit"
@@ -194,14 +191,11 @@ if [[ "$DEV_WITH_AUTH" == "1" ]]; then
     export GRYT_KEYCLOAK_ADMIN_USERNAME="$KEYCLOAK_ADMIN_USER"
     export GRYT_KEYCLOAK_ADMIN_PASSWORD="$KEYCLOAK_ADMIN_PASSWORD"
 
-    # The login theme is a Keycloakify jar, and compose mounts it as a file.
-    # If it is not there Docker creates a directory at that path, and Keycloak
-    # does not merely lose its theme — it fails to boot, with an EOFException
-    # out of QuarkusEntryPoint and a container that never goes healthy. So a
-    # clone that has never built the theme cannot start the auth stack at all.
-    #
-    # auth/up.sh guards this, but we call compose directly rather than going
-    # through it, so the guard has to be here too.
+    # The login theme is a Keycloakify jar mounted as a file. Without it Docker
+    # creates a directory there and Keycloak fails to boot on an EOFException.
+
+    # auth/up.sh guards this, but we call compose directly, so the guard has to
+    # be here too.
     THEME_JAR="packages/auth/login-theme/dist_keycloak/keycloak-theme-for-kc-all-other-versions.jar"
     if [[ ! -f "$THEME_JAR" ]]; then
       echo "Building the Keycloak login theme (first run — needs Docker, takes a minute)..."
@@ -217,11 +211,13 @@ if [[ "$DEV_WITH_AUTH" == "1" ]]; then
     fi
 
     # keycloak-user-profile is named explicitly because nothing depends on it,
-    # so `up` would not start it. It applies the realm's user profile, without
-    # which registration asks for a first and last name that Gryt never wanted
-    # and refuses the account until they are filled (GRYT-180). GRYT_IMPORT_REALM
-    # is 1 above, so on a fresh volume the realm — and the profile with it — is
-    # imported fresh every time, and this has to follow.
+    # so `up` would not start it (GRYT-180).
+
+    # Without it registration demands a first and last name Gryt never wanted, and
+    # a fresh volume reimports the realm, which is why this has to follow.
+
+    # GRYT_IMPORT_REALM is 1 above, so a fresh volume reimports the realm and the
+    # profile with it, which is why this has to follow.
     KC_SERVICES=(postgres keycloak mailpit keycloak-user-profile)
     docker compose -f packages/auth/docker-compose.keycloak.yml \
       up -d "${KC_SERVICES[@]}" \
@@ -232,12 +228,11 @@ if [[ "$DEV_WITH_AUTH" == "1" ]]; then
       echo "Check: docker logs gryt-auth-keycloak-import" >&2
     }
 
-    # The admin used to be created here, because KC_BOOTSTRAP_ADMIN_* only
-    # creates one when `start` finds no master realm and the realm import makes
-    # master first — so a fresh volume came up with nobody able to log in. The
-    # auth stack now does it itself, in a keycloak-bootstrap-admin one-shot that
-    # `keycloak` waits on, so every deployment gets it and not just this script
-    # (GRYT-180). Warn rather than repeat it, so a failure is still visible.
+    # KC_BOOTSTRAP_ADMIN_* only creates an admin when `start` finds no master
+    # realm, and the import makes master first, so a fresh volume had no login.
+
+    # The auth stack now does it in a keycloak-bootstrap-admin one-shot that
+    # `keycloak` waits on (GRYT-180). Warn rather than repeat it.
     if ! curl -fsS -X POST "http://localhost:${KEYCLOAK_PORT}/realms/master/protocol/openid-connect/token" \
         -d "client_id=admin-cli" -d "username=${KEYCLOAK_ADMIN_USER}" \
         -d "password=${KEYCLOAK_ADMIN_PASSWORD}" -d "grant_type=password" >/dev/null 2>&1; then
@@ -262,10 +257,8 @@ WS_S3_ENV="$S3_DISABLE_ENV"
 
 COMMON_ENV="HOST=${HOST} CORS_ORIGIN=${CORS_ORIGIN} GRYT_AUTH_MODE=${GRYT_AUTH_MODE} GRYT_IDENTITY_TIERS=${GRYT_IDENTITY_TIERS} GRYT_OIDC_ISSUER=${GRYT_OIDC_ISSUER} GRYT_OIDC_AUDIENCE=${GRYT_OIDC_AUDIENCE} GRYT_TRUSTED_CERT_ISSUERS=${GRYT_TRUSTED_CERT_ISSUERS} JWT_SECRET=${JWT_SECRET} SERVER_PASSWORD=${SERVER_PASSWORD} SFU_WS_HOST=${SFU_WS_HOST} SFU_PUBLIC_HOST=${SFU_PUBLIC_HOST} STUN_SERVERS=${STUN_SERVERS} ${WS_S3_ENV}"
 
-# The client reads these at build time through config.ts. Without them the
-# browser would still send people to production Keycloak to sign in, while the
-# servers only trusted the local CA — a mismatch that fails at join with a
-# rejected certificate rather than anywhere useful.
+# The client reads these at build time through config.ts. Without them the browser
+# signs in against production Keycloak while the servers only trust the local CA.
 CLIENT_ENV=""
 if [[ "$DEV_WITH_AUTH" == "1" ]]; then
   CLIENT_ENV="VITE_GRYT_OIDC_ISSUER=${GRYT_OIDC_ISSUER} VITE_GRYT_IDENTITY_URL=${LOCAL_IDENTITY_URL}"
@@ -298,8 +291,7 @@ tmux new-window -t "$SESSION" -n client \
   "bash -lc 'cd packages/client && echo \"── Client ──\" && env ${CLIENT_ENV} yarn dev --host; exec bash'"
 
 # Window 2: Server 1 (ws1) on :5001
-# Each instance needs its own DATA_DIR — servers are fully independent, and two
-# processes on one SQLite file race for the write lock ("database is locked").
+# Each instance needs its own DATA_DIR: two processes on one SQLite file race.
 tmux new-window -t "$SESSION" -n ws1 \
   "bash -lc 'cd packages/server && echo \"── ws1 :5001 ──\" && env PORT=5001 SERVER_NAME=ws1 SERVER_INSTANCE_ID=ws1 DATA_DIR=./data/ws1 ${COMMON_ENV} yarn dev; exec bash'"
 

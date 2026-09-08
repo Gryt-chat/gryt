@@ -1,0 +1,37 @@
+name: Skills shipped
+
+# CLAUDE.md requires two prose skills on everything that leaves the repository.
+# Both used to be installed per machine, and twice a machine did not have one:
+# nothing failed, the copy just went out unedited.
+
+on:
+  pull_request:
+    paths:
+      - .claude/CLAUDE.md
+      - .claude/skills/**
+      - .github/scripts/check-skills-shipped.mjs
+      - .github/workflows/skills-shipped.yml
+
+  push:
+    branches: [main]
+    paths:
+      - .claude/CLAUDE.md
+      - .claude/skills/**
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  skills-shipped:
+    name: Skills shipped
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node .github/scripts/check-skills-shipped.mjs

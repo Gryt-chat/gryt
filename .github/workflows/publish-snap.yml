@@ -2,17 +2,12 @@ name: Publish snap to the Snap Store
 
 # Split out of Release Client, because it was never on the release path and it
 # was holding the release up anyway.
-#
-# `concurrency` is declared per workflow, and Release Client shares its group
-# with Release Server so the two cannot race for a push. A job in that workflow
-# holds the group until it finishes — so ten minutes spent watching a Snap Store
-# review delayed the next release of anything by ten minutes. On 2026-08-25 a
-# server release sat `pending` for exactly that reason while a client release
-# waited out a review nobody was reading.
-#
+
+# Release Client shares its concurrency group with Release Server, so ten minutes
+# spent watching a Snap Store review delayed the next release of anything.
+
 # Out here it holds nothing. The GitHub release is already published when this
-# starts — that is the event that triggers it — so the Store either gets the
-# same artifact or it does not, on its own time.
+# starts, so the Store either gets the same artifact or it does not.
 
 on:
   release:
@@ -27,9 +22,8 @@ on:
         required: true
         type: string
 
-# Its own group, and it may be cancelled. Two of these running means two
-# releases went out close together, and the older upload is the one nobody
-# wants in the Store.
+# Its own group, and it may be cancelled: two of these running means two releases
+# went out close together, and the older upload is not the one to keep.
 concurrency:
   group: publish-snap
   cancel-in-progress: true
@@ -39,43 +33,29 @@ jobs:
     name: Publish the snap to the Snap Store
     runs-on: ubuntu-latest
 
-    # Stable only. Every upload waits on the Store's automated review, and betas
-    # ship often. Linux beta testers already have the AppImage, .deb and .snap
-    # attached to the GitHub release, so putting every beta through the review
-    # queue buys very little.
-    #
-    # `latest/beta` is closed in the Store to match. Leaving it open but unfed
-    # would serve an increasingly stale beta indefinitely.
-    #
-    # Read off the tag rather than a workflow input, because a `release` event
-    # has no idea which dispatch produced it. A beta is `v1.2.3-beta.N`.
+    # Stable only. Every upload waits on the Store's automated review, and Linux
+    # beta testers already have the AppImage, .deb and .snap on the release.
+
+    # `latest/beta` is closed in the Store to match, rather than left open and
+    # serving an increasingly stale beta.
+
+    # Read off the tag rather than a workflow input, because a `release` event has
+    # no idea which dispatch produced it. A beta is `v1.2.3-beta.N`.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       !contains(github.event.release.tag_name, '-beta')
 
-    # This job is allowed to fail, and it now does when the Store ends up serving
-    # the wrong version.
-    #
-    # It used to carry `continue-on-error: true`, on the argument that a Canonical
-    # outage must not read as a failed Gryt release. The argument holds — GitHub,
-    # Windows, macOS, AppImage, deb and the downloadable snap have all shipped
-    # before this runs, and this workflow triggers on `release: published`, so the
-    # release is already out and nothing downstream waits on it.
-    #
-    # What that flag actually bought was silence. Four runs reported success while
-    # the Store served a version from four weeks earlier. A publisher that cannot
-    # fail is not automation, it is a cron job nobody reads — so the failure is
-    # left visible, and the run is named clearly enough that a red mark on it is
-    # not mistaken for a broken release.
+    # This job is allowed to fail, and it does when the Store ends up serving the
+    # wrong version. Everything else has shipped before this runs.
+
+    # `continue-on-error: true` bought silence instead: four runs reported success
+    # while the Store served a version from four weeks earlier.
 
     # The upload waits out the Store's automated review, because that is when
-    # snapcraft applies --release and there is no way to hand that off. Reviews
-    # here have taken 25 and 77 minutes; one ran three hours on 2026-08-17.
-    #
-    # Waiting is affordable now in a way it was not when this lived inside
-    # Release Client: out here the job holds no concurrency group, so nothing
-    # queues behind it. Two hours, then the release step below picks up the
-    # revision on its own.
+    # snapcraft applies --release. Reviews here have taken 25, 77 and 180 minutes.
+
+    # Affordable out here in a way it was not inside Release Client: this job holds
+    # no concurrency group, so nothing queues behind it.
     timeout-minutes: 130
 
     env:
@@ -95,17 +75,14 @@ jobs:
           echo "Snapcraft version:"
           snapcraft --version
 
-      # A snap name is global and has to be registered in the Store before
-      # anything can be pushed to it, so an unregistered name skips with a notice
-      # instead of turning every release red.
-      #
-      # Asked as the publisher, not through the public API. api.snapcraft.io only
-      # knows about snaps that are public and have a released revision, so a name
-      # that is registered but private answers 404 there, which is the state any
-      # newly registered name is in before its first upload. Measured on
-      # gryt-chat-slim, 2026-09-08: registered, private, 404. Guarding on that
-      # would skip the name on every release forever, and the skip is what stops
-      # the upload that would let it be made public.
+      # A snap name is global and has to be registered before anything can be
+      # pushed to it, so an unregistered name skips rather than turning red.
+
+      # Asked as the publisher: api.snapcraft.io only knows snaps that are public
+      # with a released revision, so a registered private name answers 404 there.
+
+      # Guarding on that public 404 would skip the name forever, and the skip is
+      # what stops the upload that would let it be made public.
       - name: Is this snap name registered
         id: registered
         shell: bash
@@ -157,37 +134,21 @@ jobs:
           ls -lah "./$SNAP"
 
       # Foreground, and it waits.
-      #
-      # This step used to run snapcraft in the background and kill it the moment
-      # the Store acknowledged the file, on the stated assumption that
-      # "--release=stable is recorded by the Store at upload time and honoured
-      # when the review passes, whether or not anyone is still connected".
-      #
-      # That assumption is false, and it cost four weeks. --release is applied by
-      # the snapcraft *client*: it polls the review to completion and then makes a
-      # separate call to put the revision on a channel. Kill the client and the
-      # revision is created and released to nothing. On 2026-09-07 the Store held
-      # 99 revisions with revisions 66 to 99 all showing no channel, while
-      # latest/stable served 1.5.10 from 13 August and snapd told everyone who had
-      # installed it that they were up to date.
-      #
-      # Nothing caught it because the step exited 0 on the acknowledgement, which
-      # it read as the release having happened.
+
+      # --release is applied by the snapcraft *client*: it polls the review to
+      # completion and then makes a separate call to put the revision on a channel.
+
+      # Killing it once the Store acknowledged the file created 34 revisions on no
+      # channel while latest/stable served 1.5.10 from 13 August, exiting 0.
       - name: Upload to the Snap Store
         if: steps.registered.outputs.yes == 'true'
         shell: bash
 
-        # Both of these matter, and they do different jobs.
-        #
-        # The step timeout is what makes the two steps below reliable: a step
-        # that runs out of time fails and the job carries on, whereas a job that
-        # runs out of time is cancelled, and a cancelled job's remaining steps
-        # are not something to depend on. So the ceiling is here, under the job's
-        # own, and the recovery runs on ordinary control flow.
-        #
-        # continue-on-error because a failed upload is not the end of the story:
-        # the revision may already exist, and the next step can still put it on
-        # the channel.
+        # The step timeout is what makes the two steps below reliable: a step that
+        # fails lets the job carry on, where a cancelled job's steps do not run.
+
+        # continue-on-error because the revision may already exist, and the next
+        # step can still put it on the channel.
         timeout-minutes: 100
         continue-on-error: true
         env:
@@ -211,20 +172,15 @@ jobs:
           echo "Uploading $SNAP to latest/stable. The review runs before the"
           echo "release is applied, so this can take an hour or more."
 
-          # --verbosity=brief so a long review does not write tens of thousands
-          # of one-second poll lines into the log. A three-hour run once produced
-          # about 28000 of them.
+          # --verbosity=brief so a long review does not write tens of thousands of
+          # one-second poll lines into the log. A three-hour run produced 28000.
           snapcraft upload --release=stable --verbosity=brief "$SNAP"
 
-      # The upload above can end without releasing: the job hits its timeout, the
-      # runner drops the connection, snapcraft errors after the revision exists.
-      # In every one of those the revision is on the Store and only the channel
-      # assignment is missing, which is a second of work — so do it here rather
-      # than leaving the Store a version behind until somebody notices.
-      #
-      # This also drains what is already stuck. The first run after this merges
-      # puts the current version on latest/stable without anyone touching the web
-      # UI.
+      # The upload above can end without releasing — timeout, dropped connection,
+      # an error after the revision exists — leaving only the channel assignment.
+
+      # This also drains what is already stuck: the first run after this merges
+      # puts the current version on latest/stable with nobody touching the web UI.
       - name: Put the revision on latest/stable if the upload did not
         if: always() && steps.registered.outputs.yes == 'true'
         shell: bash
@@ -244,11 +200,9 @@ jobs:
           echo "Newest revisions on the Store:"
           head -6 revisions.txt
 
-          # Columns are Rev., Uploaded, Arch, Version, Channels, and the last one
-          # is "-" for a revision that was never put on a channel. Matched by
-          # searching the fields for the version rather than by column number, so
-          # a change in how the date is formatted does not silently match nothing.
-          #
+          # Columns are Rev., Uploaded, Arch, Version, Channels, and the last is
+          # "-" for a revision never put on a channel. Matched by field, not column.
+
           # Highest revision wins: re-uploading the same version creates another.
           REV="$(
             awk -v v="$VERSION" '
@@ -273,13 +227,11 @@ jobs:
 
           snapcraft release "$SNAP_NAME" "$REV" stable
 
-      # Ask the Store what it is actually serving, rather than trusting that the
-      # steps above did what they said.
-      #
-      # This is the check whose absence let the Store sit four weeks behind while
-      # every run reported success. It uses the public API with no credentials —
-      # the same answer a user's snapd gets — so it cannot pass on a view only
-      # the publisher can see.
+      # Ask the Store what it is actually serving rather than trusting the steps
+      # above. Its absence let the Store sit four weeks behind reporting success.
+
+      # The public API with no credentials — the same answer a user's snapd gets —
+      # so it cannot pass on a view only the publisher can see.
       - name: Check the Store is serving it
         if: always() && steps.registered.outputs.yes == 'true'
         shell: bash
@@ -332,8 +284,7 @@ jobs:
             cat status.txt
 
             # Channel then Version, so the field after "stable" is the version.
-            # Read that way rather than by column number because the Track and
-            # Arch columns are only printed on some rows.
+            # By field rather than column: Track and Arch print on some rows only.
             LIVE="$(awk '{ for (i = 1; i <= NF; i++) if ($i == "stable") { print $(i + 1); exit } }' status.txt)"
 
             if [[ "$LIVE" == "$VERSION" ]]; then

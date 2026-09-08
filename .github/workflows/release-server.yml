@@ -133,8 +133,7 @@ jobs:
           set -euo pipefail
 
           # Release from what is on each submodule's main, not the superproject's
-          # gitlink — a stale pointer ships a server and SFU the client disagrees
-          # with, and the gitlink only moves when update-submodules.yml runs.
+          # gitlink: a stale pointer ships a server the client disagrees with.
           for path in packages/server packages/sfu packages/image-worker; do
             git -C "$path" fetch origin main
             git -C "$path" checkout -B main origin/main

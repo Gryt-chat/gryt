@@ -1,47 +1,26 @@
 #!/usr/bin/env bash
-#
 # Fast-forward the superproject checkout so ops/ changes reach the machine.
-#
-# Everything else on this box updates itself. The sites refresher fetches the
-# docs, site and ui submodules; the web client refresher asks GHCR for a newer
-# image. Nothing pulled the superproject, so ops/ was the one directory where
-# merging a pull request changed nothing here at all.
-#
-# That is not academic. On 2026-08-21 the checkout sat six merges behind while
-# three of them were compose changes, and the refresher scripts themselves are
-# symlinked out of this checkout, so a change to those could never take effect
-# either. A script that cannot deliver its own updates is a poor place to put
-# the delivery mechanism.
-#
-# Which is also why this is its own file rather than a few lines inside
-# refresh-sites.sh. Bash reads a script as it runs it, so a script that pulls
-# the checkout it lives in can have its own remaining lines replaced underneath
-# it. This one is short enough to be read in a single go, and it is run from
-# ExecStartPre so the refresher that follows is a fresh process reading whatever
-# the pull just left behind.
-#
-# Deliberately fast-forward only, and deliberately --no-recurse-submodules. The
-# submodules are the sites refresher's business and it moves them to commits the
-# gitlinks here do not name; recursing would drag them backwards to whatever the
-# superproject last recorded, which is the opposite of what everything else on
-# this box is trying to do.
-#
-# Refuses on any local commit or tracked modification rather than resolving it.
-# Nothing here should be editing this checkout, and if something is, standing on
-# it is worse than doing nothing.
+# Nothing pulled it, so merging a pull request changed nothing here at all.
+
+# On 2026-08-21 the checkout sat six merges behind, three of them compose changes,
+# and the refresher scripts are symlinked out of it, so those could not update either.
+
+# Its own file rather than lines inside refresh-sites.sh: bash reads a script as it
+# runs, so this is short and runs from ExecStartPre, leaving the refresher fresh.
+
+# Fast-forward only and --no-recurse-submodules — recursing would drag the
+# submodules back to the gitlinks, which is what the sites refresher moves them off.
+
+# Refuses on any local commit or tracked modification. Nothing should be editing
+# this checkout, and if something is, standing on it is worse than doing nothing.
 
 set -euo pipefail
 
-# Where the checkout is.
-#
-# Worked out from this script's own path rather than named, because it is
-# symlinked into /usr/local/bin from inside the checkout it maintains — so it
-# already knows, and every install that follows the README is that shape.
-#
-# It used to default to one machine's home directory, which is wrong for anybody
-# else and is not something a public repository should be carrying at all.
-#
-# GRYT_ROOT still wins, for an install that copies the script instead.
+# Where the checkout is. Worked out from this script's own path, because it is
+# symlinked into /usr/local/bin from inside the checkout it maintains.
+
+# It used to default to one machine's home directory. GRYT_ROOT still wins, for an
+# install that copies the script instead.
 SELF=$(readlink -f "${BASH_SOURCE[0]}")
 ROOT="${GRYT_ROOT:-$(cd "$(dirname "$SELF")/../.." && pwd)}"
 BRANCH="${GRYT_BRANCH:-main}"
@@ -67,9 +46,8 @@ git_in() {
 
 [[ -d "$ROOT/.git" ]] || { log "$ROOT is not a git checkout — nothing to do"; exit 0; }
 
-# Tracked changes only. Submodule gitlinks read as modified here as a matter of
-# course, because the sites refresher moves the submodules without committing
-# them, so those are not a reason to refuse.
+# Tracked changes only: submodule gitlinks read as modified as a matter of course,
+# because the sites refresher moves them without committing.
 if ! dirty=$(git_in status --porcelain --untracked-files=no -- ':!packages' 2>&1); then
   log "cannot read the state of $ROOT: $dirty"
   exit 1

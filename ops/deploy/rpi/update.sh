@@ -11,17 +11,14 @@ STATE="$BASE/.deployed"
 RETRY_BASE=300
 RETRY_CAP=21600
 
-# How long one image may take to build before it is given up on.
-#
-# This is the fix for the failure on 2026-09-07: a `bun install` inside the ui
-# build wedged after printing "Slow filesystem detected", and because a build
-# had no timeout it held the lock below for an hour and three quarters. Every
-# cycle after it exited immediately on `flock -n`, so site and docs — which are
-# quick, and which had merged changes waiting — were never checked again. Six
-# merged pull requests sat undeployed until somebody looked at the box.
-#
-# Forty minutes is roughly twice the ui build's honest worst case on this Pi.
-# A build that overruns it is not slow, it is stuck.
+# How long one image may take to build before it is given up on. On 2026-09-07 a
+# wedged `bun install` held the lock below for an hour and three quarters.
+
+# Every cycle after it exited on `flock -n`, so site and docs were never checked
+# and six merged pull requests sat undeployed until somebody looked at the box.
+
+# Forty minutes is roughly twice the ui build's honest worst case on this Pi. A
+# build that overruns it is not slow, it is stuck.
 BUILD_TIMEOUT=40m
 
 mkdir -p "$STATE"
@@ -118,9 +115,8 @@ update_service() {
 
     echo "[$(date -Is)] [$service] building ${target:0:12}"
 
-    # `timeout` rather than a bare build. A stuck build is killed and counted as
-    # a failure, which puts it on the retry backoff below and — crucially —
-    # lets the services after it in this run carry on.
+    # `timeout` rather than a bare build: a stuck build is killed and counted as a
+    # failure, which backs it off and lets the services after it carry on.
     local status_code=0
     timeout "$BUILD_TIMEOUT" docker compose -f "$COMPOSE" build "$service" || status_code=$?
 
@@ -161,13 +157,11 @@ update_service() {
     echo "[$(date -Is)] [$service] deployed ${target:0:12}"
 }
 
-# The web clients are images, not build contexts, so there is no commit to
-# compare against. The published tag stays the same and the id under it moves,
-# which is the only thing that says a release happened.
-#
-# Nothing pulled these until this existed. The dev box's refresh script covers
-# gryt-prod-client and gryt-beta-client, but those are leftovers on 3666 and
-# 3667 that nothing routes to; app.gryt.chat and beta.gryt.chat are here.
+# The web clients are images, not build contexts, so there is no commit to compare.
+# The tag stays the same and the id under it moves, which is what says a release happened.
+
+# Nothing pulled these until this existed. The dev box's script covers the leftovers
+# on 3666 and 3667 that nothing routes to; app.gryt.chat and beta.gryt.chat are here.
 update_image() {
     local service="$1"
     local container="$2"

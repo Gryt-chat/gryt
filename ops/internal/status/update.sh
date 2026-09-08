@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
-#
-# Keeps the status page and the console current on the VPS.
-#
-# Written because merging a pull request used to change nothing here: the deploy
-# was `scp`, so gryt#223 landed and the box carried on running the old compose
-# file until somebody noticed. The Pi has polled on a timer for months; this is
-# the same idea, minus the building — nothing is built on this box.
+# Keeps the status page and the console current on the VPS. The deploy was `scp`,
+# so gryt#223 merged and the box carried on running the old compose file.
 
 set -u
 
@@ -36,14 +31,11 @@ retry_delay() {
 
 # ── The config, which lives in git ───────────────────────────────────────
 
-# The files the sync owns. Everything else in $DEST is either written by the
-# console or holds the password, and is never touched.
-#
-# This script is one of them. Without that, a change to it merges and never
-# runs: the copy in git updates and the copy being executed does not, which is
-# exactly the "merged, deployed nothing" the timer exists to end. The systemd
-# units are not here — changing those needs a daemon-reload, so they stay a
-# documented one-off.
+# The files the sync owns. Everything else in $DEST is written by the console or
+# holds the password, and is never touched.
+
+# This script is one of them: otherwise a change to it merges and never runs. The
+# systemd units are not — those need a daemon-reload, so they stay a one-off.
 SYNCED=(
     "docker-compose.yml:$DEST/docker-compose.yml"
     "README.md:$DEST/README.md"
@@ -88,10 +80,8 @@ update_config() {
         echo "[$(date -Is)] [config] ${head:0:8} -> ${target:0:8}"
     fi
 
-    # What is deployed, not what git did. A clone made at the current commit
-    # never moves, so a check on git alone would call the box current while it
-    # ran something else entirely — which is how a fresh install would sit
-    # undeployed forever, silently, saying "current" every five minutes.
+    # What is deployed, not what git did. A clone made at the current commit never
+    # moves, so a fresh install would sit undeployed forever saying "current".
     if files_match; then
         echo "[$(date -Is)] [config] current ${target:0:8}"
         return 0
@@ -99,19 +89,16 @@ update_config() {
 
     echo "[$(date -Is)] [config] deployed files differ from ${target:0:8}"
 
-    # Gatus exits on a config it cannot parse, and the status page goes with it.
-    # Checking a copy first costs 25 seconds and the alternative is the page
-    # being down during whatever it was meant to be reporting.
+    # Gatus exits on a config it cannot parse. Checking a copy costs 25 seconds
+    # and the alternative is the page being down during the outage it reports.
     rm -rf /tmp/gatus-validate-config
     cp -r "$SRC/ops/internal/status/config" /tmp/gatus-validate-config
 
-    # Named and removed explicitly, never `--rm` into a pipe.
-    #
-    # `docker run --rm ... | grep -q` looks right and leaks a container every
-    # time: grep exits on its first match, the SIGPIPE kills the docker client,
-    # and the container it was attached to keeps running. Six of them piled up
-    # on this box in five minutes, and the one from 2026-09-03 has the same
-    # cause — the validate command in this README, which is written that way.
+    # Named and removed explicitly, never `--rm` into a pipe: grep exits on its
+    # first match, SIGPIPE kills the docker client, and the container keeps running.
+
+    # Six piled up on this box in five minutes. The validate command in the README
+    # is written that way and has the same cause.
     local name="gatus-validate-$$"
     docker rm -f "$name" >/dev/null 2>&1 || true
 
@@ -135,17 +122,14 @@ update_config() {
         return 1
     fi
 
-    # Named files, never the directory. `.env` holds CONSOLE_PASSWORD_HASH, is
-    # not in git, and a wholesale copy would delete it and lock everybody out of
-    # the console. announcements.yaml is written by the console and is not in
-    # git either.
-    # Written beside and renamed, never copied over in place. bash reads a
-    # script as it runs, so overwriting this file mid-execution would hand the
-    # running shell the second half of a different one. A rename swaps the
-    # name and leaves the open inode alone.
-    #
-    # It also matters for the Gatus config, which is watched: a half-written
-    # file is a config that does not parse.
+    # Named files, never the directory. `.env` holds CONSOLE_PASSWORD_HASH and
+    # announcements.yaml is written by the console; neither is in git.
+
+    # Written beside and renamed, never copied over in place. bash reads a script
+    # as it runs, so overwriting this one would hand the shell half of another.
+
+    # It also matters for the Gatus config, which is watched: a half-written file
+    # is a config that does not parse.
     local pair dest
     for pair in "${SYNCED[@]}"; do
         dest="${pair#*:}"
@@ -208,15 +192,11 @@ update_image() {
 # ── The one thing the compose file cannot state ──────────────────────────
 
 # The console runs as uid 1000 and writes announcements.yaml into the config
-# directory. Docker does not chown a bind mount, so a root-owned directory on
-# the host leaves it unable to write the only file it exists to write.
-#
-# That is what happened: the write threw EACCES, the throw killed the process,
-# and console.gryt.chat answered 502 while Docker restarted it in a loop. The
-# console handles the failure now, but it still cannot post, so fix the cause
-# here — every cycle, so a fresh install and a hand-made directory both end up
-# right without anybody remembering this.
-#
+# directory. Docker does not chown a bind mount, so a root-owned one blocks it.
+
+# The write threw EACCES, that killed the process, and console.gryt.chat answered
+# 502 in a restart loop. Fixed every cycle so a hand-made directory ends up right.
+
 # Gatus mounts the same directory read-only and does not care who owns it.
 ensure_config_writable() {
     local dir="$DEST/config" owner

@@ -102,6 +102,12 @@ here as an image rather than built on this box. It writes
 
 [console]: https://github.com/Gryt-chat/console
 
+`config/` has to be writable by uid 1000. The image runs as `node`, Docker
+doesn't chown a bind mount, and a root-owned directory means announcements
+can't post. `update.sh` chowns it on every cycle, so there's nothing to do by
+hand. It's written down because the symptom is a 502 from the console, which
+points nowhere near permissions.
+
 Updating it:
 
 ```bash

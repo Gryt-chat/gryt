@@ -1033,30 +1033,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          # The -c.snap.publish.* overrides below are what keeps the snap out
-          # of the store from here. electron-builder adds the Snap Store
-          # publisher on its own when it finds SNAPCRAFT_STORE_CREDENTIALS, and
-          # that upload blocks on the store's review queue — twenty-five
-          # minutes on v1.5.8, with publish-release waiting behind it, so a
-          # Windows download was held up by a Linux store scan. The .snap is
-          # attached to the release like everything else now, and the store
-          # push is its own job at the end.
-          #
-          # Spelled out per key rather than as `-c.snap.publish=github`. The
-          # shorthand replaces the publish config for this target instead of
-          # extending it, so owner and repo went missing and electron-builder
-          # fell back to inferring them from package.json — it tried to create
-          # the release in Gryt-chat/client, where this token cannot write, and
-          # got a 403 that no retry was ever going to clear. That is what left
-          # v1.5.9 a draft with no .snap on it.
-          # `--win nsis portable` rather than a bare `--win`, which would also
-          # build the appx and publish it. The MSIX is built in its own step
-          # below and kept off the release, because nobody can install it: it
-          # is unsigned, and `Add-AppxPackage -AllowUnsigned` refuses any
-          # package that activates an executable, which every packaged Electron
-          # app does. v1.9.5 put 254MB on the release page that fails for
-          # everyone who downloads it. See packages/client/scripts/sign-windows.cjs
-          # for the HRESULTs and GRYT-848 for the certificate.
+          # The -c.snap.publish.* overrides keep the snap out of the store from here, spelled
+          # out per key: the shorthand replaces the config and left v1.5.9 a draft.
+
+          # `--win nsis portable` rather than a bare `--win`, which also builds and publishes
+          # the appx — an unsigned MSIX nobody can install. See GRYT-848.
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             TARGETS="--linux AppImage deb rpm snap"
           elif [[ "$RUNNER_OS" == "Windows" ]]; then
@@ -1066,15 +1047,8 @@ jobs:
             exit 1
           fi
 
-          # electron-builder fetches the Electron binary on first use, and
-          # app-builder asks for it through DownloadNoRetry — so a connection
-          # that drops mid-download fails the build outright with no second
-          # attempt. That is what took v1.5.2-beta.1 down on Windows:
-          # `Get "…/electron-v40.6.1-win32-x64.zip": EOF`.
-          #
-          # Three attempts rather than five. A genuine packaging failure repeats
-          # the whole build each time, and the download failures seen so far all
-          # land in the first minute.
+          # electron-builder fetches Electron through DownloadNoRetry, so a dropped connection
+          # fails the build outright. Three attempts: a real failure repeats the whole build.
           published=""
           for attempt in 1 2 3; do
             if npx electron-builder \
@@ -1116,17 +1090,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # electron-builder 26.x builds AppImages against a runtime that loads
-          # libfuse2, which fuse3-only distros (Arch, Fedora, Ubuntu 24.04+) no
-          # longer ship — so the download does not launch for most Linux users,
-          # it just silently does nothing (GRYT-953). The static "type2" runtime
-          # carries its own fuse; relink-appimage-fuse.mjs reattaches the built
-          # AppImage to it and rewrites the updater manifest's sha512/size.
-          #
-          # Pinned by sha256. "continuous" is the only channel type2-runtime
-          # publishes, so a moved runtime is meant to fail the checksum here
-          # rather than slip a new binary into the release unnoticed. Bump the
-          # pin deliberately when updating it.
+          # electron-builder 26.x builds AppImages against libfuse2, which fuse3-only distros
+          # no longer ship (GRYT-953). Pinned by sha256, so a moved runtime fails the checksum.
           RUNTIME_URL="https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64"
           RUNTIME_SHA256="1cc49bcf1e2ccd593c379adb17c9f85a36d619088296504de95b1d06215aebbf"
           RUNTIME="${RUNNER_TEMP}/appimage-runtime-x86_64"
@@ -1135,10 +1100,8 @@ jobs:
 
           node ../../.github/scripts/relink-appimage-fuse.mjs --runtime "$RUNTIME" --dir release
 
-          # electron-builder published with --publish always, to a release that
-          # stays a draft until publish-release flips it live. Overwrite the
-          # AppImage(s) and rewritten manifest(s) on that draft, so nobody ever
-          # sees the libfuse2 build. deb and snap are untouched and left alone.
+          # electron-builder published to a draft, so overwrite the AppImages and rewritten
+          # manifests there and nobody ever sees the libfuse2 build.
           tag="v${VERSION}"
           shopt -s nullglob
           for f in release/*-linux-*.AppImage release/*-linux.yml; do
@@ -1146,36 +1109,16 @@ jobs:
             gh release upload "$tag" "$f" --clobber --repo "${OWNER}/${REPO}"
           done
 
-      # The MSIX, built every release and attached to none of them.
-      #
-      # Built, because a target nobody builds rots. This one went out in v1.9.5
-      # carrying electron-builder's own SampleAppx placeholder tiles, which
-      # happened because until then nothing had ever looked inside the package
-      # the release was producing. It is also the artefact a Store submission
-      # uploads, so there has to be one to fetch.
-      #
-      # Not published, because an unsigned MSIX cannot be installed by anybody.
-      # Not by double-clicking it, and not with `Add-AppxPackage -AllowUnsigned`
-      # either — that refuses any package activating an executable, and Gryt's
-      # manifest activates `app\Gryt Chat.exe` as a Windows.FullTrustApplication.
-      # Attaching it to the release meant 254MB that failed for everyone who
-      # downloaded it. GRYT-848 is the certificate; a Store submission needs a
-      # Partner Center identity instead, because Microsoft signs what it
-      # distributes.
-      #
-      # Its own step rather than another target on the run above, because
-      # `--publish always` publishes everything it builds and there is no
-      # per-target way to opt one artefact out that is worth the config. The
-      # cost is one more pack over the same win-unpacked tree, a few minutes.
+      # The MSIX, built every release and attached to none of them. Built, because a target
+      # nobody builds rots; not published, because an unsigned MSIX cannot be installed.
       - name: Package the MSIX
         if: runner.os == 'Windows' && matrix.variant == 'full'
         working-directory: packages/client
         shell: bash
         env:
           VERSION: ${{ env.VERSION }}
-          # Same as the step above. Empty until a certificate exists, and the
-          # hook says out loud that the package it just made cannot be
-          # installed.
+          # Same as the step above: empty until a certificate exists, and the hook says out
+          # loud that the package it just made cannot be installed.
           GRYT_WIN_SIGN_TOOL: ${{ secrets.WINDOWS_SIGN_TOOL }}
           GRYT_WIN_SIGN_ARGS: ${{ secrets.WINDOWS_SIGN_ARGS }}
         run: |
@@ -1188,9 +1131,8 @@ jobs:
 
           ls -la release/*.appx
 
-      # Kept for a month rather than forever. Long enough to pull one for a
-      # Store submission or to check what the tiles look like, short enough that
-      # a quarter-gigabyte per release does not pile up.
+      # Kept for a month rather than forever: long enough to pull one for a Store submission,
+      # short enough that a quarter-gigabyte per release does not pile up.
       - name: Upload the MSIX
         if: runner.os == 'Windows' && matrix.variant == 'full'
         uses: actions/upload-artifact@v4
@@ -1200,22 +1142,8 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-      # Push the MSIX to the Microsoft Store, so a Store install actually gets
-      # the update. The Store owns updates for its own build — the in-app
-      # updater stands down there (process.windowsStore, GRYT-850) — so without
-      # this, a Store install would sit forever on the version it was submitted
-      # with. That is the whole reason not to make the Store the default Windows
-      # download until this runs (GRYT-954 waits on it).
-      #
-      # Stable only: a beta must not reach the public listing. Dormant until the
-      # AZURE_AD_* secrets exist (HAS_STORE_CREDS), so shipping this ahead of
-      # Partner Center leaves every release exactly as it was. Gryt is a free
-      # product, which is all the msstore GitHub path supports today.
-      #
-      # The submission is asynchronous: this hands the package to certification
-      # and returns. It does not wait for the listing to go live, and it does not
-      # gate publish-release — a Store rejection must not hold back the .exe,
-      # AppImage and dmg that do not depend on it.
+      # Push the MSIX to the Microsoft Store, which owns updates for its own build. Stable
+      # only, dormant without AZURE_AD_*, and asynchronous: it does not gate publish-release.
       - name: Set up the Microsoft Store CLI
         if: runner.os == 'Windows' && matrix.variant == 'full' && env.CHANNEL == 'latest' && env.HAS_STORE_CREDS == 'true'
         uses: microsoft/microsoft-store-apppublisher@v1.1
@@ -1237,13 +1165,8 @@ jobs:
           $appx = Get-ChildItem -Path "release" -Filter "*.appx" | Select-Object -First 1
           if (-not $appx) { throw "No .appx in release/ to submit." }
           Write-Host "Submitting $($appx.Name) to the Microsoft Store ($productId)"
-          # sellerId is a placeholder on purpose. reconfigure refuses to run
-          # non-interactively without one, but the submission API is the
-          # `.../v1.0/my/applications/<productId>` endpoint, scoped by the app
-          # credentials rather than the seller — verified with store-auth-check,
-          # where `apps get` returned the listing with a placeholder seller. So
-          # there is no real Seller ID to find (this account never surfaced one),
-          # and no SELLER_ID secret is needed.
+          # sellerId is a placeholder on purpose: reconfigure refuses to run without one, but
+          # the submission API is scoped by the app credentials rather than the seller.
           msstore reconfigure `
             --tenantId $env:AZURE_AD_TENANT_ID `
             --sellerId 0 `
@@ -1259,29 +1182,8 @@ jobs:
         shell: bash
         env:
           DEBUG: electron-builder,electron-osx-sign,electron-notarize
-          # The keychain "Prepare macOS signing keychain" already built, rather
-          # than CSC_LINK and CSC_KEY_PASSWORD, which used to be here.
-          #
-          # With CSC_LINK set, electron-builder ignores that work and does its
-          # own: app-builder-lib's `createKeychain` makes a keychain with a
-          # random 32-byte password, imports the certificate, and then runs
-          #
-          #   security set-key-partition-list -S apple-tool:,apple: -s -k <p12 password>
-          #
-          # where `-k` is the *keychain's* password. It has been passing the
-          # certificate's for as long as the function has existed — 26.8.1, what
-          # we pin, and 26.15.3, the current release, are identical here.
-          #
-          # macOS did not check until 26.6. GitHub moved macos-latest from
-          # 26.5.2 to 26.6.2 on 2026-08-31, and v1.9.13 failed on
-          # `SecKeychainUnlock: The user name or passphrase you entered is not
-          # correct` with nothing in this repository changed and the signing
-          # secrets untouched since March. GRYT-903.
-          #
-          # `codeSigningInfo` in macPackager.js returns `{ keychainFile:
-          # process.env.CSC_KEYCHAIN }` whenever CSC_LINK is absent, and only
-          # calls `createKeychain` when it is present. So naming the keychain
-          # here is what keeps electron-builder out of the broken path.
+          # The keychain "Prepare macOS signing keychain" built, rather than CSC_LINK: with
+          # that set, electron-builder unlocks with the wrong password and macOS 26.6 refuses.
           CSC_KEYCHAIN: ${{ runner.temp }}/build.keychain-db
           APPLE_API_KEY: ${{ runner.temp }}/AuthKey.p8
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
@@ -1297,21 +1199,11 @@ jobs:
 
           echo "${{ secrets.APPLE_API_KEY_P8_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
 
-          # The publish overrides matter even though this uploads separately with
-          # `gh release upload`. electron-builder bakes them into app-update.yml
-          # inside the packaged app, which is where the updater reads its repo
-          # from. Without them this inherited publish.repo from
-          # packages/client/electron-builder.yml, which named the client repo
-          # rather than this one, and every shipped macOS build asked an empty
-          # repository for updates. The other platforms always passed these,
-          # which is why only macOS was broken.
-          # `forceCodeSigning` is the other half of dropping CSC_LINK. Without a
-          # certificate to import, electron-builder looks for an identity and,
-          # when it cannot find one, calls `reportError`, which *warns* and
-          # carries on — a green build that shipped an unsigned app, which
-          # Gatekeeper refuses and the updater cannot replace. `reportError`
-          # throws instead when this is set, so a keychain that did not work is
-          # a failed release rather than a bad one.
+          # The publish overrides matter even though this uploads separately: electron-builder
+          # bakes them into app-update.yml, and without them macOS asked an empty repository.
+
+          # `forceCodeSigning` is the other half of dropping CSC_LINK: without it a missing
+          # identity only warns, and the build ships an app Gatekeeper refuses.
           npx electron-builder \
             --config electron-builder.config.cjs \
             --mac \
@@ -1343,12 +1235,8 @@ jobs:
             release/*.dmg
             release/*.zip
             release/*.blockmap
-            # A glob, because the channel file is named after the channel:
-            # latest-mac.yml for a full build and slim-mac.yml for a slim one.
-            # Spelled out, it was a literal path rather than a pattern, so
-            # nullglob left it in the list when it did not exist and the upload
-            # failed with "no matches found". That is what kept macOS slim off
-            # v1.9.15 while every other leg published.
+            # A glob, because the channel file is named after the channel. Spelled out as a
+            # literal it did not exist and the upload failed, which kept macOS slim off v1.9.15.
             release/*-mac.yml
           )
           shopt -u nullglob
@@ -1363,29 +1251,11 @@ jobs:
 
       # ── Each platform goes live on its own ──────────────────────────────
       #
-      # The release left draft only once all six legs had finished, so a Windows
-      # build that took four minutes waited on a macOS build that took fifteen.
-      # Windows users got the update eleven minutes late for a reason none of
-      # them could act on.
-      #
-      # Publishing part-way is safe because the client already refuses a release
-      # it cannot install. `newestReleaseWithoutApi` walks candidate tags newest
-      # first and calls `releaseIsInstallable`, which wants *this* platform and
-      # variant's channel file — `latest-mac.yml`, `slim.yml` and so on — plus
-      # the installer that file names, both present and non-empty. A tag missing
-      # either is skipped with "assets incomplete" and the app falls through to
-      # the version below. So a macOS client meeting a release that is so far
-      # Windows-only does not error: it sees no update yet, which is true.
-      #
-      # Which makes this the whole change. Flip the draft from the leg, as soon
-      # as that leg's own assets are up. `--draft=false` on a published release
-      # is a no-op, so six legs racing to run it is fine and the first one home
-      # wins.
-      #
-      # It checks the same two things the client checks rather than trusting the
-      # upload above. A leg that produced no channel file leaves the release
-      # alone instead of publishing something its own platform cannot install,
-      # which is how macOS slim missed v1.9.15.
+      # The client already refuses a release it cannot install: it wants this platform's
+      # channel file and the installer it names, so a part-published release is skipped.
+
+      # `--draft=false` on a published release is a no-op, so six legs racing is fine. Each
+      # checks the same two things rather than trusting the upload above.
       - name: Make this platform's build available
         working-directory: packages/client
         shell: bash
@@ -1400,9 +1270,8 @@ jobs:
 
           TAG="v$VERSION"
 
-          # electron-builder names the channel file after the channel, and slim
-          # publishes on one of its own so the two variants do not overwrite
-          # each other inside a single release.
+          # electron-builder names the channel file after the channel, and slim publishes on
+          # one of its own so the two variants do not overwrite each other.
           if [[ "$VARIANT" == "slim" ]]; then CHANNEL="slim"; else CHANNEL="latest"; fi
 
           case "$RUNNER_OS" in
@@ -1416,14 +1285,8 @@ jobs:
             exit 0
           fi
 
-          # The installer the channel file points at. An update reads this file
-          # and then asks for that name, so a release carrying one without the
-          # other is one the updater breaks on rather than skips.
-          # `|| true` on both: `set -o pipefail` is on, so a grep that matches
-          # nothing or a transient API error would otherwise fail the leg — and
-          # failing a build that has already produced and uploaded its installer
-          # is a far worse outcome than not publishing a minute early. Both fall
-          # through to the checks below, which warn and leave the release alone.
+          # The installer the channel file points at: a release carrying one without the other
+          # is one the updater breaks on. `|| true` on both, or a transient error fails the leg.
           INSTALLER="$(grep -m1 -E '^[[:space:]]*path:' "release/$YML" | sed -E 's/^[[:space:]]*path:[[:space:]]*//' | tr -d '\r' || true)"
 
           if [[ -z "$INSTALLER" ]]; then
@@ -1443,18 +1306,8 @@ jobs:
           gh release edit "$TAG" --repo "$OWNER/$REPO" --draft=false
           echo "$TAG is installable on $RUNNER_OS ($VARIANT)."
 
-  # Runs after every matrix leg. The release is usually live by the time this
-  # starts — each leg publishes it once its own assets are up — so this no
-  # longer decides whether anybody can install anything. It owns the
-  # whole-release work instead: checksums across every file, the attestation,
-  # the notes appendix that refers to them, and telling Discord once rather
-  # than six times.
-  #
-  # A failed leg still skips this. That now leaves a release live for the
-  # platforms that finished and silent for the one that did not, rather than a
-  # draft nobody can install. `cleanup-failed-release` already declines to
-  # delete a published release, so whatever somebody installed stays
-  # installable.
+  # Runs after every matrix leg, once each has published the release itself. It owns the
+  # whole-release work: checksums, the attestation, the notes appendix, and one Discord post.
   publish-release:
     name: Publish release
     needs: [prepare-release, build-electron]
@@ -1480,9 +1333,8 @@ jobs:
           echo "Assets on $TAG:"
           printf '%s\n' "$ASSETS" | sed 's/^/  /'
 
-          # One installer per platform plus the three channel files. A client
-          # whose channel file is missing gets a 404 and reports the release as
-          # broken, so the channel files matter as much as the installers.
+          # One installer per platform plus the three channel files. A client whose channel
+          # file is missing gets a 404 and reports the release as broken.
           MISSING=0
           for PATTERN in \
             'win-x64\.exe$' \
@@ -1499,29 +1351,16 @@ jobs:
           done
 
           if [[ "$MISSING" -ne 0 ]]; then
-            # No longer "leaving it as a draft": the legs that did finish have
-            # published it between them, and taking it back would pull an
-            # update out from under whoever already has it. Failing here is the
-            # signal that a platform is missing; the release stands, carrying
-            # the platforms that built.
+            # No longer "leaving it as a draft": the legs that finished have published it, and
+            # taking it back would pull an update out from under whoever has it.
             echo "::error::$TAG is missing assets. It stays published for the platforms that have them."
             exit 1
           fi
 
           echo "All expected assets present."
 
-      # Something to check a download against, and something that is not just
-      # Sivert saying so (GRYT-723).
-      #
-      # The desktop app is signed and notarised, which stops a chat server
-      # reaching it, and until now that was the whole of the story: no hashes
-      # were published anywhere, so there was nothing to compare a download to
-      # even for somebody who wanted to.
-      #
-      # Here rather than in each build leg, because the sums have to cover the
-      # assets as they are on the release — after `electron-builder` has
-      # uploaded them and after the macOS leg has clobbered its own. A hash
-      # taken before the upload describes a file nobody downloads.
+      # Something to check a download against, and something that is not just Sivert saying so
+      # (GRYT-723). Here rather than per leg, so the sums cover the assets as they end up.
       - name: Download the assets and write SHA256SUMS
         shell: bash
         env:
@@ -1534,15 +1373,13 @@ jobs:
 
           gh release download "$TAG" --repo "$OWNER/$REPO" --dir dist --clobber
 
-          # Removed rather than skipped. A re-run of this job would otherwise
-          # hash the previous run's sums into the new file, and the line would
-          # be wrong the moment the file is rewritten.
+          # Removed rather than skipped: a re-run would otherwise hash the previous run's sums
+          # into the new file, and the line would be wrong the moment it is rewritten.
           rm -f dist/SHA256SUMS.txt
 
           cd dist
-          # A glob rather than `ls`, so a filename with a space in it stays one
-          # argument. Globs come out sorted, which keeps the file stable between
-          # runs and makes a diff between two releases only the lines that moved.
+          # A glob rather than `ls`, so a filename with a space stays one argument. Globs come
+          # out sorted, which keeps the file stable between runs.
           sha256sum -- * > ../SHA256SUMS.txt
           mv ../SHA256SUMS.txt .
 

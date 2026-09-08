@@ -22,8 +22,6 @@ cask "gryt-chat" do
   # Without this, brew upgrade reinstalls over a copy electron-updater has
   # already moved on.
   auto_updates true
-  # Same app bundle, so brew has to pick one.
-  conflicts_with cask: "gryt-chat-slim"
   depends_on macos: :monterey
 
   app "Gryt Chat.app"

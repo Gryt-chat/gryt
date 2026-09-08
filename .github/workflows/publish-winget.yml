@@ -25,22 +25,8 @@ concurrency:
 
 jobs:
   publish-winget:
-    name: Publish ${{ matrix.variant }} to winget
+    name: Publish to winget
     runs-on: windows-latest
-
-    # Both variants, as two winget packages. Each is its own pull request
-    # against microsoft/winget-pkgs, so slim being held in review must not stop
-    # full going out.
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - variant: full
-            package: Gryt.GrytChat
-            suffix: ""
-          - variant: slim
-            package: Gryt.GrytChat.Slim
-            suffix: "-slim"
 
     if: >-
       github.event_name == 'workflow_dispatch' ||
@@ -52,8 +38,7 @@ jobs:
       OWNER: Gryt-chat
       REPO: gryt
       TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
-      PACKAGE: ${{ matrix.package }}
-      SUFFIX: ${{ matrix.suffix }}
+      PACKAGE: Gryt.GrytChat
 
     steps:
       - uses: actions/checkout@v4
@@ -67,7 +52,7 @@ jobs:
           set -euo pipefail
 
           VERSION="${TAG#v}"
-          EXE="Gryt-Chat-${VERSION}-win-x64${SUFFIX}.exe"
+          EXE="Gryt-Chat-${VERSION}-win-x64.exe"
 
           gh release download "$TAG" --repo "$OWNER/$REPO" \
             --pattern 'SHA256SUMS.txt' --dir .

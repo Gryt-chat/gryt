@@ -36,24 +36,8 @@ concurrency:
 
 jobs:
   publish-snap:
-    name: Publish ${{ matrix.variant }} snap to the Snap Store
+    name: Publish the snap to the Snap Store
     runs-on: ubuntu-latest
-
-    # Both variants. Every release builds both, and this used to download both
-    # and then pick with `find -print -quit`, so whichever the filesystem
-    # returned first is what Snap users got. Nobody chose it.
-    #
-    # Independent jobs on purpose: slim failing must not stop full publishing.
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - variant: full
-            snap: gryt-chat
-            suffix: ""
-          - variant: slim
-            snap: gryt-chat-slim
-            suffix: "-slim"
 
     # Stable only. Every upload waits on the Store's automated review, and betas
     # ship often. Linux beta testers already have the AppImage, .deb and .snap
@@ -98,8 +82,7 @@ jobs:
       OWNER: Gryt-chat
       REPO: gryt
       TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
-      SNAP_NAME: ${{ matrix.snap }}
-      SUFFIX: ${{ matrix.suffix }}
+      SNAP_NAME: gryt-chat
 
     steps:
       - name: Install Snapcraft
@@ -113,16 +96,16 @@ jobs:
           snapcraft --version
 
       # A snap name is global and has to be registered in the Store before
-      # anything can be pushed to it, so an unregistered variant skips with a
-      # notice instead of turning every release red.
+      # anything can be pushed to it, so an unregistered name skips with a notice
+      # instead of turning every release red.
       #
       # Asked as the publisher, not through the public API. api.snapcraft.io only
       # knows about snaps that are public and have a released revision, so a name
-      # that is registered but private answers 404 there — which is exactly the
-      # state a new variant is in before its first upload. Measured on
-      # gryt-chat-slim on 2026-09-08: registered, private, 404. The public check
-      # this replaces would have skipped it on every release forever, and the
-      # skip is what stops the upload that would let it be made public.
+      # that is registered but private answers 404 there, which is the state any
+      # newly registered name is in before its first upload. Measured on
+      # gryt-chat-slim, 2026-09-08: registered, private, 404. Guarding on that
+      # would skip the name on every release forever, and the skip is what stops
+      # the upload that would let it be made public.
       - name: Is this snap name registered
         id: registered
         shell: bash
@@ -143,7 +126,7 @@ jobs:
           cat names.txt
 
           # Column 1 is the name in both the table and its header. Matched as a
-          # whole field so gryt-chat does not match gryt-chat-slim.
+          # whole field, so a name that is a prefix of another does not match it.
           if awk -v n="$SNAP_NAME" '$1 == n { found = 1 } END { exit !found }' names.txt; then
             echo "yes=true" >> "$GITHUB_OUTPUT"
           else
@@ -161,10 +144,10 @@ jobs:
           set -euo pipefail
 
           VERSION="${TAG#v}"
-          SNAP="Gryt-Chat-${VERSION}-linux-amd64${SUFFIX}.snap"
+          SNAP="Gryt-Chat-${VERSION}-linux-amd64.snap"
 
           # By name, not a glob. Both variants are on the release and they differ
-          # only by the suffix.
+          # only by the suffix, so `find -print -quit` let the filesystem pick.
           gh release download "$TAG" \
             --repo "$OWNER/$REPO" \
             --pattern "$SNAP" \
@@ -218,7 +201,7 @@ jobs:
           fi
 
           VERSION="${TAG#v}"
-          SNAP="Gryt-Chat-${VERSION}-linux-amd64${SUFFIX}.snap"
+          SNAP="Gryt-Chat-${VERSION}-linux-amd64.snap"
 
           if [[ ! -f "$SNAP" ]]; then
             echo "::error::$SNAP was not downloaded from $TAG."

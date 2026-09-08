@@ -1,20 +1,11 @@
-# Keep the log files from growing without end.
-#
-# Docker's default json-file driver has no size limit unless the daemon is
-# configured with one, and most are not. A server that runs for a year writes
-# until the disk is full, and on a box where the database sits on the same disk
-# that is not only a logging problem.
-#
-# 20MB across two files per container, so a busy service keeps something like a
-# day of history and a quiet one keeps months. Raise it if you would rather
-# have more; the point is that there is a number rather than none.
-#
-# Deliberately json-file rather than journald. journald needs journald on the
-# host, and Docker refuses to start a container with it on a system without
-# systemd — Alpine, a minimal container host, WSL with systemd off. A logging
-# choice should not be the thing that stops the stack coming up. The project's
-# own deployment uses journald, and it does that in an override file of its own
-# rather than here (gryt#198).
+# Keep the log files from growing without end. Docker's json-file driver has no
+# size limit unless the daemon sets one, and most do not.
+
+# 20MB across two files per container, so a busy service keeps about a day and a
+# quiet one months. The point is that there is a number rather than none.
+
+# json-file rather than journald, because journald needs systemd on the host and
+# Docker refuses the container without it. Gryt's own box uses an override (#198).
 x-logging: &default-logging
   driver: json-file
   options:
@@ -22,9 +13,8 @@ x-logging: &default-logging
     max-file: "2"
 
 services:
-  # Web client (dev/local only — won't authenticate against auth.gryt.chat in production)
-  # Use for local development or with your own Keycloak.
-  # Enable with: docker compose --profile web up -d
+  # Web client, dev and local only: it will not authenticate against
+  # auth.gryt.chat unless your domain is a registered redirect URI.
   client:
     build:
       context: ../..

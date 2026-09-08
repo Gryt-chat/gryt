@@ -395,8 +395,7 @@ nobody browses. Don't run the skills over them. The rule below applies instead.
 
 ## Comments
 
-**Default to none. Two lines when you need one. Longer only to stop a specific mistake,
-and then say which mistake.**
+**Default to none. Two lines when you need one, and never more than two.**
 
 This reverses what this file used to say. It claimed the comments here were load-bearing
 and long on purpose, and that was true of some of them and became an excuse for the rest.
@@ -405,6 +404,11 @@ The result is code you have to read around.
 The scale of it, measured on 2026-09-07: `packages/mobile` carries **8517 comment lines
 against 37520 lines of TypeScript**, so 23% of it. `src/connection/useConnection.ts` is
 39% comments and `src/shell/tabs.ts` is 70%.
+
+`scripts/check-comment-length.mjs` enforces the two in `packages/server` and
+`packages/client`, and runs in CI in both. It counts lines carrying words, so `/**`, `*/`
+and a `── section ──` rule are free. Its `NOT_YET` list names the directories still to be
+swept, and that list only ever shrinks — take an entry out, never add one.
 
 Delete on sight:
 
@@ -416,7 +420,7 @@ Delete on sight:
   sensible. If it is the obvious thing, it needs no defence.
 - **Restated types.** `/** The user's name. */` above `name: string`.
 
-Keep, and let it run past two lines if it has to:
+Keep, in two lines:
 
 - **A trap.** Something that looks wrong and is not, or looks fine and is not. `btoa` being
   unsafe above `0x7f` on Hermes is the example that keeps earning its place — it is why
@@ -426,6 +430,9 @@ Keep, and let it run past two lines if it has to:
   directory is worth one line, because otherwise a new module is silently unchecked.
 - **A decision that will otherwise be re-litigated.** Not the history of it — the
   conclusion, once, where the code is.
+
+When two lines genuinely will not carry it, the rest goes in the task, in
+`packages/docs`, or into a check script that fails when the property stops holding.
 
 The test: **would somebody make a mistake without it?** Not "is this interesting", not
 "did I think hard about this". If nobody trips without it, it goes in the commit message,

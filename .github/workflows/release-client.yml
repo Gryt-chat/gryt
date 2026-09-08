@@ -36,17 +36,14 @@ permissions:
   # For the `gh workflow run` at the end of publish-release, which starts
   # publish-snap.yml. Dispatching a workflow is an Actions write.
   actions: write
-  # Both for `actions/attest-build-provenance`, which signs a statement about
-  # this build into sigstore's public transparency log (GRYT-723). `id-token`
-  # is how the runner proves to sigstore which workflow it is, and
-  # `attestations` is what lets it store the result against this repository.
+  # Both for `actions/attest-build-provenance` (GRYT-723): `id-token` proves to sigstore which
+  # workflow this is, and `attestations` lets it store the result against this repository.
   id-token: write
   attestations: write
 
 concurrency:
-  # Shared with release-server.yml on purpose. Both workflows commit to the same
-  # branch, so a per-workflow group only serialised releases of the same kind and
-  # let a client release and a server release race for the push.
+  # Shared with release-server.yml on purpose: both commit to the same branch, so a
+  # per-workflow group let a client release and a server release race for the push.
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
@@ -79,16 +76,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Clone from the URL rather than resolving the recorded gitlink. A
-          # pointer at a commit that is not on the remote kills the job before
-          # it reaches the code that would repair it — the same failure that
-          # forced #48 to be done by hand. All four are moved to their own main
-          # below, so the recorded value is discarded anyway.
-          #
-          # This list and the one in "Move release submodules into place"
-          # have to hold the same paths. A path in the second but not the first
-          # is never cloned, so the fetch there runs against a directory that is
-          # not a repository and takes the job down.
+          # Clone from the URL rather than the recorded gitlink: a pointer at a commit not on
+          # the remote kills the job. This list and "Move release submodules" must match.
           for path in packages/client packages/server packages/sfu packages/image-worker; do
             if [[ -e "$path/.git" ]]; then
               continue
@@ -135,41 +124,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          # The client is released from its main, not from the superproject's
-          # gitlink, because the gitlink only moves when update-submodules.yml
-          # runs. A dispatch that never arrived, or a sweep still in flight,
-          # would otherwise ship a client that disagrees with the release.
+          # The client is released from its main, not the superproject's gitlink, which only
+          # moves when update-submodules.yml runs and could ship a disagreeing client.
           git -C packages/client fetch origin main
           git -C packages/client checkout -B main origin/main
           echo "packages/client -> $(git -C packages/client rev-parse --short HEAD) (main)"
 
-          # The three embedded services come from their newest release tag
-          # instead. They used to come from main as well, and main is routinely
-          # a commit or two past the last release, which meant the embedded
-          # binaries were built from an untagged commit.
-          #
-          # build-embedded-server.mjs versions each artefact with `git describe`
-          # when HEAD is not exactly on a tag, so those builds reported
-          # "1.0.48-1-gafa06e4" rather than "1.0.49". versionCheck.ts then
-          # compares that against the newest GitHub release with a parser that
-          # does `(part || 0)`, and Number("48-1-gafa06e4") is NaN, which is
-          # falsy, so the patch component collapsed to 0 and the whole thing
-          # compared as 1.0.0. Every desktop-hosted server reported an update
-          # that installing could never clear, because the next build was
-          # untagged too. GRYT-306.
-          #
-          # Which tag depends on the channel being released (GRYT-724). This
-          # used to be stable-only on every channel, so a beta of the client
-          # carried the newest stable server — and a feature whose halves land
-          # in the client and the server shipped a release apart. 1.7.0-beta.1
-          # went out with the role-gated call button from GRYT-712 and an
-          # embedded server that did not publish the permission it asks about.
-          #
-          # The comment here used to say a prerelease "would put the nag
-          # straight back", because versionCheck resolved `latest` from the
-          # newest non-prerelease release. GRYT-722 changed that: a server on a
-          # beta now places itself on the beta channel and compares against the
-          # newest beta, so the reason no longer holds.
+          # The three embedded services come from their newest release tag, not main: an
+          # untagged build reports `git describe` and versionCheck compared it as 1.0.0.
+
+          # Which tag depends on the channel (GRYT-724): stable-only shipped a beta client
+          # with a server that did not publish the permission it asks about.
           if [[ "${{ github.event.inputs.channel }}" == "beta" ]]; then
             # Plain releases too, so a stable newer than the last beta wins.
             tag_pattern='v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?'
@@ -180,11 +145,8 @@ jobs:
           for path in packages/server packages/sfu packages/image-worker; do
             git -C "$path" fetch origin main --tags --force
 
-            # versionsort.suffix is what makes -v:refname semver precedence
-            # rather than string order. Measured on git 2.50.1: without it
-            # v1.6.15-beta.1 sorts above v1.6.15, so the beta would be picked
-            # over the release it led to. The stable-only filter used to hide
-            # that; it does not any more.
+            # versionsort.suffix is what makes -v:refname semver precedence rather than
+            # string order: without it v1.6.15-beta.1 sorts above v1.6.15.
             tag=$(git -C "$path" \
                 -c versionsort.suffix=-alpha \
                 -c versionsort.suffix=-beta \
@@ -224,13 +186,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # The channel is picked at dispatch rather than read off the branch.
-          # Deriving it from github.ref_name implied that a beta release built
-          # from a beta branch, which was never true: the client submodule is
-          # force-moved to client:main a few steps above, so beta and stable
-          # always built identical client code. Only the labelling differed,
-          # and the beta branch's stale server and SFU gitlinks made the
-          # embedded binaries silently disagree with the client.
+          # The channel is picked at dispatch rather than read off the branch. Deriving it
+          # from github.ref_name implied a beta branch built beta code, which was never true.
           CHANNEL="${{ github.event.inputs.channel }}"
 
           if [[ "$CHANNEL" != "latest" && "$CHANNEL" != "beta" ]]; then
@@ -352,14 +309,8 @@ jobs:
               ;;
           esac
 
-          # Refuse to publish behind what has already shipped. release.json used
-          # to be per-branch: main's copy tracked stable releases while beta's
-          # tracked the beta line. Moving the channel to a dispatch input merged
-          # those two lines, and the first release from main computed
-          # 1.3.0-beta.2 while v1.3.1-beta.1 already existed.
-          #
-          # Only base versions are compared, so beta.N increments within the same
-          # base are still fine — it is the x.y.z going backwards that is wrong.
+          # Refuse to publish behind what has already shipped: merging the two release lines
+          # computed 1.3.0-beta.2 while v1.3.1-beta.1 existed. Base versions only.
           HIGHEST_BASE="$(git tag --list 'v*' | sed 's/^v//; s/-.*$//' | sort -V | tail -n 1 || true)"
 
           if [[ -n "$HIGHEST_BASE" && "$BASE_VERSION" != "$HIGHEST_BASE" ]]; then
@@ -532,14 +483,8 @@ jobs:
 
           cat .release/manifest.json
 
-      # Every other repository in the org gets its release notes from
-      # `generate_release_notes: true`, which lists the pull requests merged
-      # since the previous tag. That is useless here: the superproject's own
-      # commits between two releases are submodule bumps and a version bump, and
-      # the work is in four repositories GitHub cannot see across.
-      #
-      # Runs before the tag is pushed, so the newest stable tag is still the
-      # previous release rather than this one.
+      # `generate_release_notes: true` is useless here: the superproject's commits between
+      # releases are submodule bumps. Runs before the tag, so the newest tag is the previous.
       - name: Build release notes
         shell: bash
         run: |
@@ -548,10 +493,8 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           PREVIOUS_MANIFEST="${RUNNER_TEMP}/previous-manifest.json"
 
-          # The previous stable release, whichever channel this one is. A beta
-          # then lists everything since the last thing most people are running,
-          # which is what patch-notes-style.md asks of the written note too — a
-          # note covering only beta.4..beta.5 describes a build nobody is on.
+          # The previous stable release, whichever channel this is, so a beta lists everything
+          # since the last thing most people are running.
           PREVIOUS_TAG="$(git tag --list 'v*' --sort=-v:refname \
             | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
             | grep -vx "v${VERSION}" \
@@ -563,9 +506,8 @@ jobs:
             echo "Comparing against $PREVIOUS_TAG"
             ARGS+=(--previous "$PREVIOUS_MANIFEST")
           else
-            # Only reachable for a release line older than the manifest itself.
-            # Worth degrading rather than failing: a release with no list of
-            # changes still installs.
+            # Only reachable for a release line older than the manifest. Worth degrading
+            # rather than failing: a release with no list of changes still installs.
             echo "No previous manifest found — the notes will say so."
             rm -f "$PREVIOUS_MANIFEST"
           fi
@@ -583,17 +525,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # This branch can move under us between checkout and here — a merged PR,
-          # or a server release that got past the concurrency group. Rebasing our
-          # commit is not enough: release.json is four lines and the server writes
-          # "server" while we write "version", so the two hunks overlap and a
-          # replay conflicts even though the edits are independent.
-          #
-          # So re-apply what we own onto whatever the branch holds now, and retry.
-          # A reset reverts the tracked manifest, so keep a copy; the packages/client
-          # working tree is untouched by the reset, so re-staging it re-records the
-          # same commit. The release.json edit matches "Update monorepo release.json"
-          # above; keep them in step.
+          # This branch can move between checkout and here, and a replay conflicts because the
+          # server writes "server" where we write "version". Re-apply what we own and retry.
           MANIFEST_BACKUP="${RUNNER_TEMP}/release-manifest.json"
           cp .release/manifest.json "$MANIFEST_BACKUP"
 
@@ -617,12 +550,8 @@ jobs:
           outcome=""
           for attempt in 1 2 3 4 5; do
             apply_release_metadata
-            # Every submodule moved above, so the tag records what was built.
-            # build-electron checks out the tag and initialises submodules from
-            # its gitlinks: a path left out here is built from whatever main
-            # happened to point at, while manifest.json names the commit the
-            # release actually chose. That disagreement is the bug #51 fixed for
-            # server and sfu, and it applies to the worker for the same reason.
+          # Every submodule moved above, so the tag records what was built: a path left out is
+          # built from whatever main pointed at while manifest.json names another commit.
             git add release.json .release/manifest.json \
               packages/client packages/server packages/sfu packages/image-worker
 
@@ -650,14 +579,8 @@ jobs:
             exit 1
           fi
 
-          # Tagged after the push succeeds, so the tag can never name a commit that
-          # is not on the branch.
-          #
-          # Same idempotency as `Tag server repo`: a re-dispatch of a version
-          # that already got this far finds its own tag on the remote, and that
-          # used to fail the step on "tag already exists". Accept the tag when
-          # it already names this commit; refuse to move one that names another.
-          # GRYT-300.
+          # Tagged after the push succeeds, so a tag can never name a commit not on the
+          # branch. Accept a tag already naming this commit; refuse to move one (GRYT-300).
           HEAD_SHA="$(git rev-parse HEAD)"
           REMOTE_SHA="$(git ls-remote origin "refs/tags/v${VERSION}" | awk '{ print $1 }')"
 
@@ -696,11 +619,8 @@ jobs:
             echo "release_type=prerelease" >> "$GITHUB_OUTPUT"
           fi
 
-      # Created as a draft so nothing sees it until every platform has uploaded.
-      # The builds finish minutes apart — macOS trails Windows by about seven,
-      # because it signs and notarises first — and a client that checks in that
-      # gap gets a 404 on its own channel file while another platform is already
-      # updating happily. The publish-release job below flips it live.
+      # Created as a draft so nothing sees it until every platform has uploaded: the builds
+      # finish minutes apart, and a client checking in that gap 404s on its channel file.
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -720,45 +640,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Two builds per platform. `slim` leaves the embedded server out,
-        # which is 34MB off the installer, and is what the site offers as
-        # the default download. See scripts/variant.mjs in the client.
+        # Two builds per platform. `slim` leaves the embedded server out, 34MB off the
+        # installer, and is what the site offers as the default download.
         variant:
           - full
           - slim
         os:
           - ubuntu-latest
           - macos-latest
-          # Pinned, do not move back to windows-latest without checking first.
-          # windows-latest now ships Visual Studio 18, and node-gyp 11.5.0 cannot
-          # parse its version — it reports `unknown version "undefined"` and
-          # refuses the toolchain even when handed it directly via VCINSTALLDIR.
-          # That broke the better-sqlite3 build in the embedded server, verified
-          # with windows-build-probe.yml: identical code and step order failed on
-          # windows-latest and passed on windows-2022. See GRYT-26.
-          #
-          # That reason no longer applies. The server and the image worker are on
-          # node:sqlite, so node-gyp is out of this workflow entirely and nothing
-          # in the embedded server build compiles C++ any more.
-          #
-          # The pin stays regardless, because it was never tested against what
-          # still needs a compiler here: native/build.bat, which builds the audio
-          # and screen capture helpers. That uses MSVC directly rather than
-          # through node-gyp, so the version-parsing bug probably does not apply
-          # — but probably is not tried, and a Windows build that only breaks
-          # during a release is an expensive way to find out. Re-run the probe
-          # against build.bat before unpinning.
+          # Pinned; do not move back to windows-latest without re-running the probe. node-gyp
+          # is out of this path now, but native/build.bat has never been tried against VS 18.
           - windows-2022
 
     runs-on: ${{ matrix.os }}
 
-    # publish-release needs this job, and a matrix leg failing fails the job
-    # even with fail-fast off. Without this, a bug in the slim path would
-    # block a release the full builds had already succeeded at. Slim is
-    # additive: when it breaks, a release is what it was before this existed.
-    #
-    # Worth removing once a release has proven the slim path, so that a
-    # silently missing slim artifact stops being possible.
+    # publish-release needs this job, and a matrix leg failing fails the job. Slim is
+    # additive; worth removing once a release has proven it, so a missing artifact fails.
     continue-on-error: ${{ matrix.variant == 'slim' }}
 
     env:
@@ -771,9 +668,8 @@ jobs:
       BASE_VERSION: ${{ needs.prepare-release.outputs.base_version }}
       CHANNEL: ${{ needs.prepare-release.outputs.channel }}
       RELEASE_TYPE: ${{ needs.prepare-release.outputs.release_type }}
-      # 'true' only once the Store submission secrets exist. The Store steps
-      # below gate on it, so they stay dormant — and a release stays green —
-      # until Partner Center is wired up. GRYT-960.
+      # 'true' only once the Store submission secrets exist. The Store steps gate on it, so
+      # they stay dormant and a release stays green until Partner Center is wired up.
       HAS_STORE_CREDS: ${{ secrets.AZURE_AD_APPLICATION_CLIENT_ID != '' }}
 
     steps:
@@ -883,11 +779,8 @@ jobs:
             go mod download
           fi
 
-      # build-embedded-server.mjs runs `npm run build` in this directory, and
-      # the worker's build script is a bare `tsc`. Without this the compiler
-      # isn't on disk and the embedded server build fails on a fresh checkout.
-      # The install of the worker's *runtime* dependencies is a separate thing
-      # the build script does, into its own output directory.
+      # build-embedded-server.mjs runs `npm run build` here and the worker's script is a bare
+      # `tsc`, so without this the compiler is not on disk on a fresh checkout.
       - name: Install image worker dependencies
         if: matrix.variant == 'full'
         working-directory: packages/image-worker
@@ -910,20 +803,8 @@ jobs:
           set -euo pipefail
           npx eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0
 
-      # Still required, but no longer for the reason it was added. The embedded
-      # server used to run `npm rebuild better-sqlite3 --build-from-source`
-      # here, and node-gyp needed the VCINSTALLDIR this action sets. Both the
-      # server and the image worker are on node:sqlite now, so nothing in the
-      # embedded server build compiles C++ any more.
-      #
-      # What still needs a toolchain is "Build native Windows binaries" below —
-      # native/build.bat compiles the audio and screen capture helpers. Delete
-      # this step and that one breaks, so it stays.
-      #
-      # Whether the windows-2022 pin can be lifted is a separate question. It
-      # was pinned because node-gyp 11.5.0 could not parse Visual Studio 18, and
-      # node-gyp is no longer in this path — but native/build.bat has not been
-      # tried against VS 18. That is what GRYT-26's probe is for.
+      # Still required, but for "Build native Windows binaries" below rather than node-gyp:
+      # native/build.bat compiles the audio and screen helpers. Delete it and that breaks.
       - name: Set up MSVC Build Tools Windows
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
@@ -953,16 +834,8 @@ jobs:
             exit 1
           fi
 
-          # sharp is what this checks now. better-sqlite3 was the other one, and
-          # it is gone: the server and the image worker both moved to
-          # node:sqlite, which is part of the runtime and cannot be missing from
-          # a bundle. Leaving the old check here would fail every release.
-          #
-          # sharp is still worth asserting. It ships as a per-platform optional
-          # dependency that npm resolves by os/cpu, so a bundle built on the
-          # wrong host, or an install that quietly skipped optional deps, gets a
-          # server that starts and then throws the first time anyone uploads an
-          # image.
+          # sharp is what this checks now: it ships as a per-platform optional dependency, so
+          # a bundle built on the wrong host throws the first time anyone uploads an image.
           if [[ ! -d build/embedded-server/server/node_modules/sharp ]]; then
             echo "Missing embedded sharp dependency."
             echo "The packaged app will crash with: Cannot find module 'sharp'"
@@ -1093,19 +966,10 @@ jobs:
             ARGS+=(-t "$TAG")
           done
 
-          # A push that reaches GHCR and is refused is usually the secondary
-          # rate limit rather than anything about this build. That is what took
-          # v1.5.0-beta.1 down: the version tag had already gone up and
-          # latest-beta came back 403, so the image was half published.
-          #
-          # Retried rather than failed, because giving up costs the whole
-          # release and not just the tag — this job failing skips Publish
-          # release, and the release then sits as a draft nobody can install.
-          # Layer cache makes a second attempt cheap.
-          # The digest is written out so the image can be attested by it
-          # (GRYT-760). GRYT-723 attested the installers on the release and left
-          # this, which is the version of the client anybody self-hosting the
-          # web build actually runs.
+          # A push refused by GHCR is usually the secondary rate limit; v1.5.0-beta.1 was half
+          # published. Retried, because giving up leaves the release a draft nobody installs.
+
+          # The digest is written out so the image can be attested by it (GRYT-760).
           METADATA="${RUNNER_TEMP}/buildx-metadata.json"
 
           pushed=""
@@ -1147,9 +1011,8 @@ jobs:
         with:
           subject-name: ${{ env.DOCKER_IMAGE }}
           subject-digest: ${{ steps.docker.outputs.image_digest }}
-          # Stored alongside the image in GHCR as well as in the log, so
-          # `gh attestation verify oci://...` works without knowing which
-          # repository built it.
+          # Stored alongside the image in GHCR as well as in the log, so `gh attestation
+          # verify oci://...` works without knowing which repository built it.
           push-to-registry: true
 
       - name: Package and publish Electron app
@@ -1163,14 +1026,8 @@ jobs:
           CHANNEL: ${{ env.CHANNEL }}
           RELEASE_TYPE: ${{ env.RELEASE_TYPE }}
           VERSION: ${{ env.VERSION }}
-          # Windows signing. Empty until a certificate exists, and empty is
-          # fine: scripts/sign-windows.cjs signs nothing without them and
-          # warns that Smart App Control will block the result.
-          #
-          # Whichever CA is bought also needs its own credentials here, next
-          # to these. They differ per CA and the signing tools read them from
-          # the environment themselves, so nothing is passed through Gryt's
-          # code. See the hook for the two likely commands. GRYT-848.
+          # Windows signing, empty until a certificate exists: sign-windows.cjs signs nothing
+          # and warns that Smart App Control will block the result. See GRYT-848.
           GRYT_WIN_SIGN_TOOL: ${{ secrets.WINDOWS_SIGN_TOOL }}
           GRYT_WIN_SIGN_ARGS: ${{ secrets.WINDOWS_SIGN_ARGS }}
         run: |

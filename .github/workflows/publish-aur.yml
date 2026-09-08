@@ -24,25 +24,8 @@ concurrency:
 
 jobs:
   publish-aur:
-    name: Publish ${{ matrix.variant }} to the AUR
+    name: Publish to the AUR
     runs-on: ubuntu-latest
-
-    # Both variants. The AUR creates the repository on first push, so the slim
-    # package needs no account work -- unlike a snap name, which is global.
-    #
-    # Independent jobs: slim failing must not stop full publishing.
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - variant: full
-            pkg: gryt-chat-bin
-            pkgbuild: PKGBUILD
-            suffix: ""
-          - variant: slim
-            pkg: gryt-chat-slim-bin
-            pkgbuild: PKGBUILD.slim
-            suffix: "-slim"
 
     # A `release` event does not know which dispatch produced it, so the channel
     # is read off the tag. Betas do not go in `gryt-chat-bin`.
@@ -57,9 +40,7 @@ jobs:
       OWNER: Gryt-chat
       REPO: gryt
       TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
-      AUR_PKG: ${{ matrix.pkg }}
-      PKGBUILD_FILE: ${{ matrix.pkgbuild }}
-      SUFFIX: ${{ matrix.suffix }}
+      AUR_PKG: gryt-chat-bin
 
     steps:
       - name: Check out the AUR package
@@ -107,7 +88,7 @@ jobs:
           set -euo pipefail
 
           VERSION="${TAG#v}"
-          DEB="Gryt-Chat-${VERSION}-linux-amd64${SUFFIX}.deb"
+          DEB="Gryt-Chat-${VERSION}-linux-amd64.deb"
 
           gh release download "$TAG" \
             --repo "$OWNER/$REPO" \
@@ -121,16 +102,16 @@ jobs:
           # before this file existed fall back to main; without that the first
           # release after it landed could not publish at all.
           at() {
-            gh api "repos/$OWNER/$REPO/contents/packaging/aur/${PKGBUILD_FILE}?ref=$1" \
+            gh api "repos/$OWNER/$REPO/contents/packaging/aur/PKGBUILD?ref=$1" \
               --jq '.content' 2>/dev/null | base64 -d
           }
 
           if at "$TAG" > pkgbuild.candidate && [[ -s pkgbuild.candidate ]]; then
-            echo "Using packaging/aur/${PKGBUILD_FILE} from $TAG."
+            echo "Using packaging/aur/PKGBUILD from $TAG."
           elif at main > pkgbuild.candidate && [[ -s pkgbuild.candidate ]]; then
-            echo "$TAG predates packaging/aur/${PKGBUILD_FILE}. Using main's."
+            echo "$TAG predates packaging/aur/PKGBUILD. Using main's."
           else
-            echo "::error::No packaging/aur/${PKGBUILD_FILE} at $TAG or on main."
+            echo "::error::No packaging/aur/PKGBUILD at $TAG or on main."
             exit 1
           fi
 

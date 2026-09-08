@@ -1,8 +1,8 @@
 name: Repo checks
 
 # Small checks on things nothing else reads: the skills CLAUDE.md requires, the
-# winget manifests, which are otherwise only validated at submission, and the two
-# AUR PKGBUILDs, which are the same package twice and drift silently.
+# winget manifests, which are otherwise only validated at submission, and the
+# Homebrew cask, whose arch stanza fails at the point somebody opens the app.
 
 on:
   pull_request:
@@ -10,11 +10,9 @@ on:
       - .claude/CLAUDE.md
       - .claude/skills/**
       - packaging/winget/**
-      - packaging/aur/**
       - packaging/homebrew/**
       - .github/scripts/check-skills-shipped.mjs
       - .github/scripts/check-winget-manifests.mjs
-      - .github/scripts/check-aur-pkgbuilds.mjs
       - .github/scripts/check-homebrew-casks.mjs
       - .github/workflows/repo-checks.yml
 
@@ -24,7 +22,6 @@ on:
       - .claude/CLAUDE.md
       - .claude/skills/**
       - packaging/winget/**
-      - packaging/aur/**
       - packaging/homebrew/**
 
   workflow_dispatch:
@@ -45,5 +42,4 @@ jobs:
           node-version: 24
       - run: node .github/scripts/check-skills-shipped.mjs
       - run: node .github/scripts/check-winget-manifests.mjs
-      - run: node .github/scripts/check-aur-pkgbuilds.mjs
       - run: node .github/scripts/check-homebrew-casks.mjs

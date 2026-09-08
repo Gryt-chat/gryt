@@ -21,22 +21,8 @@ concurrency:
 
 jobs:
   publish-homebrew:
-    name: Publish the ${{ matrix.variant }} Homebrew cask
+    name: Publish the Homebrew cask
     runs-on: ubuntu-latest
-
-    # Both variants. The tap is ours, so a second cask needs no account work.
-    #
-    # Independent jobs: slim failing must not stop full publishing.
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - variant: full
-            cask: gryt-chat
-            suffix: ""
-          - variant: slim
-            cask: gryt-chat-slim
-            suffix: "-slim"
 
     # A `release` event does not know which dispatch produced it, so the channel
     # is read off the tag.
@@ -52,8 +38,7 @@ jobs:
       REPO: gryt
       TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
       TAP_REPO: Gryt-chat/homebrew-tap
-      CASK: ${{ matrix.cask }}
-      SUFFIX: ${{ matrix.suffix }}
+      CASK: gryt-chat
 
     steps:
       - name: Check out the tap
@@ -91,7 +76,7 @@ jobs:
             --pattern 'SHA256SUMS.txt' --dir .
 
           sum_for() {
-            local dmg="Gryt-Chat-${VERSION}-mac-$1${SUFFIX}.dmg"
+            local dmg="Gryt-Chat-${VERSION}-mac-$1.dmg"
             local sum
 
             sum="$(awk -v f="$dmg" '$2 == f { print $1 }' SHA256SUMS.txt)"

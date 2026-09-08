@@ -15,8 +15,7 @@ optdepends=(
   'avahi: LAN server discovery via mDNS'
 )
 provides=('gryt-chat')
-# Both variants install /opt/Gryt Chat, so only one of them at a time.
-conflicts=('gryt-chat' 'gryt-chat-slim-bin')
+conflicts=('gryt-chat')
 options=('!strip' '!debug')
 source=("https://github.com/Gryt-chat/gryt/releases/download/v${pkgver}/Gryt-Chat-${pkgver}-linux-amd64.deb")
 sha256sums=('SKIP')

@@ -51,9 +51,9 @@
 
 ## Self-hosting
 
-See the **[Quick Start guide](https://docs.gryt.chat/docs/guide/quick-start)** to self-host Gryt with Docker Compose — two files, one command, no cloning required.
+See the **[Quick Start guide](https://docs.gryt.chat/docs/host/quick-start)** to self-host Gryt with Docker Compose — two files, one command, no cloning required.
 
-Or manage servers from a terminal with the **[Gryt CLI](https://docs.gryt.chat/docs/cli)**, which writes the compose file for you:
+Or manage servers from a terminal with the **[Gryt CLI](https://docs.gryt.chat/docs/host/cli)**, which writes the compose file for you:
 
 ```bash
 curl -fsSL https://get.gryt.chat | sh
@@ -75,9 +75,9 @@ Full docs at **[docs.gryt.chat](https://docs.gryt.chat)** — architecture, conf
 
 ## Contributing
 
-See the [contributing guide](https://docs.gryt.chat/docs/guide/contributing) for how to get involved.
+See the [contributing guide](https://docs.gryt.chat/docs/about/contributing) for how to get involved.
 
-Nothing security-relevant merges without being read line by line — the SFU, authentication, identity, the image worker and the data layer only change through a reviewed pull request. See the [AI policy](https://docs.gryt.chat/docs/guide/ai) for the exact paths, how to verify it, and the disclosure rules for contributions.
+Nothing security-relevant merges without being read line by line — the SFU, authentication, identity, the image worker and the data layer only change through a reviewed pull request. See the [AI policy](https://docs.gryt.chat/docs/about/ai) for the exact paths, how to verify it, and the disclosure rules for contributions.
 
 ## Sponsors
 

@@ -1,8 +1,7 @@
 name: Publish the Homebrew cask
 
 # packaging/homebrew/gryt-chat.rb is the source of truth. It is copied into the
-# tap, so a packaging change is a reviewed pull request rather than a push
-# nobody sees.
+# tap, so a packaging change is a reviewed pull request rather than a push.
 
 on:
   release:
@@ -90,9 +89,8 @@ jobs:
             printf '%s' "$sum"
           }
 
-          # Releases before Intel support have no x64 DMG, so a dispatch for one
-          # of those tags fails here rather than publishing a cask that 404s for
-          # half the people who install it.
+          # Releases before Intel support have no x64 DMG, so a dispatch for one of
+          # those tags fails here rather than publishing a cask that 404s.
           SUM_ARM="$(sum_for arm64)"
           SUM_INTEL="$(sum_for x64)"
 
@@ -115,9 +113,8 @@ jobs:
           mkdir -p tap/Casks
           cp cask.candidate "tap/Casks/${CASK}.rb"
 
-          # Anchored on the label rather than on a column, so the indentation of
-          # the continuation line is not load-bearing, and so none of these can
-          # match the same text inside the url further down the file.
+          # Anchored on the label rather than a column, so the continuation line's
+          # indentation is not load-bearing and none of these match inside the url.
           sed -i \
             -e "s/^  version \".*\"/  version \"${VERSION}\"/" \
             -e "s/^\( *sha256 arm: *\)\".*\",/\\1\"${SUM_ARM}\",/" \
@@ -155,9 +152,8 @@ jobs:
           git commit -m "${CASK} ${VERSION}"
           git push
 
-      # GRYT-971 is what a publisher that only checks its own upload costs. Read
-      # back over plain HTTPS, the same view a `brew update` gets, so this cannot
-      # pass on something only the pusher can see.
+      # GRYT-971 is what a publisher that only checks its own upload costs. Read back
+      # over plain HTTPS, the same view a `brew update` gets.
       - name: Check the tap is serving it
         if: always() && steps.checkout.outputs.active == 'true'
         shell: bash

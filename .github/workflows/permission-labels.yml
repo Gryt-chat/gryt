@@ -1,22 +1,17 @@
 name: Permission labels
 
-# Checks that every permission the server ships has a label in the client's
-# role editor, and that the client has no labels for permissions the server
-# dropped.
-#
-# This lives in the superproject because nowhere else can see both sides. The
-# server owns the list and the client owns the wording — deliberately, since
-# how a permission reads is not the server's business — so each repository's
-# CI is green while the two have already drifted. When they have, the role
-# editor draws the permission as a bare id under "Newer than this client". It
-# saves correctly; it just reads as a client that is out of date. Twice now:
-# upload_avatar_image in GRYT-866 and set_activity in GRYT-929.
+# Checks that every permission the server ships has a label in the client's role
+# editor, and that the client has none for permissions the server dropped.
+
+# In the superproject because nowhere else can see both sides: the server owns the
+# list and the client the wording, so each repository's CI is green as they drift.
+
+# The role editor then draws the permission as a bare id under "Newer than this
+# client". Twice: upload_avatar_image in GRYT-866, set_activity in GRYT-929.
 
 on:
-  # Time-based for the same reason Avatar parity is. The commit that changes
-  # which two versions ship together is the gitlink bump from Update
-  # Submodules, and that commit carries [skip ci], so anything hung off `push`
-  # would skip exactly the commits worth checking.
+  # Time-based for the same reason Avatar parity is. The commit that changes which
+  # two versions ship together is a gitlink bump carrying [skip ci].
   schedule:
     - cron: "41 6 * * *"
 
@@ -52,16 +47,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Cloned from the URL at main rather than resolved from the recorded
-          # gitlink, matching Avatar parity. What ships is each repository's
-          # own main; the gitlink is a snapshot of that, usually current and
-          # sometimes an hour behind.
-          #
-          # One file each, because that is all the check reads. Blobless plus a
-          # path-limited checkout fetches those two blobs and nothing else.
-          # Repo and path kept on one line each rather than in an
-          # associative array, so this reads the same on the bash 3.2 a
-          # maintainer has locally as it does on the runner.
+          # Cloned from the URL at main rather than resolved from the gitlink,
+          # which is a snapshot of it, usually current and sometimes an hour behind.
+
+          # One file each, because that is all the check reads. Repo and path on one
+          # line each rather than an associative array, for bash 3.2 locally.
           for entry in \
             "server:src/constants/permissions.ts" \
             "client:src/packages/socket/src/lib/permissions.ts"

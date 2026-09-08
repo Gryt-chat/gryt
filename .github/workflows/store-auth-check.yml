@@ -1,12 +1,12 @@
 name: Store auth check
 
-# A hand-run check that the Microsoft Store publishing credentials work, and a
-# way to learn what msstore does with the sellerId. Reconfigure refuses to run
-# non-interactively without one, so we hand it a placeholder and then look at
-# what `msstore info` stored and whether `apps list` / `apps get` actually work.
-# If the account's apps come back, the app-credential auth is what matters and
-# the seller value is not enforced; if they fail, the error tells us what it
-# wants. Prints stored config (tenant/seller/client), never the client secret.
+# A hand-run check that the Microsoft Store publishing credentials work, and a way
+# to learn what msstore does with the sellerId.
+
+# Reconfigure refuses to run non-interactively without one, so it gets a placeholder
+# and then `msstore info` and `apps list` say whether the seller value is enforced.
+
+# Prints the stored config — tenant, seller, client — and never the client secret.
 
 on:
   workflow_dispatch:

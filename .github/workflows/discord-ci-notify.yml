@@ -1,12 +1,10 @@
 name: Discord CI notification
 
-# Reports failed workflow runs to #ci in Discord, and the recovery when one
-# goes green again. Implementation lives in Gryt-chat/.github so all repos
-# share one copy. Needs the org secret DISCORD_CI_WEBHOOK_URL.
-#
-# Workflows are listed by name rather than left to a wildcard: GitHub's docs
-# don't say whether omitting `workflows` means all of them, and an unlisted
-# workflow notifies nobody. Add new workflows here as you add them.
+# Reports failed workflow runs to #ci in Discord, and the recovery when one goes
+# green. Implementation lives in Gryt-chat/.github; needs DISCORD_CI_WEBHOOK_URL.
+
+# Workflows are listed by name rather than left to a wildcard, because an unlisted
+# one notifies nobody. Add new workflows here as you add them.
 
 on:
   workflow_run:

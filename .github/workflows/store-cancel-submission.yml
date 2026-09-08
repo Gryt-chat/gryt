@@ -1,10 +1,10 @@
 name: Store cancel pending submission
 
-# One-off / incident tool. Deletes the current pending Microsoft Store
-# submission for the Gryt listing — used when a release auto-submitted a build
-# that must not go live (a client cut ahead of its server, v1.9.23). Hand-run.
-# Placeholder sellerId for the same reason as the release step: the submission
-# API is scoped by the app credentials, not a seller.
+# One-off incident tool, hand-run. Deletes the pending Microsoft Store submission
+# for the Gryt listing — used when a client was cut ahead of its server, v1.9.23.
+
+# Placeholder sellerId for the same reason as the release step: the submission API
+# is scoped by the app credentials, not a seller.
 
 on:
   workflow_dispatch:

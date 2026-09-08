@@ -205,7 +205,36 @@ update_image() {
     echo "[$(date -Is)] [$service] deployed ${after:7:12}"
 }
 
+# ── The one thing the compose file cannot state ──────────────────────────
+
+# The console runs as uid 1000 and writes announcements.yaml into the config
+# directory. Docker does not chown a bind mount, so a root-owned directory on
+# the host leaves it unable to write the only file it exists to write.
+#
+# That is what happened: the write threw EACCES, the throw killed the process,
+# and console.gryt.chat answered 502 while Docker restarted it in a loop. The
+# console handles the failure now, but it still cannot post, so fix the cause
+# here — every cycle, so a fresh install and a hand-made directory both end up
+# right without anybody remembering this.
+#
+# Gatus mounts the same directory read-only and does not care who owns it.
+ensure_config_writable() {
+    local dir="$DEST/config" owner
+
+    owner="$(stat -c '%u:%g' "$dir" 2>/dev/null)" || return 0
+    [[ "$owner" == "1000:1000" ]] && return 0
+
+    echo "[$(date -Is)] [config] $dir is owned by $owner; the console runs as 1000"
+    chown -R 1000:1000 "$dir" || {
+        echo "[$(date -Is)] [config] chown failed; announcements will not post"
+        return 1
+    }
+    echo "[$(date -Is)] [config] chowned to 1000:1000"
+}
+
 status=0
+
+ensure_config_writable || status=1
 
 # Config first: a compose change may be what introduces the service the pull
 # below is for.

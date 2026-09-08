@@ -7,12 +7,11 @@ services:
     container_name: gryt-beta-minio
     command: ["server", "/data", "--console-address", ":9001"]
     ports:
-      # 9002, not 9000: beta and prod share one Docker host, and `server` runs
-      # with host networking and `minio` pointed at 127.0.0.1 (see below). A beta
-      # brought up without MINIO_PORT set would fail to publish 9000 — prod has
-      # it — and beta's server would then resolve minio:9000 to *prod's* object
-      # storage. That is a cross-environment data path, not just a port clash,
-      # so the default has to differ rather than relying on the env file.
+      # 9002, not 9000: beta and prod share a Docker host, and a beta brought up
+      # without MINIO_PORT set would resolve minio:9000 to *prod's* storage.
+
+      # That is a cross-environment data path rather than a port clash, so the
+      # default differs rather than relying on the env file.
       - "127.0.0.1:${MINIO_PORT:-9002}:9000"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
@@ -95,9 +94,8 @@ services:
       start_period: 40s
 
   # ── Signaling Server ───────────────────────────────────────────────────────
-  # Uses host networking for LAN server discovery (mDNS via avahi).
-  # The /etc/avahi/services mount lets the server register with the host's
-  # avahi-daemon. Requires: chmod o+w /etc/avahi/services on the host.
+  # Host networking for LAN discovery via avahi. The /etc/avahi/services mount
+  # needs `chmod o+w /etc/avahi/services` on the host.
   server:
     image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest-beta}
     container_name: gryt-beta-server
@@ -107,18 +105,16 @@ services:
       - "minio:127.0.0.1"
     environment:
       PORT: ${SERVER_PORT:-5010}
-      # Every interface, not just loopback. The tunnel reaches this over the
-      # network as dev.lan:5010, and the server defaults to 127.0.0.1 — so
-      # without this it answers the healthcheck (which curls localhost on the
-      # same box) while the tunnel gets nothing, and the beta hostname serves a
-      # 502 next to a container `docker ps` calls healthy. Prod has always had
-      # it; server-nt got it in #56; this one was missed.
+      # Every interface, not just loopback. The tunnel reaches this as dev.lan:5010
+      # and the server defaults to 127.0.0.1.
+
+      # Without it the healthcheck passes on localhost while the tunnel gets a 502
+      # beside a container `docker ps` calls healthy. Prod had it; this was missed.
       HOST: "0.0.0.0"
       NODE_ENV: production
       SERVER_NAME: ${SERVER_NAME:-Gryt (Beta)}
-      # Where the image worker answers, so the server can ask it what version
-      # it is. Loopback because the server has host networking and the worker
-      # publishes there. Unset would simply mean no worker version is shown.
+      # Loopback because the server has host networking and the worker publishes
+      # there. Unset means no worker version is shown.
       IMAGE_WORKER_URL: http://127.0.0.1:${IMAGE_WORKER_HEALTH_PORT:-8083}
       SERVER_DESCRIPTION: ${SERVER_DESCRIPTION:-A Gryt voice chat server (beta)}
       SERVER_PASSWORD: ${SERVER_PASSWORD:-}
@@ -136,30 +132,23 @@ services:
       # Which identities this server admits. Add "local" to let people
       # join without a Gryt account — see docs.gryt.chat, Server → Identity.
       GRYT_IDENTITY_TIERS: ${GRYT_IDENTITY_TIERS:-account}
-      # Which certificate authority an identity may have been signed by. The
-      # server defaults to this same value; it is here so it can be pointed
-      # somewhere else without a code change.
+      # Which CA an identity may have been signed by. Here rather than only in
+      # the server's default, so it can be pointed elsewhere without a code change.
       GRYT_TRUSTED_CERT_ISSUERS: ${GRYT_TRUSTED_CERT_ISSUERS:-https://id.gryt.chat}
       # How many people one invite may admit per hour.
       GRYT_INVITE_MAX_JOINS_PER_HOUR: ${GRYT_INVITE_MAX_JOINS_PER_HOUR:-60}
-      # How many proxies in front of this server may be believed when they say
-      # who a client is. One, because this deployment sits behind the
-      # Cloudflare tunnel: the edge appends the visitor's address to the right
-      # of x-forwarded-for and nothing else in the path touches the header, so
-      # counting one from the right lands on the real client and anything a
-      # client put in that header stays to the left, where it is ignored.
-      #
-      # Leaving this unset is not neutral. The server falls back to the
-      # connection's own address, which is the tunnel's, so every client shares
-      # one rate-limit bucket and the per-IP invite lockout goes server-wide.
+      # How many proxies in front may be believed about who a client is. One: the
+      # Cloudflare tunnel appends the visitor to the right of x-forwarded-for.
+
+      # Unset is not neutral — the server falls back to the tunnel's own address,
+      # so every client shares a rate-limit bucket and the invite lockout goes wide.
       GRYT_TRUSTED_PROXY_HOPS: ${GRYT_TRUSTED_PROXY_HOPS:-1}
       DATA_DIR: /data
-      # ${MINIO_PORT} here is deliberate and is NOT the same as the plain
-      # `minio:9000` the image-worker uses. This service is `network_mode: host`
-      # with `minio` mapped to 127.0.0.1, so it reaches MinIO through the port
-      # published on the host. The image-worker is on the compose bridge network,
-      # where `minio` is the container and the port is always 9000. Both are
-      # right; making them match would break one of them.
+      # ${MINIO_PORT} here, not the plain `minio:9000` the image-worker uses: this
+      # service is host-networked and reaches MinIO through the published port.
+
+      # The image-worker is on the compose bridge, where the port is always 9000.
+      # Both are right; making them match would break one.
       S3_ENDPOINT: http://minio:${MINIO_PORT:-9002}
       S3_REGION: auto
       S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
@@ -196,15 +185,11 @@ services:
   image-worker:
     image: ghcr.io/gryt-chat/image-worker:${IMAGE_WORKER_VERSION:-latest-beta}
     container_name: gryt-beta-image-worker
-    # The server runs with host networking, so it cannot reach this container
-    # by service name — it has to come in through a published port. Bound to
-    # loopback: this is a health endpoint for the server beside it, not
-    # something the network needs.
-    #
-    # The default differs per stack on purpose. prod, prod-NT, beta and beta-NT
-    # all run a worker on one Docker host, and two of them defaulting to the
-    # same port means whichever comes up second fails to publish — or worse,
-    # a server reports the version of a different stack's worker.
+    # The server has host networking, so it cannot reach this container by service
+    # name. Bound to loopback: a health endpoint for the server beside it.
+
+    # The default differs per stack on purpose. Four workers run on one Docker
+    # host, and a shared default means one fails to publish or answers for another.
     ports:
       - "127.0.0.1:${IMAGE_WORKER_HEALTH_PORT:-8083}:8080"
     environment:
@@ -247,17 +232,16 @@ services:
     profiles: ["web"]
     ports:
       - "${CLIENT_PORT:-3667}:80"
-    # Optional: mount a host directory with addon folders for client-side addons.
-    # Each addon folder must contain an addon.json manifest.
+    # Optional: a host directory of addon folders, each with an addon.json.
+
     # volumes:
     #   - ./addons:/addons:ro
     environment:
       GRYT_OIDC_ISSUER: ${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}
       GRYT_OIDC_REALM: ${GRYT_OIDC_REALM:-gryt}
       GRYT_OIDC_CLIENT_ID: ${GRYT_OIDC_CLIENT_ID:-gryt-web}
-      # The certificate authority the client asks to vouch for its key, and the
-      # counterpart to the server's GRYT_TRUSTED_CERT_ISSUERS above — point one
-      # somewhere else without the other and the join fails. See prod.yml.
+      # The CA the client asks to vouch for its key, and the counterpart to the
+      # server's GRYT_TRUSTED_CERT_ISSUERS above. See prod.yml.
       GRYT_IDENTITY_URL: ${GRYT_IDENTITY_URL:-https://id.gryt.chat}
       GRYT_AUTH_API: ${GRYT_AUTH_API:-https://auth.gryt.chat}
       GRYT_AUTH_CALLBACK_URL: ${GRYT_AUTH_CALLBACK_URL:-https://gryt.chat/auth/callback}

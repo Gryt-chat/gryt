@@ -9,6 +9,12 @@ name: API reference
 # In the superproject because it is the only place that can see all four. /developers
 # printed `window.gryt` for weeks after GRYT-930 deleted the file it came from.
 
+# A backstop now rather than the first line of defence. server, client, bot and docs
+# each run the same check on their own pull requests, through Gryt-chat/.github.
+
+# This still catches what those cannot: a pair merged out of order, or a side whose
+# main moved without a pull request. GRYT-1100.
+
 on:
   # Time-based, like Permission labels and Avatar parity. The commit that changes
   # which versions ship together is a gitlink bump carrying [skip ci].

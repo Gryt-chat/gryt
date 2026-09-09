@@ -1,17 +1,10 @@
 # Gryt public status page.
-#
-# Runs on the VPS on purpose: everything it watches is served from home through
-# a Cloudflare tunnel, so a status page hosted alongside those services would go
-# dark exactly when somebody needs it.
-#
-# Checks hit the public hostnames rather than internal ports, so what this page
-# reports is what a user actually experiences, tunnel and CDN included.
-#
-# Every check asserts on the response body, not only on the status code. A
-# status code alone cannot tell a working service from an error page standing
-# where the service used to be — anything that answers on the hostname passes a
-# code check, including whatever the edge substitutes when the origin is gone.
-# The body assertions below name something only the real service serves.
+
+# Runs on the VPS on purpose: everything it watches is served from home through a
+# Cloudflare tunnel, so a page hosted alongside would go dark with them.
+
+# Checks hit the public hostnames and assert on the response body. A status code
+# alone cannot tell a working service from an error page standing in for it.
 
 storage:
   type: sqlite
@@ -46,22 +39,14 @@ endpoints:
       - "[BODY].status == ok"
 
   # ── Talking ─────────────────────────────────────────────────────
-  # The default server in the client and the one named on the site, so it is
-  # the only server a user has a reason to see the state of.
-  #
-  # Its SFU is not checked. Voice is not expected on this server, and a red
-  # light for something nobody uses trains people to ignore the page.
-  #
-  # No serverId assertion: /info reports it as null on this deployment. What
-  # distinguishes the real service is the shape of the answer — an edge error
-  # page returns HTML, and nothing else answering on this hostname returns an
-  # /info body with these fields in it.
-  #
-  # Deliberately not the name. It used to assert `name == Gryt Chat (OFFICIAL)`,
-  # the server was renamed to "Gryt Chat", and the check went red and stayed
-  # there — a rename is not an outage, and this page is the thing people look at
-  # to find out which it was. The name is also seasonal: a pumpkin in October is
-  # a change to the server's title, not to whether anybody can reach it.
+  # The default server in the client and the one named on the site, so the only
+  # one a user has reason to see the state of. Its SFU is not checked.
+
+  # No serverId assertion: /info reports it as null here. What distinguishes the
+  # real service is the shape of the answer — an edge error page returns HTML.
+
+  # Deliberately not the name: asserting it went red on a rename and stayed there,
+  # and a seasonal title is a change to the server rather than to reaching it.
   - name: "Community server"
     group: "Talking"
     url: "https://community.gryt.chat/info"

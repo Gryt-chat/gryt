@@ -88,9 +88,8 @@ services:
       start_period: 40s
 
   # ── Signaling Server ───────────────────────────────────────────────────────
-  # Uses host networking for LAN server discovery (mDNS via avahi).
-  # The /etc/avahi/services mount lets the server register with the host's
-  # avahi-daemon. Requires: chmod o+w /etc/avahi/services on the host.
+  # Host networking for LAN discovery via avahi. The /etc/avahi/services mount
+  # needs `chmod o+w /etc/avahi/services` on the host.
   server:
     image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest}
     container_name: gryt-prod-server
@@ -103,9 +102,8 @@ services:
       HOST: "0.0.0.0"
       NODE_ENV: production
       SERVER_NAME: ${SERVER_NAME:-My Gryt Server}
-      # Where the image worker answers, so the server can ask it what version
-      # it is. Loopback because the server has host networking and the worker
-      # publishes there. Unset would simply mean no worker version is shown.
+      # Loopback because the server has host networking and the worker publishes
+      # there. Unset means no worker version is shown.
       IMAGE_WORKER_URL: http://127.0.0.1:${IMAGE_WORKER_HEALTH_PORT:-8081}
       SERVER_DESCRIPTION: ${SERVER_DESCRIPTION:-A Gryt voice chat server}
       SERVER_PASSWORD: ${SERVER_PASSWORD:-}
@@ -123,30 +121,23 @@ services:
       # Which identities this server admits. Add "local" to let people
       # join without a Gryt account — see docs.gryt.chat, Server → Identity.
       GRYT_IDENTITY_TIERS: ${GRYT_IDENTITY_TIERS:-account}
-      # Which certificate authority an identity may have been signed by. The
-      # server defaults to this same value; it is here so it can be pointed
-      # somewhere else without a code change.
+      # Which CA an identity may have been signed by. Here rather than only in
+      # the server's default, so it can be pointed elsewhere without a code change.
       GRYT_TRUSTED_CERT_ISSUERS: ${GRYT_TRUSTED_CERT_ISSUERS:-https://id.gryt.chat}
       # How many people one invite may admit per hour.
       GRYT_INVITE_MAX_JOINS_PER_HOUR: ${GRYT_INVITE_MAX_JOINS_PER_HOUR:-60}
-      # How many proxies in front of this server may be believed when they say
-      # who a client is. One, because this deployment sits behind the
-      # Cloudflare tunnel: the edge appends the visitor's address to the right
-      # of x-forwarded-for and nothing else in the path touches the header, so
-      # counting one from the right lands on the real client and anything a
-      # client put in that header stays to the left, where it is ignored.
-      #
-      # Leaving this unset is not neutral. The server falls back to the
-      # connection's own address, which is the tunnel's, so every client shares
-      # one rate-limit bucket and the per-IP invite lockout goes server-wide.
+      # How many proxies in front may be believed about who a client is. One: the
+      # Cloudflare tunnel appends the visitor to the right of x-forwarded-for.
+
+      # Unset is not neutral — the server falls back to the tunnel's own address,
+      # so every client shares a rate-limit bucket and the invite lockout goes wide.
       GRYT_TRUSTED_PROXY_HOPS: ${GRYT_TRUSTED_PROXY_HOPS:-1}
       DATA_DIR: /data
-      # ${MINIO_PORT} here is deliberate and is NOT the same as the plain
-      # `minio:9000` the image-worker uses. This service is `network_mode: host`
-      # with `minio` mapped to 127.0.0.1, so it reaches MinIO through the port
-      # published on the host. The image-worker is on the compose bridge network,
-      # where `minio` is the container and the port is always 9000. Both are
-      # right; making them match would break one of them.
+      # ${MINIO_PORT} here, not the plain `minio:9000` the image-worker uses: this
+      # service is host-networked and reaches MinIO through the published port.
+
+      # The image-worker is on the compose bridge, where the port is always 9000.
+      # Both are right; making them match would break one.
       S3_ENDPOINT: http://minio:${MINIO_PORT:-9000}
       S3_REGION: auto
       S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
@@ -181,15 +172,11 @@ services:
   image-worker:
     image: ghcr.io/gryt-chat/image-worker:${IMAGE_WORKER_VERSION:-latest}
     container_name: gryt-prod-image-worker
-    # The server runs with host networking, so it cannot reach this container
-    # by service name — it has to come in through a published port. Bound to
-    # loopback: this is a health endpoint for the server beside it, not
-    # something the network needs.
-    #
-    # The default differs per stack on purpose. prod, prod-NT, beta and beta-NT
-    # all run a worker on one Docker host, and two of them defaulting to the
-    # same port means whichever comes up second fails to publish — or worse,
-    # a server reports the version of a different stack's worker.
+    # The server has host networking, so it cannot reach this container by service
+    # name. Bound to loopback: a health endpoint for the server beside it.
+
+    # The default differs per stack on purpose. Four workers run on one Docker
+    # host, and a shared default means one fails to publish or answers for another.
     ports:
       - "127.0.0.1:${IMAGE_WORKER_HEALTH_PORT:-8081}:8080"
     environment:
@@ -221,31 +208,17 @@ services:
       retries: 3
       start_period: 10s
 
-  ## ── A second server (optional) ────────────────────────────────────────────
-  ## One compose file can run as many Gryt servers as you like. They share the
-  ## SFU and MinIO above; what each one needs of its own is a data volume, a
-  ## port, a name, and a worker.
-  ##
-  ## Uncomment this block and the two volumes at the bottom to add one. Full
-  ## explanation at docs.gryt.chat → Deployment → Docker Compose.
-  ##
-  ## Four things must differ from the server above, and the first two are the
-  ## ones that bite:
-  ##
-  ##   DATA_DIR volume  two servers sharing one gryt.db corrupt each other
-  ##   SERVER_NAME      the SFU identifies a server as NAME_PORT_INSTANCE and
-  ##                    keys voice rooms on it, so a duplicate means the second
-  ##                    server's voice never starts
-  ##   PORT             host networking, so this is a real port on the host
-  ##   health port      the worker's, published on loopback for its own server
-  ##
-  ## The SFU, MinIO and the bucket are deliberately shared. Object keys are
-  ## UUIDs, so two servers in one bucket cannot collide.
-  ##
-  ## Note: only one host-networked server can advertise itself on the LAN. The
-  ## avahi service file has a fixed name and the second server overwrites the
-  ## first. Both work normally by address; only mDNS discovery is affected.
-  ##
+  # ── A second server (optional) ────────────────────────────────────────────
+  # One compose file can run as many Gryt servers as you like. Each needs its own
+  # data volume, SERVER_NAME, PORT and worker; SFU, MinIO and bucket are shared.
+
+  # Two servers sharing one gryt.db corrupt each other, and the SFU keys voice
+  # rooms on SERVER_NAME, so a duplicate stops the second server's voice starting.
+
+  # Only one host-networked server can advertise on the LAN — the avahi service
+  # file has a fixed name. docs.gryt.chat → Deployment → Docker Compose.
+
+  # check-comment-length: off
   # server-2:
   #   image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest}
   #   container_name: gryt-prod-server-2
@@ -341,34 +314,30 @@ services:
   #     timeout: 3s
   #     retries: 3
   #     start_period: 10s
+  # check-comment-length: on
 
   # ── Web Client (dev / local only) ─────────────────────────────────────────
-  # The web client won't authenticate against auth.gryt.chat in production
-  # unless your domain is registered as a redirect URI (only official Gryt
-  # domains are whitelisted). Use for local development or with your own
-  # Keycloak. Enable with: docker compose --profile web up -d
+  # Only official Gryt domains are whitelisted as redirect URIs, so this needs
+  # your own Keycloak. Enable with `docker compose --profile web up -d`.
   client:
     image: ghcr.io/gryt-chat/client:${CLIENT_VERSION:-latest}
     container_name: gryt-prod-client
     profiles: ["web"]
     ports:
       - "${CLIENT_PORT:-3666}:80"
-    # Optional: mount a host directory with addon folders for client-side addons.
-    # Each addon folder must contain an addon.json manifest.
+    # Optional: a host directory of addon folders, each with an addon.json.
+
     # volumes:
     #   - ./addons:/addons:ro
     environment:
       GRYT_OIDC_ISSUER: ${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}
       GRYT_OIDC_REALM: ${GRYT_OIDC_REALM:-gryt}
       GRYT_OIDC_CLIENT_ID: ${GRYT_OIDC_CLIENT_ID:-gryt-web}
-      # The certificate authority the client asks to vouch for its key, and the
-      # counterpart to the server's GRYT_TRUSTED_CERT_ISSUERS above — point one
-      # somewhere else without the other and the join fails.
-      #
-      # Pointing at a different Keycloak and leaving this alone is GRYT-156:
-      # the token comes from your issuer and goes to Gryt's CA, which validates
-      # against its own and refuses it. The 401 says "no applicable key found in
-      # the JWKS", which is the symptom.
+      # The CA the client asks to vouch for its key, and the counterpart to the
+      # server's GRYT_TRUSTED_CERT_ISSUERS above. Move one and the join fails.
+
+      # A different Keycloak with this left alone is GRYT-156. The 401 reads "no
+      # applicable key found in the JWKS", which is the symptom.
       GRYT_IDENTITY_URL: ${GRYT_IDENTITY_URL:-https://id.gryt.chat}
       GRYT_AUTH_API: ${GRYT_AUTH_API:-https://auth.gryt.chat}
       GRYT_AUTH_CALLBACK_URL: ${GRYT_AUTH_CALLBACK_URL:-https://gryt.chat/auth/callback}
@@ -411,10 +380,8 @@ services:
         global:
           scrape_interval: 15s
         scrape_configs:
-          # 9091, not 5000. Metrics moved off the port the world talks to, so
-          # that a deployment behind a reverse proxy or a tunnel does not serve
-          # its Prometheus register to strangers. Reached over the Compose
-          # network, so the port is deliberately not published.
+          # 9091, not 5000: metrics moved off the port the world talks to, so a
+          # deployment behind a proxy does not serve its register to strangers.
           - job_name: gryt-server
             static_configs:
               - targets: ["server:${METRICS_PORT:-9091}"]

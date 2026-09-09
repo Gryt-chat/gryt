@@ -1,48 +1,27 @@
-# The official Gryt server: community.gryt.chat
-#
-# This is Gryt-operated infrastructure, not a self-hosting example. If you are
-# standing up your own server, use `gryt` (get.gryt.chat) or the files under
-# ops/deploy — they are written for that and this one is not.
-#
-# It runs on `gryt-community`, a VM under Astro that is deliberately cut off
-# from everything else here. It reaches the public internet and nothing on any
-# private network: not the LAN, not another VM, not Astro itself, not the other
-# WireGuard peers. A public server invites strangers, and this is the one
-# machine here somebody might get a shell on.
-#
-# Isolation is enforced in three places, none of them this file:
-#
-#   Astro   /boot/config/gryt-community-isolation.sh — FORWARD and INPUT rules
-#           scoped to 192.168.122.0/24. This is the one that counts.
-#   VPS     wg0 -> wg0 DROP, plus INPUT rules so the peer cannot reach the hub
-#           itself. Peer isolation is a FORWARD rule and misses that on its own.
-#   Guest   /etc/nftables.conf — defence in depth. A rooted guest can flush it.
-#
-# All of the VM's egress goes through the VPS (AllowedIPs 0.0.0.0/0), which is
-# what makes ICE_ADVERTISE_IP a single true value and what lets media replies
-# leave by the address they arrived on.
-#
-# Differences from ops/deploy/compose/prod.yml, all deliberate:
-#
-#   bridge, not host networking   prod uses host networking for mDNS on the LAN.
-#                                 This VM has no LAN it should be seen on, and
-#                                 host networking would put the metrics port and
-#                                 MinIO on an interface.
-#   nothing published outward     except the media port. cloudflared runs on the
-#                                 compose network and reaches the services by
-#                                 name; the loopback publishes are for debugging
-#                                 from inside the VM.
-#   no minioadmin                 MINIO_ROOT_PASSWORD has no default here. The
-#                                 stack refuses to start without one.
-#   no web client                 app.gryt.chat serves it.
+# The official Gryt server: community.gryt.chat. Gryt-operated infrastructure,
+# not a self-hosting example — use `gryt` or ops/deploy for that.
+
+# It runs on `gryt-community`, a VM under Astro cut off from every private
+# network. A public server invites strangers, and this is the machine at risk.
+
+# The isolation is enforced elsewhere: gryt-community-isolation.sh on Astro is
+# the one that counts, with wg0 rules on the VPS and nftables in the guest.
+
+# All egress goes through the VPS (AllowedIPs 0.0.0.0/0), which is what makes
+# ICE_ADVERTISE_IP a single true value.
+
+# Against ops/deploy/compose/prod.yml: bridge rather than host networking, since
+# this VM has no LAN it should be seen on, and nothing published outward but media.
+
+# MINIO_ROOT_PASSWORD is required, and there is no web client — app.gryt.chat
+# serves it.
 name: gryt-community
 
-# Log retention, because the privacy statement on gryt.chat has to be able to
-# say a number. The server prints the full rate-limit key, client address
-# included, on every ban (rateLimiter.ts), so container logs hold IP addresses
-# and the Docker default of keeping every line forever is not a policy anybody
-# would write down. 20 MB per service across three files is a few days on a
-# quiet server and a hard ceiling on a loud one.
+# Log retention, because the privacy statement on gryt.chat has to name a number.
+# The server prints the full rate-limit key, client address included, on every ban.
+
+# 20 MB per service across three files: a few days on a quiet server and a hard
+# ceiling on a loud one.
 x-logging: &logging
   driver: json-file
   options:
@@ -105,9 +84,8 @@ services:
     restart: "no"
 
   # ── SFU ───────────────────────────────────────────────────────────────────
-  # The signalling port is on loopback and served as wss:// through the tunnel.
-  # The media port is the one thing here that faces the internet directly: the
-  # tunnel does not carry UDP, and Gryt has no TURN relay to fall back on.
+  # Signalling is on loopback, served as wss:// through the tunnel. The media port
+  # faces the internet: the tunnel carries no UDP and Gryt has no TURN relay.
   sfu:
     image: ghcr.io/gryt-chat/sfu:${SFU_VERSION:-latest}
     container_name: gryt-community-sfu
@@ -118,12 +96,11 @@ services:
     environment:
       PORT: "5005"
       ICE_UDP_MUX_PORT: ${ICE_UDP_MUX_PORT:-10000}
-      # The VPS's address, not this machine's. Media arrives DNATd from there
-      # over the tunnel, and every packet this VM sends leaves the same way, so
-      # this is the only address a client can reach it on. DISABLE_STUN defaults
-      # to true once it is set, which is what stops GRYT-768 happening again:
-      # STUN would answer the same question and give a different answer whenever
-      # the path changed underneath.
+      # The VPS's address, not this machine's: media arrives DNATd from there and
+      # leaves the same way, so it is the only address a client can reach it on.
+
+      # DISABLE_STUN defaults to true once this is set, which is what stops
+      # GRYT-768 recurring — STUN answered differently whenever the path changed.
       ICE_ADVERTISE_IP: ${ICE_ADVERTISE_IP:?Set ICE_ADVERTISE_IP to this machine's public IP}
       STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302}
       MAX_PEERS: ${MAX_PEERS:-100}
@@ -161,10 +138,8 @@ services:
       NODE_ENV: production
       SERVER_NAME: ${SERVER_NAME:-Gryt Community}
       SERVER_DESCRIPTION: ${SERVER_DESCRIPTION:-The Gryt community server}
-      # Not a join gate here — join_policy is. This is the HMAC key the server
-      # signs SFU client tokens with, and the secret it registers with the SFU
-      # under. An empty value would mean the empty string as a signing key, so
-      # it is required rather than defaulted.
+      # Not a join gate — join_policy is. This is the HMAC key SFU client tokens
+      # are signed with, so an empty value would sign with the empty string.
       SERVER_PASSWORD: ${SERVER_PASSWORD:?Set SERVER_PASSWORD in .env}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       IMAGE_WORKER_URL: http://image-worker:8080
@@ -176,16 +151,13 @@ services:
       GRYT_SERVER_ENABLED: "true"
       GRYT_OIDC_ISSUER: ${GRYT_OIDC_ISSUER:-https://auth.gryt.chat/realms/gryt}
       GRYT_OIDC_AUDIENCE: ${GRYT_OIDC_AUDIENCE:-gryt-web}
-      # Accounts only. A local identity is a name and a keypair, which is the
-      # cheapest thing on the internet to make a hundred of; an account at least
-      # costs an email address and whatever Keycloak asks for on top.
+      # Accounts only. A local identity is a name and a keypair; an account costs
+      # an email address and whatever Keycloak asks on top.
       GRYT_IDENTITY_TIERS: ${GRYT_IDENTITY_TIERS:-account}
       GRYT_TRUSTED_CERT_ISSUERS: ${GRYT_TRUSTED_CERT_ISSUERS:-https://id.gryt.chat}
       GRYT_INVITE_MAX_JOINS_PER_HOUR: ${GRYT_INVITE_MAX_JOINS_PER_HOUR:-20}
       # One hop: cloudflared appends the visitor's address to the right of
-      # x-forwarded-for and nothing else in the path touches the header.
-      # Leaving it unset would put every visitor on earth in one rate-limit
-      # bucket, so the first spammer rate-limits everyone else.
+      # x-forwarded-for. Unset puts every visitor on earth in one bucket.
       GRYT_TRUSTED_PROXY_HOPS: ${GRYT_TRUSTED_PROXY_HOPS:-1}
       # Nothing to discover on a VPS, and the avahi mount prod needs would be
       # writing service files for a LAN that does not exist.
@@ -193,14 +165,11 @@ services:
       # Bridge networking, so 9091 inside the container is reachable from
       # Prometheus on this network and from nowhere else. Do not publish it.
       METRICS_PORT: "9091"
-      # The management listener, which is how this server gets configured while
-      # it has no owner: join policy, upload caps, profanity mode. It binds
-      # 0.0.0.0 inside the container and is published on loopback only, below —
-      # requireAdminToken.ts documents that arrangement, and it is the reason
-      # the safety property lives in this file rather than in the code.
-      #
-      # Without a value the listener does not start at all, which is the right
-      # default for a self-hoster who never asked for one.
+      # The management listener — join policy, upload caps, profanity mode — is how
+      # this server is configured while it has no owner. See requireAdminToken.ts.
+
+      # It binds 0.0.0.0 in the container and is published on loopback only below.
+      # Without a value it does not start, which is right for a self-hoster.
       GRYT_ADMIN_TOKEN: ${GRYT_ADMIN_TOKEN:?Set GRYT_ADMIN_TOKEN in .env}
       DATA_DIR: /data
       S3_ENDPOINT: http://minio:9000
@@ -271,11 +240,9 @@ services:
       start_period: 10s
 
   # ── Cloudflare tunnel ─────────────────────────────────────────────────────
-  # On the compose network rather than the host, so the tunnel's ingress points
-  # at http://server:5000 and http://sfu:5005 and no HTTP port has to be
-  # published anywhere. The loopback publishes above are for debugging from
-  # inside the VM.
-  #
+  # On the compose network rather than the host, so ingress points at server:5000
+  # and sfu:5005 and no HTTP port is published. Loopback publishes are for debugging.
+
   # Started only once a token exists: `docker compose --profile tunnel up -d`.
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -283,12 +250,10 @@ services:
     logging: *logging
     profiles: ["tunnel"]
     # The token goes in the environment rather than on the command line: an
-    # argument is visible in `ps` and in `docker inspect` output to anyone on
-    # the box, and it is the whole credential for the tunnel.
-    #
-    # No :? guard, because a required variable is checked even for a service
-    # behind a profile, and that would stop the whole stack starting before
-    # there is a tunnel to start.
+    # argument is visible in `ps` and `docker inspect`, and it is the whole credential.
+
+    # No :? guard, because a required variable is checked even behind a profile and
+    # would stop the stack starting before there is a tunnel to start.
     command: ["tunnel", "--no-autoupdate", "run"]
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}

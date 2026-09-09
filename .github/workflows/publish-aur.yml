@@ -2,10 +2,9 @@ name: Publish to the AUR
 
 # The CachyOS Package Installer, paru and yay all browse the AUR, so this is the
 # only Arch-side listing there is to keep current.
-#
-# packaging/aur/PKGBUILD is the source of truth. It is copied over whatever the
-# AUR holds, so a packaging change is a reviewed pull request rather than a push
-# nobody sees. GRYT-975 is what the other way round cost.
+
+# packaging/aur/PKGBUILD is the source of truth and is copied over whatever the AUR
+# holds, so a packaging change is a reviewed PR. GRYT-975 is what the reverse cost.
 
 on:
   release:
@@ -61,9 +60,8 @@ jobs:
           printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
           chmod 600 ~/.ssh/aur
 
-          # Pinned rather than ssh-keyscan'd: this pushes a package anyone on
-          # Arch can install, so first-use trust is not good enough.
-          # SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4
+          # Pinned rather than ssh-keyscan'd: this pushes a package anyone on Arch
+          # can install. SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4
           cat >> ~/.ssh/known_hosts <<'HOSTKEY'
           aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN
           HOSTKEY
@@ -98,9 +96,7 @@ jobs:
           SUM="$(sha256sum "$DEB" | cut -d' ' -f1)"
 
           # Read at the tag, so a re-run for an older release packages that
-          # release's PKGBUILD rather than whatever main says today. Tags cut
-          # before this file existed fall back to main; without that the first
-          # release after it landed could not publish at all.
+          # release's PKGBUILD. Tags cut before this file existed fall back to main.
           at() {
             gh api "repos/$OWNER/$REPO/contents/packaging/aur/PKGBUILD?ref=$1" \
               --jq '.content' 2>/dev/null | base64 -d
@@ -143,10 +139,9 @@ jobs:
 
           # makepkg --printsrcinfo is the only supported way to write this file,
           # it needs Arch, and it refuses to run as root.
-          #
+
           # Mounted read-only and copied inside, because `chown -R build` on a
-          # writable bind mount changes the owner of the host's files too, and
-          # the runner is then locked out of the directory it has to commit in.
+          # writable bind mount locks the runner out of the directory it commits in.
           docker run --rm -v "$PWD/aur:/pkg:ro" archlinux:base-devel bash -c '
             set -e
             useradd -m build >&2
@@ -188,11 +183,11 @@ jobs:
           git commit -m "Update to ${VERSION}"
           git push origin master
 
-      # The RPC is what paru, yay and the CachyOS installer actually read, so it
-      # is the thing worth holding to — but it is cached behind the database it
-      # reports on. Measured on the first successful publish: the package page
-      # showed 1.9.24-1 immediately and the RPC kept saying 1.1.24-1 for about
-      # five minutes. Six 20-second attempts called that a failed publish.
+      # The RPC is what paru, yay and the CachyOS installer read, and it is cached
+      # behind the database it reports on.
+
+      # On the first successful publish the package page showed 1.9.24-1 at once and
+      # the RPC said 1.1.24-1 for five minutes. Six 20-second attempts called it failed.
       - name: Check the AUR is serving it
         if: always() && steps.checkout.outputs.active == 'true'
         shell: bash

@@ -1,25 +1,15 @@
 #!/bin/bash
-# Network isolation for the gryt-community VM (192.168.122.0/24, virbr0).
-#
-# The VM runs the public Gryt server, so it is the one machine here a stranger
-# might get a shell on. It may reach the public internet and nothing else: not
-# the LAN, not another VM, not Astro itself.
-#
-# Why this file exists rather than rules in LIBVIRT_FWO, which is where libvirt
-# would put them: FORWARD on this host has blanket "ACCEPT all" rules well
-# above the LIBVIRT_* jumps, so anything added there is never reached.
-#
-# Unraid runs from RAM, so nothing here survives a reboot on its own. Called
-# from /boot/config/go at boot and re-asserted by cron, because a Docker
-# restart rewrites the top of FORWARD and the failure mode is silent: the VM
-# comes back reachable and nothing says so.
-#
-# Every rule is scoped to 192.168.122.0/24 as source or destination, so none of
-# them can match traffic belonging to anything else on this host.
-#
-# Verify with, from inside the VM and with its own nftables flushed:
-#   ping 192.168.50.168   -> must fail
-#   curl https://ghcr.io/v2/  -> must answer
+# Network isolation for the gryt-community VM (192.168.122.0/24, virbr0). It runs
+# the public Gryt server, so it may reach the internet and nothing else here.
+
+# Here rather than in LIBVIRT_FWO, where libvirt would put them: FORWARD on this
+# host has blanket ACCEPT rules above the LIBVIRT_* jumps, so those are never reached.
+
+# Unraid runs from RAM, so this is called from /boot/config/go and re-asserted by
+# cron — a Docker restart rewrites the top of FORWARD and says nothing.
+
+# Every rule is scoped to 192.168.122.0/24 as source or destination. Verify from
+# inside the VM with nftables flushed: `ping 192.168.50.168` fails, ghcr.io answers.
 
 GUEST_NET=192.168.122.0/24
 GATEWAY=192.168.122.1

@@ -18,9 +18,8 @@ services:
       - ./downloads:/usr/share/nginx/html/downloads:ro
     restart: unless-stopped
 
-  # Component library docs (ui.gryt.chat). Built from packages/ui, which is a
-  # bun workspace — the context is the workspace root because apps/docs
-  # resolves @gryt/ui from source rather than from npm.
+  # Component library docs (ui.gryt.chat). The context is the bun workspace root
+  # because apps/docs resolves @gryt/ui from source rather than from npm.
   ui:
     build:
       context: ../../packages/ui
@@ -76,9 +75,8 @@ services:
       timeout: 10s
       retries: 10
 
-  # Bug reports and feedback sent from inside the apps (reports.gryt.chat).
-  # Fider above is the public half people vote on; this is the one nobody else
-  # reads. Pulled from GHCR rather than built here — Release Reports pushes it.
+  # Bug reports and feedback sent from inside the apps (reports.gryt.chat). Fider
+  # above is the public half; this is the one nobody else reads.
   reports:
     image: ghcr.io/gryt-chat/reports:${REPORTS_IMAGE_TAG:-latest}
     container_name: gryt-reports
@@ -87,21 +85,18 @@ services:
       # hostname, behind Keycloak sign-in.
       - "${INTERNAL_REPORTS_HTTP_PORT:-9476}:8080"
     environment:
-      # One key per app, and empty here (GRYT-529). A key that ships inside a
-      # public app is not a secret, and the day it needs rotating is the day
-      # everybody who has not updated stops being able to report a bug.
-      #
-      # Not additive with ALLOW_UNKEYED below: with keys set, an app id that is
-      # not among them is refused whatever that says. Unkeyed means both.
+      # One key per app, and empty here (GRYT-529): a key shipped inside a public
+      # app is not a secret, and rotating it cuts off everybody who has not updated.
+
+      # Not additive with ALLOW_UNKEYED below — with keys set, an app id that is
+      # not among them is refused whatever that says.
       REPORTS_APP_KEYS: "${REPORTS_APP_KEYS:-}"
       REPORTS_ALLOW_UNKEYED: "${REPORTS_ALLOW_UNKEYED:-false}"
-      # The shortest gap between one client's reports. A script posting in a
-      # loop is stopped by its second request, before any hourly counter has
-      # noticed — the cheapest check here and the one that does the most.
+      # The shortest gap between one client's reports. A script posting in a loop
+      # is stopped by its second request, before any hourly counter has noticed.
       REPORTS_MIN_INTERVAL_SEC: "${REPORTS_MIN_INTERVAL_SEC:-10}"
-      # Triage bans whoever keeps sending junk. Only the noise verdict counts;
-      # not_a_bug is a feature request or a support question, and banning that
-      # person is the opposite of what this inbox is for.
+      # Only the noise verdict counts. not_a_bug is a feature request or a support
+      # question, and banning that person is the opposite of what this is for.
       REPORTS_AUTO_BAN_NOISE: "${REPORTS_AUTO_BAN_NOISE:-3}"
       REPORTS_AUTO_BAN_WINDOW_H: "${REPORTS_AUTO_BAN_WINDOW_H:-24}"
       REPORTS_AUTO_BAN_DAYS: "${REPORTS_AUTO_BAN_DAYS:-7}"
@@ -109,38 +104,38 @@ services:
       REPORTS_PUBLIC_URL: "${REPORTS_PUBLIC_URL:-https://reports.gryt.chat}"
       REPORTS_CORS_ORIGINS: "${REPORTS_CORS_ORIGINS:-https://app.gryt.chat,https://beta.gryt.chat}"
       REPORTS_REQUIRE_SIGNATURE: "${REPORTS_REQUIRE_SIGNATURE:-false}"
-      # Behind the tunnel the socket address is the proxy, so the client
-      # address has to come from cf-connecting-ip — and only when the proxy is
-      # the one connecting. The ingest port is on the machine's network
-      # address, so without this list anything on the LAN can claim any address
-      # and skip every per-address rate limit and ban.
+      # Behind the tunnel the socket address is the proxy, so the client address
+      # comes from cf-connecting-ip — and only when the proxy is connecting.
+
+      # The ingest port is on the machine's network address, so without this list
+      # anything on the LAN can claim any address and skip every per-address limit.
       REPORTS_TRUST_PROXY: "true"
       REPORTS_TRUSTED_PROXIES: "${REPORTS_TRUSTED_PROXIES:-}"
-      # Triage. A URL picks the local model, a key picks the API, and naming
-      # the provider wins over both. Ollama runs on another machine, so this is
-      # its address on the network rather than localhost.
+      # Triage. A URL picks the local model, a key picks the API, and naming the
+      # provider wins over both. Ollama runs on another machine.
       REPORTS_TRIAGE_PROVIDER: "${REPORTS_TRIAGE_PROVIDER:-}"
       REPORTS_OLLAMA_URL: "${REPORTS_OLLAMA_URL:-}"
       REPORTS_OLLAMA_KEEP_ALIVE: "${REPORTS_OLLAMA_KEEP_ALIVE:-5m}"
       REPORTS_TRIAGE_TIMEOUT_MS: "${REPORTS_TRIAGE_TIMEOUT_MS:-120000}"
-      # Whether the model may reason before it answers. Worth the extra seconds
-      # on a model that fits on the card: it is the difference between "the app
-      # crashed" and "TypeError in ChannelList".
+      # Whether the model may reason before it answers. Worth the extra seconds:
+      # it is the difference between "the app crashed" and "TypeError in ChannelList".
       REPORTS_TRIAGE_THINK: "${REPORTS_TRIAGE_THINK:-}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       REPORTS_TRIAGE_MODEL: "${REPORTS_TRIAGE_MODEL:-}"
       REPORTS_DISCORD_WEBHOOK_URL: "${REPORTS_DISCORD_WEBHOOK_URL:-}"
-      # Filing a report as a task on the board (GRYT-534). A write credential,
-      # so it is empty here and set in .env; without it the button is not
-      # offered rather than offered and broken. The address has no default
-      # either — a built-in one files onto whoever's board was compiled in.
+      # Filing a report as a task on the board (GRYT-534). A write credential, so
+      # empty here; without it the button is not offered rather than broken.
+
+      # The address has no default either — a built-in one files onto whoever's
+      # board was compiled in.
       REPORTS_VIKUNJA_URL: "${REPORTS_VIKUNJA_URL:-}"
       REPORTS_VIKUNJA_TOKEN: "${REPORTS_VIKUNJA_TOKEN:-}"
       REPORTS_VIKUNJA_PROJECT: "${REPORTS_VIKUNJA_PROJECT:-2}"
-      # The weekly digest (GRYT-537). SMTP is the GRYT_SMTP_* set the rest of
-      # Gryt already points at Postmark, rather than a second copy to rotate —
-      # which is exactly why it has to be named here: a variable that is in
-      # .env and not in this block reaches nothing, silently.
+      # The weekly digest (GRYT-537). SMTP is the GRYT_SMTP_* set the rest of Gryt
+      # already points at Postmark, rather than a second copy to rotate.
+
+      # Which is why it has to be named here: a variable in .env and not in this
+      # block reaches nothing, silently.
       REPORTS_DIGEST_ENABLED: "${REPORTS_DIGEST_ENABLED:-}"
       REPORTS_DIGEST_DAY: "${REPORTS_DIGEST_DAY:-1}"
       REPORTS_DIGEST_HOUR: "${REPORTS_DIGEST_HOUR:-9}"

@@ -1,12 +1,10 @@
 name: Publish to winget
 
-# packaging/winget/ is the source of truth. The three manifests are copied and
-# their version, URL and checksum rewritten, then wingetcreate opens a pull
-# request against microsoft/winget-pkgs.
-#
-# Unlike the AUR and the tap, the far end is somebody else's review queue. The
-# first submission of a new package is read by a person, and Gryt has a history
-# there worth not repeating: GRYT-969.
+# packaging/winget/ is the source of truth. The three manifests are copied and their
+# version, URL and checksum rewritten, then wingetcreate opens a PR upstream.
+
+# Unlike the AUR and the tap, the far end is somebody else's review queue, read by a
+# person on a new package. Gryt has a history there worth not repeating: GRYT-969.
 
 on:
   release:

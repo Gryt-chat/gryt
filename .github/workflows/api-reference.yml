@@ -1,25 +1,17 @@
 name: API reference
 
-# Checks that the three generated reference pages in the docs still say what
-# the source says.
-#
-# `docs/server/plugin-api`, `docs/client/addon-api` and `docs/bot/api-reference`
-# are written by .github/scripts/generate-api-reference.mjs out of the
-# TypeScript that defines each API. Nothing in the docs repository can tell when
-# one of those APIs moves, and nothing in server, client or bot can tell that a
-# page in another repository now describes something that is gone.
-#
-# This lives in the superproject for the same reason Permission labels does:
-# it is the only place that can see all four at once. The failure it exists for
-# has already happened once on the site — /developers printed the whole of
-# `pluginApi.ts` with a comment above it saying it had to be kept current, and
-# went on printing `window.gryt` for weeks after GRYT-930 deleted that file.
+# Checks that the three generated reference pages in the docs still say what the
+# source says. generate-api-reference.mjs writes them out of the TypeScript.
+
+# Nothing in the docs repository can tell when one of those APIs moves, and nothing
+# in server, client or bot can tell that a page elsewhere describes something gone.
+
+# In the superproject because it is the only place that can see all four. /developers
+# printed `window.gryt` for weeks after GRYT-930 deleted the file it came from.
 
 on:
-  # Time-based, like Permission labels and Avatar parity. The commit that
-  # changes which versions ship together is the gitlink bump from Update
-  # Submodules, and that carries [skip ci], so anything hung off `push` would
-  # skip exactly the commits worth checking.
+  # Time-based, like Permission labels and Avatar parity. The commit that changes
+  # which versions ship together is a gitlink bump carrying [skip ci].
   schedule:
     - cron: "17 7 * * *"
 
@@ -60,15 +52,12 @@ jobs:
           set -euo pipefail
 
           # Each repository's own main, cloned from the URL rather than resolved
-          # from the recorded gitlink — matching Permission labels and Avatar
-          # parity. What ships is main; the gitlink is a snapshot of it, usually
-          # current and sometimes an hour behind.
-          #
-          # A path-limited checkout on a blobless clone fetches the few blobs
-          # each side needs and nothing else. docs takes the whole content tree
-          # because the generator writes into it and then diffs what it wrote,
-          # and server takes all of src because the socket coverage check has to
-          # find handlers and emits across every handler file, not just plugins.
+          # from the gitlink, which is a snapshot sometimes an hour behind.
+
+          # A path-limited blobless clone fetches the few blobs each side needs.
+
+          # docs takes the whole content tree because the generator writes into it and
+          # diffs what it wrote, and server all of src for the socket coverage check.
           for entry in \
             "server:src" \
             "client:src/packages/addons/src" \
@@ -93,11 +82,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          # The generator reads TypeScript with the TypeScript compiler's own
-          # parser rather than with regexes, so it needs the package. Installed
-          # into packages/docs because that is where the generator looks first,
-          # and because a path-limited checkout of docs has no package.json for
-          # `npm i` to disagree with.
+          # The generator reads TypeScript with the compiler's own parser rather
+          # than regexes, so it needs the package.
+
+          # Installed into packages/docs because that is where the generator looks,
+          # and a path-limited checkout has no package.json for `npm i` to argue with.
           mkdir -p packages/docs
           npm install --no-save --prefix packages/docs typescript@5
 
@@ -105,9 +94,8 @@ jobs:
         shell: bash
         run: node .github/scripts/generate-api-reference.mjs --check
 
-      # server-api is the one reference page still written by hand, so nothing
-      # stops it falling behind. It had reached 114 of 211 socket events with
-      # whole features missing before anybody counted.
+      # server-api is the one reference page still written by hand. It had reached
+      # 114 of 211 socket events, with whole features missing, before anybody counted.
       - name: Check the socket API is still fully described
         shell: bash
         run: node .github/scripts/check-socket-coverage.mjs

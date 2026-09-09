@@ -1,19 +1,16 @@
 #!/usr/bin/env node
 /**
- * Does `build/server-api` still describe every socket event the server has?
- *
- * The page is hand-written, unlike the three generated reference pages beside
- * it, and it had fallen to 114 of 211 events without anything noticing. Whole
- * features were missing — direct messages, threads, forums and calls, all four
- * of which are documented now.
- *
- * It is not generated, deliberately. The page is organised by what somebody is
- * trying to do (Joining, Sessions, Chat, Voice, Moderation) and reads well;
- * generating it would trade that for an alphabetical list of 211 rows. Nothing
- * in it is wrong. So this checks coverage and leaves the writing alone.
- *
- * Run it with --list to see what is missing rather than only how much.
+ * Does `build/server-api` still describe every socket event the server has? It is
+ * hand-written, and had fallen to 114 of 211 without anything noticing.
  */
+
+/* Whole features were missing — direct messages, threads, forums and calls, all
+   four documented now. */
+
+/* Not generated, deliberately: the page is organised by what somebody is trying to
+   do and reads well, where generating it would give 211 alphabetical rows. */
+
+/* Run it with --list to see what is missing rather than only how much. */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -23,11 +20,10 @@ const PAGE = "packages/docs/content/docs/build/server-api.mdx";
 
 /**
  * Events the server never speaks, so their absence is not a gap.
- *
- * `connect`, `disconnect` and friends are Socket.IO's own, documented by
- * Socket.IO. The rest are names built at runtime from a variable, which this
- * cannot resolve and a reader would not look up.
  */
+
+/* `connect`, `disconnect` and friends are Socket.IO's own. The rest are names
+   built at runtime from a variable, which this cannot resolve. */
 const NOT_OURS = new Set([
   "connect", "disconnect", "connect_error", "disconnecting", "error",
 ]);
@@ -42,15 +38,12 @@ function walk(dir, out = []) {
 }
 
 /**
- * Three registration styles, because the server uses all three.
- *
- *   'chat:send': async (payload) => {}     a key in an EventHandlerMap
- *   socket.on("session:restore", ...)      registered directly
- *   socket.emit("member:joined", ...)      server to client
- *
- * A first pass at this counted only the first style and reported that two
- * documented events did not exist. Both were real, registered the second way.
+ * Three registration styles, because the server uses all three: a key in an
+ * EventHandlerMap, a direct socket.on, and socket.emit for server to client.
  */
+
+/* A first pass counted only the first style and reported that two documented
+   events did not exist. Both were real, registered the second way. */
 function eventsInSource() {
   const found = new Map();
 
@@ -69,10 +62,8 @@ function eventsInSource() {
     for (const m of text.matchAll(/\.on\(\s*['"]([a-z][a-zA-Z]*:[a-zA-Z:_.-]+)['"]/g)) {
       add(m[1], "handler");
     }
-    /* Any emit-ish call, not only `.emit(`. calls.ts sends through a local
-       `emitTo(userId, "call:incoming", …)` helper, and matching `.emit(` alone
-       missed call:incoming, call:ringing and call:withdrawn — three events the
-       client listens for. */
+    /* Any emit-ish call, not only `.emit(`: calls.ts sends through a local
+       `emitTo(...)` helper, and three events were missed without this. */
     for (const m of text.matchAll(/emit[A-Za-z]*\(\s*(?:[^,()]{1,60},\s*)?['"]([a-zA-Z]+:[a-zA-Z:_.-]+)['"]/g)) {
       add(m[1], "emit");
     }
@@ -126,13 +117,12 @@ if (missing.length > 0) {
 }
 
 /**
- * A floor rather than a target.
- *
- * Failing on anything under 100% would mean this check goes red the moment
- * somebody adds an event, which trains people to ignore it — and the page then
- * rots anyway. A floor fails only when coverage gets worse than it is today,
- * so the number can be raised as the page catches up, and never silently slips.
+ * A floor rather than a target. Failing under 100% would go red the moment
+ * somebody adds an event, which trains people to ignore it.
  */
+
+/* So it fails only when coverage gets worse than it is today, and the number can
+   be raised as the page catches up. */
 const FLOOR = 70;
 
 if (stale.length > 0) {

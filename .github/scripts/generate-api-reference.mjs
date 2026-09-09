@@ -2,45 +2,24 @@
 /**
  * Writes the reference pages for the three APIs somebody outside Gryt builds
  * against, from the TypeScript that defines them (GRYT-950).
- *
- * - `docs/build/server-plugin-api` — what a server plugin is handed
- * - `docs/build/addon-api`  — what a client plugin is handed
- * - `docs/build/bot-api` — everything `@gryt/bot` exports
- *
- * ## Why generated
- *
- * Because a handwritten one goes stale, and there is a worked example. The
- * site's developer page printed the whole of `pluginApi.ts` with a comment
- * above it saying it had to grow with the file or become a lie. The file was
- * deleted in GRYT-930 and the page kept printing `window.gryt` and the sentence
- * "no sandbox, no permission model" for as long as it took somebody to read it
- * again. Nothing failed. The three guide pages beside these can drift the same
- * way, and mostly the guides should — they teach a shape and skip the surface —
- * but a reference that skips half the surface is worse than none.
- *
- * ## Why the superproject
- *
- * The same reason as `check-permission-labels.mjs` next door: nothing else can
- * see server, client, bot and docs at once. Each repository's CI is green while
- * its own source and the page describing it have already parted company.
- *
- * ## Usage
- *
- *   generate-api-reference.mjs           write the pages
- *   generate-api-reference.mjs --check   fail if what is on disk is not what
- *                                        this would write
- *
- * Reads whatever `packages/*` holds. The caller decides what is checked out
- * there; this script has no opinion about it.
- *
- * ## What it does not do
- *
- * It resolves nothing. A type annotation is copied through as the text in the
- * source, so `Promise<ModerationOutcome>` stays those words rather than being
- * expanded — which is what somebody reading wants, since that name is what they
- * will search for. The cost is that renaming a type in a file this does not
- * read leaves the old name on the page, and nothing here notices.
  */
+
+/* `docs/build/server-plugin-api`, `docs/build/addon-api` and `docs/build/bot-api`:
+   what a server plugin gets, what a client plugin gets, what @gryt/bot exports. */
+
+/* Generated because a handwritten one goes stale. The site's developer page kept
+   printing `window.gryt` after GRYT-930 deleted the file it came from. */
+
+/* In the superproject for the reason check-permission-labels.mjs is: nothing else
+   sees server, client, bot and docs at once. */
+
+/*
+ *   generate-api-reference.mjs           write the pages
+ *   generate-api-reference.mjs --check   fail if disk is not what this would write
+ */
+
+/* It resolves nothing: a type annotation is copied through as written, so renaming
+   a type in a file this does not read leaves the old name on the page. */
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -51,14 +30,11 @@ const ROOT =
   process.env.GRYT_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 /*
- * TypeScript is resolved from whichever package has it rather than depended on
- * here, because the superproject has no package.json and adding one to hold a
- * single devDependency would give Dependabot a fourteenth manifest to open pull
- * requests against.
- *
- * The workflow installs it into packages/docs, which is checked out anyway
- * because this writes into it.
+ * TypeScript comes from whichever package has it: the superproject has no
+ * package.json, and one would give Dependabot a fourteenth manifest to open PRs on.
  */
+
+/* The workflow installs it into packages/docs, which is checked out anyway. */
 const require = createRequire(import.meta.url);
 let ts;
 for (const from of ["docs", "client", "server", "site"]) {
@@ -100,15 +76,12 @@ function sourceFile(path) {
 }
 
 /**
- * The doc comment above a node, as prose.
- *
- * Only the description: `@param` and the rest are dropped, because a reference
- * page renders parameters from the signature and printing both would put the
- * same fact on the page twice in two shapes.
- *
- * Markdown from the source survives — these comments are written with backticks
- * and lists in them already, and MDX renders that.
+ * The doc comment above a node, as prose. Only the description — a reference page
+ * renders parameters from the signature, so printing `@param` repeats the fact.
  */
+
+/* Markdown from the source survives: these comments are written with backticks and
+   lists in them already, and MDX renders that. */
 function docOf(node) {
   const [doc] = ts.getJSDocCommentsAndTags(node).filter(ts.isJSDoc);
   if (!doc) return "";
@@ -157,18 +130,14 @@ function text(node) {
 }
 
 /**
- * The members of an interface, as `{ name, signature, doc }`.
- *
- * `signature` is the member as written minus its own name, so a method reads as
- * its parameter list and return type and a property reads as its type.
+ * The members of an interface, as `{ name, signature, doc }`. `signature` is the
+ * member minus its own name, so a method reads as its parameters and return type.
  */
 function interfaceMembers(node) {
   const members = [];
   for (const member of node.members) {
-    /* A string-literal name is not an oddity here: every key in `PluginEvents`
-       is one, because an event is called `message:created` and a colon cannot
-       go in an identifier. Reading identifiers only skipped the whole events
-       section and left the heading above it with nothing under it. */
+    /* Every key in `PluginEvents` is a string literal, because a colon cannot go in
+       an identifier. Reading identifiers only skipped the whole events section. */
     if (!member.name || !(ts.isIdentifier(member.name) || ts.isStringLiteral(member.name))) continue;
     const name = member.name.text;
     const whole = text(member).replace(/;$/, "");
@@ -190,12 +159,10 @@ function interfaceMembers(node) {
 
 /**
  * The members of a `const x = { … }`, the same shape as an interface's.
- *
- * The client's whole API is an object literal rather than a type — it is the
- * thing itself, assigned onto `globalThis` — so a reference for it has to read
- * the value. Getters are reported as properties, which is what they are from
- * the outside.
  */
+
+/* The client's whole API is an object literal assigned onto `globalThis`, so a
+   reference for it has to read the value. Getters are reported as properties. */
 function objectMembers(node) {
   const init = node.initializer;
   if (!init || !ts.isObjectLiteralExpression(init)) {
@@ -215,17 +182,12 @@ function objectMembers(node) {
       members.push({ name, signature: `(${params})${returns}`, doc, kind: "method" });
     } else if (ts.isGetAccessorDeclaration(property)) {
       /*
-       * Refused rather than inferred. This reads source as text and resolves
-       * nothing, on purpose — `Promise<ModerationOutcome>` should stay the words
-       * somebody will search for — but the cost is that an unannotated getter
-       * has no type to print, and `gryt.version` was one. It listed as `version`
-       * with nothing beside it, which is a reference page lying by omission.
-       *
-       * A checker was the first fix and it is the wrong one: it drags in module
-       * resolution for a surface of two getters, and it did not answer anyway
-       * without the lib files. Annotating the source is a smaller change and
-       * makes the source better too.
+       * Refused rather than inferred: this reads source as text, so an unannotated
+       * getter has no type to print and `gryt.version` listed with nothing beside it.
        */
+
+      /* A checker was the first fix and it is the wrong one: module resolution for
+         a surface of two getters, and it did not answer without the lib files. */
       if (!property.type) {
         console.error(
           `generate-api-reference: \`${name}\` in ${node.name.getText()} has no return type.\n` +
@@ -247,8 +209,7 @@ function objectMembers(node) {
         });
       } else if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) {
         /* `gryt.log.info` and its two siblings are arrow properties rather than
-           methods. Without this they came out as headings with an empty code
-           block under them. */
+           methods, and came out as headings with an empty code block under them. */
         const params = value.parameters.map(text).join(", ");
         const returns = value.type ? `: ${text(value.type)}` : "";
         members.push({ name, signature: `(${params})${returns}`, doc, kind: "method" });
@@ -295,10 +256,8 @@ function numbers(path, names) {
     const decl = found.get(name);
     if (!decl?.initializer) continue;
     const written = text(decl.initializer);
-    /* `MAX_PAYLOAD_BYTES` is written `8 * 1024`, which is the right way to write
-       it and the wrong thing to print at somebody. Folded when it is nothing but
-       digits and arithmetic, and left alone otherwise — the guard is what keeps
-       this from being an eval of whatever the source happens to say. */
+    /* `MAX_PAYLOAD_BYTES` is written `8 * 1024`. Folded when it is nothing but digits
+       and arithmetic — that guard is what keeps this from being an eval. */
     const value = /^[\d_+*\s]+$/.test(written)
       ? String(Function(`"use strict"; return (${written})`)())
       : written;
@@ -314,14 +273,12 @@ const BANNER =
   "    Do not edit this file. Change the source it reads, then run the script. */}";
 
 /**
- * The same warning, where a reader can see it.
- *
- * The comment above is invisible on the site, so it only ever reached somebody
- * who had already opened the file — by which point they were editing a page
- * whose next regeneration would throw the edit away. It also answers the
- * question Sivert asked of the docs as a whole: which of these pages are
- * reference, and which are written by a person.
+ * The same warning, where a reader can see it. The comment above is invisible on
+ * the site, so it only reached somebody already editing a page about to be rewritten.
  */
+
+/* It also answers the question Sivert asked of the docs: which pages are reference
+   and which are written by a person. */
 const NOTICE = [
   "import { Callout } from 'fumadocs-ui/components/callout';",
   "",
@@ -348,14 +305,12 @@ function frontmatter({ title, description, icon }) {
 }
 
 /**
- * One member as a heading, a signature block and its prose.
- *
- * The heading is the name and nothing else. Putting the parameter list in it
- * looked precise and was not: the first version cut at the first `)`, so a
- * handler parameter left the heading ending mid-type, and `ban`'s three-line
- * signature became a heading three lines long. The signature is in the code
- * block directly underneath either way.
+ * One member as a heading, a signature block and its prose. The heading is the name
+ * and nothing else.
  */
+
+/* Putting the parameter list in it cut at the first `)`, so a handler parameter left
+   the heading ending mid-type and `ban` became a heading three lines long. */
 function member({ name, signature, doc, needs }, level = "###") {
   const callable = signature.startsWith("(") || signature.startsWith("<");
   const out = [`${level} \`${name}${callable ? "()" : ""}\``, ""];
@@ -363,9 +318,8 @@ function member({ name, signature, doc, needs }, level = "###") {
   out.push(`${name}${signature}`);
   out.push("```");
   if (needs) out.push(`\nNeeds \`${needs}\`.`);
-  /* The doc comments say "Needs `messaging`." themselves, because they were
-     written to be read in the editor. Printing both put the sentence on the
-     page twice, two lines apart. */
+  /* The doc comments say "Needs `messaging`." themselves, because they were written
+     to be read in the editor. Printing both put it on the page twice. */
   const prose = needs
     ? doc.replace(new RegExp(`\\s*Needs \`${needs}\`\\.`, "g"), "").trim()
     : doc;
@@ -377,34 +331,28 @@ function member({ name, signature, doc, needs }, level = "###") {
 }
 
 /*
- * A union type is full of pipes and a pipe ends a markdown column, so
- * `string | null` rendered as two cells and pushed the row's last value off the
- * end of the table. Escaped here rather than at each call site, because every
- * cell on these pages is a type or a name and none of them wants a raw pipe.
+ * A union type is full of pipes and a pipe ends a markdown column, so `string | null`
+ * rendered as two cells and pushed the row's last value off the end.
  */
+
+/* Escaped here rather than at each call site: every cell on these pages is a type or
+   a name, and none of them wants a raw pipe. */
 function cell(value) {
   return String(value).replace(/\|/g, "\\|");
 }
 
 /**
  * An interface as a table of its fields, with what each one is for.
- *
- * The doc comment on a field is the whole reason this is worth generating. The
- * first version printed name and type only, and `GrytBotOptions` came out as
- * ten rows of `string` — while the source had a four-line warning on `wants`
- * saying the first run's declaration is fixed from then on. That is the single
- * most useful sentence in the file and the page dropped it.
- *
- * Optionality goes on the name as a `?` rather than into a column of its own.
- * It is TypeScript's own spelling, everybody reading this has seen it, and a
- * fourth column would push the descriptions into a two-word ribbon.
- *
- * The whole doc, not the first paragraph. Cutting at the paragraph break was
- * the second version and it lost the sentence that matters most in
- * `GrytBotOptions`: `wants` explains what it is in one paragraph and then says
- * a later run asking for more gets the first run's answer. A long cell is a
- * smaller problem than a reference that quietly drops the warning.
  */
+
+/* The doc comment on a field is the reason this is worth generating: name and type
+   alone gave ten rows of `string` for `GrytBotOptions`, dropping its warning. */
+
+/* Optionality goes on the name as a `?` rather than into a column of its own: it is
+   TypeScript's own spelling, and a fourth column would squeeze the descriptions. */
+
+/* The whole doc, not the first paragraph. Cutting at the paragraph break lost that
+   same `wants` warning, and a long cell is the smaller problem. */
 function fieldTable(members, extra) {
   return table(
     ["Field", "Type", "What it is"],
@@ -498,11 +446,8 @@ function serverPage() {
     "",
     ...events.map((event) => {
       /*
-       * The payload as a table rather than as its source text. Every one of
-       * these is an inline type literal with doc comments inside it, and
-       * flattening that onto one line put `/** The member's id … *\/` in the
-       * middle of a type annotation. A field, its type and what it means are
-       * three columns.
+       * The payload as a table rather than source text: these are inline type literals
+       * with doc comments inside, and flattening one put a `/**` into an annotation.
        */
       const literal = event.node?.type;
       const fields = literal && ts.isTypeLiteralNode(literal) ? interfaceMembers(literal) : [];
@@ -651,10 +596,8 @@ function clientPage() {
 function botPage() {
   const index = sourceFile(`${BOT}/index.ts`);
 
-  /* Everything index.ts re-exports is public and nothing else is, which is a
-     cleaner definition of the surface than any heuristic over the other files.
-     Kept in the order it is exported: that order is somebody's decision about
-     what matters, and sorting it would throw that away. */
+  /* Everything index.ts re-exports is public and nothing else is. Kept in the order
+     it is exported, because that order is somebody's decision about what matters. */
   const exports = [];
   for (const statement of index.statements) {
     if (!ts.isExportDeclaration(statement) || !statement.exportClause) continue;
@@ -753,12 +696,12 @@ const PAGES = [
 ];
 
 /*
- * A page fumadocs is not told about does not appear in the sidebar. It renders
- * at its URL, so nothing 404s and nothing fails — it is simply not findable,
- * which is the whole point of a reference. `meta.json` is hand-ordered, so this
- * checks rather than writes: where a page sits among its neighbours is somebody's
- * decision and not this script's.
+ * A page fumadocs is not told about renders at its URL and appears in no sidebar, so
+ * nothing fails and it is simply not findable.
  */
+
+/* `meta.json` is hand-ordered, so this checks rather than writes: where a page sits
+   among its neighbours is somebody's decision. */
 function checkListed(page) {
   const section = dirname(`${ROOT}/${page.path}`);
   const slug = page.path.split("/").pop().replace(/\.mdx$/, "");

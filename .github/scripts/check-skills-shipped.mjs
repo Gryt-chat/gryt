@@ -1,14 +1,12 @@
 /* eslint-env node */
 
 /**
- * Every skill CLAUDE.md names is in the repository.
- *
- * The rule was versioned and the tool was not, and it went wrong twice with
- * nothing to notice. `humanizer` was named until 2026-08-22 and was never on the
- * Windows machine. `natural-writing` was written 2026-08-28 and reached that
- * machine on 2026-09-03, and the Microsoft Store copy was written inside the
- * gap, without contractions and with a phrase the skill's own examples call out.
+ * Every skill CLAUDE.md names is in the repository. The rule was versioned and
+ * the tool was not, and it went wrong twice with nothing to notice.
  */
+
+/* `humanizer` was named until 2026-08-22 and never installed. `natural-writing`
+   reached the Windows machine six days after the rule asked for it. */
 
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
@@ -22,9 +20,8 @@ const skillsDir = join(root, ".claude", "skills");
 const text = readFileSync(claudeMd, "utf8");
 
 /**
- * Read off the paths rather than the prose. A backticked word is any word;
- * `.claude/skills/<name>` is a claim that the repository carries it, which is
- * the thing being checked.
+ * Read off the paths rather than the prose: a backticked word is any word, where
+ * `.claude/skills/<name>` is a claim that the repository carries it.
  */
 const named = new Set(
   [...text.matchAll(/\.claude\/skills\/([a-z][a-z0-9-]*)/g)].map(([, name]) => name),

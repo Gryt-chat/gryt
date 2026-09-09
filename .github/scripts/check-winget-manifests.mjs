@@ -2,16 +2,14 @@
 
 /**
  * The winget manifests match Microsoft's schema, with the placeholders filled.
- *
- * Two things this catches that reading them does not. A bare 64-zero checksum
- * parses as the integer 0 rather than a string, so the file is invalid as
- * committed and the error only appears at submission. And the three manifests
- * carry the version three times, so one that stops being rewritten points at a
- * release that does not exist.
- *
- * The far end is somebody else's review queue, where a mistake costs a person's
- * time rather than a re-run.
+ * The far end is a review queue, where a mistake costs a person's time.
  */
+
+/* A bare 64-zero checksum parses as the integer 0 rather than a string, so the
+   file is invalid as committed and the error only appears at submission. */
+
+/* The three manifests carry the version three times, so one that stops being
+   rewritten points at a release that does not exist. */
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

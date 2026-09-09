@@ -3,15 +3,13 @@
 /**
  * The cask still downloads a file per architecture, and still carries the three
  * lines publish-homebrew.yml rewrites.
- *
- * The arch stanza is the part worth a check. Drop it and both Macs get the
- * arm64 disk image, which is what the cask did until Intel builds existed and
- * which fails at the point somebody opens it rather than at build time.
- *
- * The seds are anchored on `version`, `sha256 arm:` and `intel:`, and the
- * workflow greps afterwards to confirm each landed. Rename one of those and the
- * sed matches nothing.
  */
+
+/* Drop the arch stanza and both Macs get the arm64 disk image, which fails at the
+   point somebody opens it rather than at build time. */
+
+/* The seds are anchored on `version`, `sha256 arm:` and `intel:`, and the workflow
+   greps afterwards. Rename one and the sed matches nothing. */
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

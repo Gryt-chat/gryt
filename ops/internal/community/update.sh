@@ -1,22 +1,12 @@
 #!/usr/bin/env bash
-#
-# Keep community.gryt.chat on the images the last release published.
-#
-# The VM was found on server 1.8.3 while 1.8.7 was out. Nothing on the box ever
-# pulled, because SERVER_VERSION and friends in .env pinned exact tags and a
-# pinned tag never moves. Same shape as GRYT-291, where app.gryt.chat served a
-# build five versions behind the desktop app for weeks.
-#
+# Keep community.gryt.chat on the images the last release published. The VM was
+# found on server 1.8.3 while 1.8.7 was out, because .env pinned exact tags.
+
 # So the versions are `latest` now and this pulls them. The trade is the one
-# refresh-web-client.sh made on dev on 2026-08-21: rolling forward on a timer
-# is a decision, and so is leaving a public server behind, and the second one
-# is the decision that keeps producing bugs nobody can reproduce.
-#
-# To pin again, put a version back in .env and `docker compose up -d`. This
-# script only ever pulls the tag a service is already configured for, so a
-# pinned service stops moving the moment you pin it.
-#
-# Run from the systemd timer beside this script. Safe to run by hand.
+# refresh-web-client.sh made: leaving a public server behind is also a decision.
+
+# To pin again, put a version back in .env and `up -d` — this only ever pulls the
+# tag a service is already configured for. Run from the systemd timer beside it.
 
 set -euo pipefail
 
@@ -43,10 +33,8 @@ for service in $SERVICES; do
     continue
   fi
 
-  # Recreating the SFU drops every call on it, so leave it alone while anybody
-  # is connected and take it on a later tick. Voice is not expected on this
-  # server, but "not expected" is not "never", and a dropped call to save ten
-  # minutes is a bad trade.
+  # Recreating the SFU drops every call on it, so leave it alone while anybody is
+  # connected. Voice is not expected on this server, but "not expected" is not "never".
   if [[ "$service" == "sfu" ]]; then
     peers=$(curl -sf --max-time 5 http://127.0.0.1:5025/metrics 2>/dev/null \
       | awk '/^gryt_sfu_peers_active /{print $2}' || true)
@@ -61,12 +49,11 @@ for service in $SERVICES; do
     continue
   fi
 
-  # Compare like with like. `before` is the image the running container was
-  # created from, so `after` has to be the image that container's own tag
-  # resolves to now, read the same way. `docker compose images -q` answers in a
-  # different id format, so it never matched and every service was recreated on
-  # every tick — the ten-minute churn refresh-web-client.sh warns about, found
-  # by running this twice in a row and watching it recreate a second time.
+  # Compare like with like: `before` is the image the container was created from,
+  # so `after` has to be what that container's own tag resolves to, read the same way.
+
+  # `docker compose images -q` answers in a different id format, so it never matched
+  # and every service was recreated on every tick.
   ref=$(docker inspect --format '{{.Config.Image}}' "$container" 2>/dev/null || true)
   after=$(docker image inspect --format '{{.Id}}' "$ref" 2>/dev/null || true)
   if [[ -z "$after" || "$before" == "$after" ]]; then

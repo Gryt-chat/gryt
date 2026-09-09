@@ -1,28 +1,16 @@
 #!/usr/bin/env node
 /**
  * Fails when the server ships a permission the client has no words for.
- *
- * The server owns the list of permissions and sends it with the role editor
- * payload. The client owns the labels and the one-line descriptions, on
- * purpose — how a permission is worded is not the server's business. The
- * seam between them is unchecked, and when it slips the role editor puts the
- * permission in a group called "Newer than this client" and draws it as a bare
- * id. It saves and applies correctly the whole time. It just reads as a client
- * that is out of date.
- *
- * That has happened twice: `upload_avatar_image` in GRYT-866 and
- * `set_activity` in GRYT-929, the second caught by hand rather than by
- * anything running.
- *
- * Neither repository's CI can catch it, because neither can see the other.
- * This one can. Same reasoning as check-avatar-parity.sh next door.
- *
- * Usage: check-permission-labels.mjs
- *
- * Reads the two source files in place. The caller is responsible for having
- * packages/server and packages/client checked out at whatever refs it wants
- * compared; this script has no opinion about that.
  */
+
+/* The server owns the list and the client owns the wording. When the seam slips
+   the role editor draws the permission as a bare id, and saves it correctly. */
+
+/* Twice: `upload_avatar_image` in GRYT-866 and `set_activity` in GRYT-929, the
+   second caught by hand. Neither repository's CI can see the other; this can. */
+
+/* Usage: check-permission-labels.mjs. Reads the two source files in place, at
+   whatever refs the caller checked out. */
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -36,13 +24,12 @@ const SERVER_FILE = `${ROOT}/packages/server/src/constants/permissions.ts`;
 const CLIENT_FILE = `${ROOT}/packages/client/src/packages/socket/src/lib/permissions.ts`;
 
 /**
- * Both files are dense with comments, and the comments talk about permissions
- * by name. Stripping them first is the difference between reading the code and
- * reading the prose about the code.
- *
- * Crude on purpose: it does not understand a `//` inside a string literal.
- * Neither file has one, and a parser that did would be a dependency.
+ * Both files talk about permissions by name in their comments, so stripping them
+ * is the difference between reading the code and reading the prose about it.
  */
+
+/* Crude on purpose: it does not understand a `//` inside a string literal.
+   Neither file has one, and a parser that did would be a dependency. */
 function withoutComments(source) {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
 }
@@ -67,11 +54,12 @@ function fail(message) {
 const serverSource = withoutComments(read(SERVER_FILE, "server permission catalogue"));
 
 /*
- * Anchored on the declaration rather than on "the first array in the file".
- * The same file also holds MEMBER_PERMISSIONS and the backfill table, and
- * picking one of those up would compare the client against a subset — which
- * passes while saying nothing.
+ * Anchored on the declaration rather than the first array in the file, which also
+ * holds MEMBER_PERMISSIONS and the backfill table.
  */
+
+/* Picking one of those up would compare the client against a subset, which passes
+   while saying nothing. */
 const serverMatch = serverSource.match(
   /export const PERMISSIONS\b[^=]*=\s*\[([\s\S]*?)\n\]/,
 );
@@ -91,11 +79,12 @@ const serverPermissions = [...serverMatch[1].matchAll(/"([a-z0-9_]+)"/g)].map((m
 const clientSource = withoutComments(read(CLIENT_FILE, "client permission labels"));
 
 /*
- * Every entry the role editor can draw a name for. Matching on `id:` followed
- * by `label:` rather than on bare strings keeps PERMISSIONS_BEFORE_CATALOGUE
- * out of it — that list is a frozen record of an old release, not a set of
- * things this editor has words for.
+ * Every entry the role editor can draw a name for. Matching `id:` followed by
+ * `label:` rather than bare strings keeps PERMISSIONS_BEFORE_CATALOGUE out.
  */
+
+/* That list is a frozen record of an old release, not a set of things this editor
+   has words for. */
 const clientLabelled = [
   ...clientSource.matchAll(/\{\s*id:\s*"([a-z0-9_]+)"\s*,\s*label:/g),
 ].map((m) => m[1]);
@@ -129,9 +118,8 @@ for (const permission of unlabelled) {
 }
 
 /*
- * The other direction is worth failing on too. A label for a permission the
- * server dropped is a switch the role editor offers and the server ignores,
- * which is a worse lie than a missing switch.
+ * The other direction is worth failing on too: a label for a permission the server
+ * dropped is a switch the role editor offers and the server ignores.
  */
 for (const permission of orphaned) {
   fail(

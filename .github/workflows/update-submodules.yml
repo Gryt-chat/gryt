@@ -1,9 +1,7 @@
 name: Update Submodules
 
-# Updates submodule gitlinks on main. This used to take a target_branch input
-# defaulting to beta, which is where the "chore: update all submodules on beta"
-# commits came from. With the beta branch gone there is only one target left, so
-# the input would be a choice of one.
+# Updates submodule gitlinks on main. The target_branch input is gone with the
+# beta branch: there is only one target left, so it was a choice of one.
 
 on:
   # How this normally runs: each submodule repo pings us when something lands on
@@ -11,10 +9,8 @@ on:
   repository_dispatch:
     types: [submodule-updated]
 
-  # Backstop only. GitHub throttles scheduled runs on quiet repositories — this
-  # was set to every 15 minutes and delivered one run in two hours — so the
-  # schedule cannot be the primary trigger. Hourly is enough to catch a dispatch
-  # that never arrived.
+  # Backstop only. GitHub throttles scheduled runs on quiet repositories — every
+  # 15 minutes delivered one run in two hours — so this cannot be the trigger.
   schedule:
     - cron: "17 * * * *"
 
@@ -46,21 +42,15 @@ permissions:
   contents: write
 
 concurrency:
-  # This used to share the `release-${{ github.ref }}` group with both release
-  # workflows, on the grounds that a third unattended writer to main would race
-  # them for the push. It does race them — but the push below already handles
-  # that itself, retrying five times and re-pointing the submodules against
-  # whatever main has become. The shared group was guarding something that no
-  # longer needs guarding, and it cost more than it gave: GitHub keeps only one
-  # pending run per group, so a burst of merges left queued sweeps cancelling
-  # each other, the hourly backstop included. Three gitlinks sat stale on
-  # 2026-08-06 because of it.
+  # Its own group rather than the releases'. The push below already retries five
+  # times and re-points the submodules against whatever main has become.
+
+  # GitHub keeps one pending run per group, so sharing meant a burst of merges
+  # left queued sweeps cancelling each other. Three gitlinks sat stale 2026-08-06.
   group: submodule-sweep-${{ github.ref }}
 
-  # Safe to cancel, because the sweep is idempotent — it points every submodule
-  # at its current main, so the newest run alone produces the same result as
-  # running all of them in order. During a burst this collapses to one run
-  # instead of a queue where only the last survives anyway.
+  # Safe to cancel: the sweep is idempotent, so the newest run alone produces the
+  # same result as running all of them in order.
   cancel-in-progress: true
 
 jobs:
@@ -74,11 +64,10 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          # Deliberately not `submodules: recursive`. That clones each submodule
-          # at the recorded gitlink, so a pointer at a commit which is not on the
-          # remote — an unpushed local commit, a force-pushed branch — kills the
-          # checkout before this job reaches the code that would repair it. That
-          # happened on 2026-08-06 and needed a manual fix. The job re-points
+          # Deliberately not `submodules: recursive`, which clones at the recorded
+          # gitlink — a pointer at a commit not on the remote kills the checkout.
+
+          # That happened on 2026-08-06 and needed a manual fix. This job re-points
           # every submodule anyway, so the recorded SHA is of no use here.
           submodules: false
 
@@ -94,18 +83,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Read out of `.gitmodules` rather than written down here, and shared
-          # with the commit step through `$GITHUB_ENV` rather than written down
-          # there as well.
-          #
-          # There used to be two hand-kept copies of this list, and they drifted
-          # twice by the same route: a submodule added to one and not the other.
-          # `mobile` first, then `reports`. The symptom is nasty — the list in
-          # the commit step is only used when a push is rejected and the commit
-          # is rebuilt, so the missing submodule's bump is silently dropped on
-          # exactly the runs nobody is watching, and everything looks fine
-          # otherwise. `.gitmodules` is the file that already decides what a
-          # submodule is.
+          # Read out of `.gitmodules` and shared with the commit step through
+          # `$GITHUB_ENV`, rather than two hand-kept copies that drifted twice.
+
+          # The list in the commit step is only used when a push is rejected, so a
+          # missing submodule was dropped on exactly the runs nobody watches.
           SUBMODULES="$(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' \
             | awk '{ print $2 }' | sort | tr '\n' ' ')"
 
@@ -117,10 +99,8 @@ jobs:
           echo "Submodules: $SUBMODULES"
           echo "SUBMODULES=$SUBMODULES" >> "$GITHUB_ENV"
 
-          # Clone straight from the URL rather than `git submodule update`,
-          # which insists on the recorded gitlink and so fails on a broken one.
-          # Nothing here reads that SHA — each submodule is moved to its own
-          # origin/main a moment later.
+          # Clone from the URL rather than `git submodule update`, which insists
+          # on the recorded gitlink and fails on a broken one. Nothing reads it.
           for path in $SUBMODULES; do
             if [[ -e "$path/.git" ]]; then
               continue
@@ -173,16 +153,12 @@ jobs:
             git add "$path"
           }
 
-          # Derived from $SUBMODULES rather than written out, because this was
-          # the last hand-kept copy of the list and it had already drifted. The
-          # comment above records the same mistake twice, on mobile and then
-          # reports, against the two copies that were consolidated then. This
-          # was the third, and packages/core was its third drift: added as a
-          # submodule, never added here, so its gitlink sat at 0dec296 through
-          # five releases while the sweep ran green every hour and said nothing.
-          #
-          # The short name a dispatch selects is the path's last segment, which
-          # is what every one of those blocks used.
+          # Derived from $SUBMODULES rather than written out. As the last hand-kept
+          # copy it drifted: packages/core sat at 0dec296 through five releases.
+
+          # The short name a dispatch selects is the path's last segment.
+
+          # The short name a dispatch selects is the path's last segment.
           MATCHED=0
 
           for path in $SUBMODULES; do
@@ -218,10 +194,8 @@ jobs:
           # kick off the other workflows.
           git commit -m "chore: update $SELECTED submodules on $TARGET_BRANCH [skip ci]"
 
-          # main can move under us — a merged PR, or a release commit that got
-          # past the concurrency group. Nothing here is worth rebasing: on a
-          # rejection, take the branch as it now stands and re-point the
-          # submodules at their current tips, which is the whole job anyway.
+          # main can move under us. Nothing here is worth rebasing: on a rejection,
+          # take the branch as it stands and re-point the submodules at their tips.
           for attempt in 1 2 3 4 5; do
             if git push origin "HEAD:$TARGET_BRANCH"; then
               exit 0
@@ -231,10 +205,8 @@ jobs:
             git fetch origin "$TARGET_BRANCH"
             git reset --hard "origin/$TARGET_BRANCH"
 
-            # `$SUBMODULES` comes from `.gitmodules` by way of `$GITHUB_ENV`,
-            # set in "Initialize top-level submodules". It was a second
-            # hand-kept copy of that list until GRYT-732, and it had already
-            # drifted twice — see the note where it is built.
+            # `$SUBMODULES` comes from `.gitmodules` by way of `$GITHUB_ENV`, set
+            # in "Initialize top-level submodules". A second copy until GRYT-732.
             for path in $SUBMODULES; do
               [[ -d "$path" ]] || continue
               git -C "$path" fetch origin main

@@ -15,6 +15,7 @@ services:
       # All media flows over this one UDP port. It has to be published above.
       - ICE_UDP_MUX_PORT=${ICE_UDP_MUX_PORT:-3478}
       # Optional: control what IP is advertised in ICE candidates
+
       # - ICE_ADVERTISE_IP=${ICE_ADVERTISE_IP:-}
       # - DISABLE_STUN=${DISABLE_STUN:-false}
     volumes:

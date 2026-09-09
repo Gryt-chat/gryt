@@ -42,8 +42,8 @@ gryt:
 sfu:
   enabled: true
 
-  # Where servers register. Never exposed by the Service: the Service port is
-  # reachable by clients, and a reachable /server lets anyone register on this SFU.
+  # Where servers register. On the Service so the server Pod can reach it, and
+  # kept off the Ingress, which is what actually puts a port in front of clients.
   controlPort: 9092
   image:
     repository: ghcr.io/gryt-chat/sfu

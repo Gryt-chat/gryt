@@ -16,6 +16,12 @@ spec:
     targetPort: {{ .Values.sfu.service.port }}
     protocol: TCP
     name: websocket
+  # Registration. Reachable by the server Pod and by nothing outside the cluster:
+  # the Ingress routes to the websocket port above and never to this one.
+  - port: {{ .Values.sfu.controlPort | default 9092 }}
+    targetPort: {{ .Values.sfu.controlPort | default 9092 }}
+    protocol: TCP
+    name: control
   selector:
     {{- include "gryt.sfu.selectorLabels" . | nindent 4 }}
 {{- end }}

@@ -77,7 +77,7 @@ assert.ok(
 // to say why it is absent, and a substring search reads that as a route.
 const routed = [...wrangler.matchAll(/pattern\s*=\s*"([^/"]+)/g)].map((m) => m[1]);
 
-for (const host of ["status.gryt.chat", "ws1.sivert.io", "sfu.sivert.io"]) {
+for (const host of ["status.gryt.chat", "www.gryt.chat", "ws1.sivert.io", "sfu.sivert.io"]) {
   assert.equal(routed.includes(host), false, `${host} is routed through the offline page`);
 }
 

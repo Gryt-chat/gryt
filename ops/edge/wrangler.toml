@@ -9,11 +9,13 @@ workers_dev = false
 # Browser-facing hostnames only. ws1 and sfu are the API and the signalling
 # socket, where the client handles a failed connection and an HTML body would not.
 
+# www is absent too. It is a redirect rule to the bare hostname, and those run before
+# Workers, so a route here would never serve anything.
+
 # status.gryt.chat is deliberately absent: it is what this page links to, it runs
 # on the VPS on its own tunnel, and it has to stay up when these do not.
 routes = [
   { pattern = "gryt.chat/*", zone_name = "gryt.chat" },
-  { pattern = "www.gryt.chat/*", zone_name = "gryt.chat" },
   { pattern = "docs.gryt.chat/*", zone_name = "gryt.chat" },
   { pattern = "app.gryt.chat/*", zone_name = "gryt.chat" },
   { pattern = "beta.gryt.chat/*", zone_name = "gryt.chat" },

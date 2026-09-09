@@ -11,6 +11,7 @@ on:
     workflows:
       - API reference
       - Avatar parity
+      - Deploy offline page
       - Permission labels
       - Publish snap to the Snap Store
       - Publish the Homebrew cask

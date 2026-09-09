@@ -62,10 +62,13 @@ services:
     ports:
       - "${SFU_PORT:-5005}:5005"
       - "${ICE_UDP_MUX_PORT:-3478}:${ICE_UDP_MUX_PORT:-3478}/udp"
+      # Loopback only. The server below runs with host networking, so it cannot
+      # reach a container port at all unless that port is published somewhere.
+      - "127.0.0.1:${SFU_CONTROL_PORT:-9092}:${SFU_CONTROL_PORT:-9092}"
     environment:
       PORT: "5005"
-      # Registration, deliberately unpublished: the port above is public so clients
-      # can reach it, and a published /server lets anyone use this SFU as their relay.
+      # Registration. Published to loopback and no further: the port above is
+      # public, and a public /server lets anyone use this SFU as their relay.
       SFU_CONTROL_PORT: "${SFU_CONTROL_PORT:-9092}"
       STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
       ICE_UDP_MUX_PORT: ${ICE_UDP_MUX_PORT:-3478}
@@ -114,7 +117,12 @@ services:
       METRICS_PORT: ${METRICS_PORT:-9091}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://127.0.0.1:15738,https://app.gryt.chat}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
-      SFU_WS_HOST: ws://sfu:${SFU_CONTROL_PORT:-9092}
+      # 127.0.0.1 because this service has host networking, where the compose network
+      # does not resolve and only published ports can be reached.
+
+      # The websocket port, not the control port: an SFU that has moved registration
+      # refuses here and names the port to move to, and the server follows that.
+      SFU_WS_HOST: ws://127.0.0.1:${SFU_PORT:-5005}
       SFU_PUBLIC_HOST: ${SFU_PUBLIC_HOST:-ws://localhost:5005}
       STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
       VOICE_MAX_USERS: ${VOICE_MAX_USERS:-}

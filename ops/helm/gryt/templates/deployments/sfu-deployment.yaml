@@ -38,6 +38,9 @@ spec:
         - name: websocket
           containerPort: {{ .Values.sfu.service.port }}
           protocol: TCP
+        - name: control
+          containerPort: {{ .Values.sfu.controlPort | default 9092 }}
+          protocol: TCP
         env:
         - name: PORT
           valueFrom:

@@ -58,7 +58,20 @@ assert.equal(response.status, 503, "the page answers with a success-shaped code"
 assert.equal(response.headers.get("cache-control"), "no-store", "the outage gets cached");
 assert.ok(response.headers.get("retry-after"), "nothing tells a client when to come back");
 
-/* ── the routes leave out what must not be behind it ──────────────────────── */
+/* ── the routes are somewhere wrangler will read them ─────────────────────── */
+
+// In TOML every key after a table header belongs to that table. Below [[rules]]
+// this parsed as rules[0].routes, and the Worker deployed to nothing.
+const firstTable = wrangler.search(/^\[/m);
+const routesAt = wrangler.search(/^routes\s*=/m);
+
+assert.notEqual(routesAt, -1, "wrangler.toml declares no routes");
+assert.ok(
+  firstTable === -1 || routesAt < firstTable,
+  "routes sits under a [table] header, so wrangler reads it as that table's key",
+);
+
+/* ── and they leave out what must not be behind it ────────────────────────── */
 
 // The patterns, not the whole file: the comment above them names status.gryt.chat
 // to say why it is absent, and a substring search reads that as a route.
@@ -70,4 +83,4 @@ for (const host of ["status.gryt.chat", "ws1.sivert.io", "sfu.sivert.io"]) {
 
 assert.ok(routed.length >= 5, `only ${routed.length} hostnames are routed`);
 
-console.log(`offline page: self-contained, answers 503, ${routed.length} hostnames routed`);
+console.log(`offline page: self-contained, answers 503, ${routed.length} hostnames wrangler will route`);

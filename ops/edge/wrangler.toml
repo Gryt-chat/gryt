@@ -3,12 +3,8 @@ main = "src/index.js"
 compatibility_date = "2026-09-09"
 workers_dev = false
 
-# The page is a file rather than a template literal, so it can be opened in a
-# browser and edited like a page.
-[[rules]]
-type = "Text"
-globs = ["**/*.html"]
-fallthrough = true
+# Above [[rules]] on purpose. Every key after a table header belongs to that
+# table, so down there this parsed as rules[0].routes and deployed to nothing.
 
 # Browser-facing hostnames only. ws1 and sfu are the API and the signalling
 # socket, where the client handles a failed connection and an HTML body would not.
@@ -23,6 +19,13 @@ routes = [
   { pattern = "beta.gryt.chat/*", zone_name = "gryt.chat" },
   { pattern = "ui.gryt.chat/*", zone_name = "gryt.chat" },
 ]
+
+# The page is a file rather than a template literal, so it can be opened in a
+# browser and edited like a page.
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
 
 [observability]
 enabled = true

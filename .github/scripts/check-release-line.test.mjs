@@ -107,9 +107,14 @@ test("a prerelease needs no line", () => {
 });
 
 test("a version is matched whole, not as a prefix", () => {
-  /* 1.11.3 must not satisfy 1.11.30, and the dots are not wildcards. */
   assert.equal(run(written, "app", "1.11.30").code, 1);
-  assert.equal(run(written, "app", "1211x3").code, 1);
+});
+
+test("the dots in a version are not wildcards", () => {
+  /* Unescaped, 1.11.3 as a pattern matches 1211x3, and a release rides on a
+     line written for something else. */
+  const lookalike = fixture("lookalike", { app: [{ version: "1211x3", date: today }] });
+  assert.equal(run(lookalike, "app", "1.11.3").code, 1);
 });
 
 test("a source it cannot read fails, and says the check did not run", () => {

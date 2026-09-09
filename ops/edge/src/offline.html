@@ -6,10 +6,10 @@
     <meta name="robots" content="noindex" />
     <title>Gryt is down</title>
     <style>
-      /* Hallmark · macrostructure: Quote-Led shape, dialog card · genre: modern-minimal
+      /* Hallmark · macrostructure: Manifesto (poster, one screen) · genre: modern-minimal
        * design-system: packages/ui/design.md · theme: @gryt/ui dark half, inlined
        * tone: utilitarian · anchor hue: gryt violet · enrichment: the hard-hat owl
-       * pre-emit critique: P5 H5 E5 S5 R4 V4
+       * pre-emit critique: P5 H5 E5 S4 R5 V4
        */
 
       :root {
@@ -141,57 +141,41 @@
 
       .actions { display: flex; flex-wrap: wrap; gap: var(--space-2xs); }
 
-      /* The app's own surface language: a raised card on a hairline, the owl
-         cresting its top edge. The hazard stripe is the maintenance signal. */
-      body { display: grid; place-content: center; padding: var(--space-xl) var(--space-md); }
+      /* The axis is broken at the foot: the status row runs edge to edge under a
+         hairline, so the centred stack is not the only alignment on the page. */
+      body { display: grid; grid-template-rows: 1fr auto; }
 
-      .card {
-        position: relative;
-        width: min(100%, 30rem);
-        margin-top: 44px;
-        padding: var(--space-xl) var(--space-lg) var(--space-lg);
-        border: 1px solid var(--color-rule);
-        border-radius: var(--radius-lg);
-        background: var(--color-paper-2);
+      .poster {
+        display: grid;
+        justify-items: center;
+        align-content: center;
+        gap: var(--space-md);
+        text-align: center;
+        padding: var(--space-xl) var(--space-md);
+        max-width: 40rem;
+        margin: 0 auto;
       }
 
-      .card::before {
-        content: "";
-        position: absolute;
-        inset: 0 0 auto;
-        height: 5px;
-        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-        background: repeating-linear-gradient(
-          -45deg,
-          var(--color-warn) 0 10px,
-          var(--color-warn-rule) 10px 20px
-        );
-      }
+      .poster .mark { width: clamp(120px, 22vw, 168px); height: auto; }
+      .poster h1 { margin-top: var(--space-2xs); }
+      .poster .lede { max-width: 32rem; }
 
-      .card .mark {
-        position: absolute;
-        top: -44px;
-        right: var(--space-lg);
-        width: 96px;
-        height: 96px;
-      }
-
-      .card h1 { margin: var(--space-sm) 0 var(--space-2xs); }
-
-      /* paper-3 sits a hair off paper-2, so on the card the neutral button takes
-         the hairline the Chip already uses rather than a third surface. */
-      .card .btn--neutral { border: 1px solid var(--color-rule); }
-
-      .card hr {
-        height: 1px;
-        margin: var(--space-lg) 0 var(--space-md);
-        border: 0;
-        background: var(--color-rule);
+      .footrow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-sm);
+        padding: var(--space-sm) var(--space-md);
+        border-top: 1px solid var(--color-rule);
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        color: var(--color-ink-2);
       }
     </style>
   </head>
   <body>
-    <main class="card">
+    <main class="poster">
       <svg class="mark" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"
            role="img" aria-label="Gryt, in a hard hat">
         <g id="hat_hardhat" clip-path="url(#grytowl)">
@@ -225,17 +209,20 @@
         </clipPath>
         </defs>
       </svg>
-      <p class="chip">
-        <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M236.8,188.09,149.35,36.22h0a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM222.93,203.8a8.5,8.5,0,0,1-7.48,4.2H40.55a8.5,8.5,0,0,1-7.48-4.2,7.59,7.59,0,0,1,0-7.72L120.52,44.21a8.75,8.75,0,0,1,15,0l87.45,151.87A7.59,7.59,0,0,1,222.93,203.8ZM120,144V104a8,8,0,0,1,16,0v40a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,180Z" /></svg>
-        Service unavailable
-      </p>
       <h1>Gryt is down</h1>
       <p class="lede">Something on our side stopped answering. It isn&rsquo;t your connection.</p>
-      <hr />
       <div class="actions">
         <a class="btn btn--accent" href="https://status.gryt.chat">Check status.gryt.chat</a>
         <a class="btn btn--neutral" href="">Try again</a>
       </div>
     </main>
+
+    <footer class="footrow">
+      <p class="chip">
+        <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M236.8,188.09,149.35,36.22h0a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM222.93,203.8a8.5,8.5,0,0,1-7.48,4.2H40.55a8.5,8.5,0,0,1-7.48-4.2,7.59,7.59,0,0,1,0-7.72L120.52,44.21a8.75,8.75,0,0,1,15,0l87.45,151.87A7.59,7.59,0,0,1,222.93,203.8ZM120,144V104a8,8,0,0,1,16,0v40a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,180Z" /></svg>
+        Service unavailable
+      </p>
+      <span>HTTP 503</span>
+    </footer>
   </body>
 </html>

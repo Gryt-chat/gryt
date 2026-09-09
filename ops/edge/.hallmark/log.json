@@ -1,0 +1,12 @@
+[
+  {
+    "date": "2026-09-09",
+    "macrostructure": "Manifesto (poster, one screen)",
+    "theme": "@gryt/ui dark half, inlined",
+    "genre": "modern-minimal",
+    "enrichment": "the hard-hat owl, large and centred",
+    "design-system": "packages/ui/design.md",
+    "brief": "Gryt · the page the edge serves when the origin is down",
+    "considered": ["dialog card", "two bands"]
+  }
+]

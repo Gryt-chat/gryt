@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Gryt is down</title>
+    <style>
+      /* Hallmark · macrostructure: Manifesto (poster, one screen) · genre: modern-minimal
+       * design-system: packages/ui/design.md · theme: @gryt/ui dark half, inlined
+       * tone: utilitarian · anchor hue: gryt violet · enrichment: the hard-hat owl
+       * pre-emit critique: P5 H5 E5 S4 R5 V4
+       */
+
+      :root {
+        color-scheme: dark;
+
+        --color-paper: #111318;
+        --color-paper-2: #1a1d24;
+        --color-paper-3: #1e2028;
+        --color-paper-hover: #334155;
+        --color-ink: #e0e0e6;
+        --color-ink-2: #888888;
+        --color-rule: #2b303d;
+        --color-accent: #968ff8;
+        --color-accent-ink: #0c0a20;
+        --color-focus: #b4afff;
+
+        --color-warn-paper: #30250e;
+        --color-warn-rule: #513c06;
+        --color-warn-ink: #f8d17f;
+        --color-warn: #fbbf24;
+
+        --color-owl-body: #a495e3;
+        --color-owl-wing: #7c6ec3;
+        --color-owl-face: #c3c1ff;
+        --color-owl-ink: #2e2d5f;
+        --color-hat: #fed842;
+        --color-hat-brim: #fdc62a;
+        --color-hat-shade: #fab01e;
+        --color-hat-rib: #f9ae1c;
+
+        --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+        --space-3xs: 0.375rem;
+        --space-2xs: 0.5rem;
+        --space-xs: 0.75rem;
+        --space-sm: 1rem;
+        --space-md: 1.5rem;
+        --space-lg: 2rem;
+        --space-xl: 3rem;
+
+        --text-sm: 0.875rem;
+        --text-md: 1.0625rem;
+        --text-display: clamp(2.25rem, 4vw + 0.75rem, 3.5rem);
+
+        --radius-md: 12px;
+        --radius-lg: 20px;
+        --radius-full: 999px;
+        --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+        --dur-short: 180ms;
+      }
+
+      *,
+      *::before,
+      *::after { box-sizing: border-box; }
+
+      html,
+      body { overflow-x: clip; }
+
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        background: var(--color-paper);
+        color: var(--color-ink);
+        font-family: var(--font-sans);
+        font-size: var(--text-md);
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* @gryt/ui Chip, warning tone. */
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-3xs);
+        padding: 0.25rem var(--space-xs);
+        border: 1px solid var(--color-warn-rule);
+        border-radius: var(--radius-full);
+        background: var(--color-warn-paper);
+        color: var(--color-warn-ink);
+        font-size: 0.75rem;
+        font-weight: 500;
+        line-height: 1.4;
+      }
+
+      .chip svg { width: 14px; height: 14px; flex: none; }
+
+      h1 {
+        margin: 0;
+        font-size: var(--text-display);
+        font-weight: 600;
+        letter-spacing: -0.022em;
+        line-height: 1.08;
+        text-wrap: balance;
+        overflow-wrap: anywhere;
+        min-width: 0;
+      }
+
+      .lede { margin: 0; color: var(--color-ink-2); text-wrap: pretty; }
+
+      /* @gryt/ui Button, medium. */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-2xs);
+        min-height: 2.5rem;
+        padding: 0 1.25rem;
+        border: 0;
+        border-radius: var(--radius-full);
+        font-size: var(--text-sm);
+        font-weight: 600;
+        white-space: nowrap;
+        text-decoration: none;
+        transition: scale var(--dur-short) var(--ease-out),
+          background-color var(--dur-short) var(--ease-out);
+      }
+
+      .btn--accent { background: var(--color-accent); color: var(--color-accent-ink); }
+      .btn--accent:hover { background: var(--color-focus); }
+      .btn--neutral { background: var(--color-paper-3); color: var(--color-ink); }
+      .btn--neutral:hover { background: var(--color-paper-hover); }
+      .btn:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .btn:hover { scale: 1.03; }
+        .btn:active { scale: 0.96; }
+      }
+
+      .actions { display: flex; flex-wrap: wrap; gap: var(--space-2xs); }
+
+      /* The axis is broken at the foot: the status row runs edge to edge under a
+         hairline, so the centred stack is not the only alignment on the page. */
+      body { display: grid; grid-template-rows: 1fr auto; }
+
+      .poster {
+        display: grid;
+        justify-items: center;
+        align-content: center;
+        gap: var(--space-md);
+        text-align: center;
+        padding: var(--space-xl) var(--space-md);
+        max-width: 40rem;
+        margin: 0 auto;
+      }
+
+      .poster .mark { width: clamp(120px, 22vw, 168px); height: auto; }
+      .poster h1 { margin-top: var(--space-2xs); }
+      .poster .lede { max-width: 32rem; }
+
+      .footrow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-sm);
+        padding: var(--space-sm) var(--space-md);
+        border-top: 1px solid var(--color-rule);
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        color: var(--color-ink-2);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="poster">
+      <svg class="mark" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"
+           role="img" aria-label="Gryt, in a hard hat">
+        <g id="hat_hardhat" clip-path="url(#grytowl)">
+        <g id="owl">
+        <path id="Left Ear" d="M225.82 299.43C239.06 289.32 145.04 243.93 298.19 243.93L225.82 299.43Z" fill="var(--color-owl-body)"/>
+        <path id="Right Ear" d="M798.181 299.43C784.951 289.32 878.961 243.93 725.811 243.93L798.181 299.43Z" fill="var(--color-owl-body)"/>
+        <path id="Body" d="M511.999 191C628.209 194.6 718.78 215.01 802.399 299.43C910.789 408.83 908.579 532.9 906.959 677V677.001C880.299 731.63 845.78 777.07 814.14 829.8C762.71 915.53 745.76 1060.65 767.09 1185.99H256.909C278.239 1060.65 261.289 915.53 209.859 829.8C178.229 777.07 143.699 731.63 117.039 677C115.419 532.9 113.209 408.83 221.599 299.43C305.219 215.01 395.789 194.6 511.999 191Z" fill="var(--color-owl-body)"/>
+        <path id="Left Arm" d="M117.04 677C43.6099 849 28.5999 1005 95.3899 1185.99C256.91 1185.99 256.91 1185.99 256.91 1185.99C278.24 1060.65 261.29 915.53 209.86 829.8C178.23 777.07 143.7 731.63 117.04 677Z" fill="var(--color-owl-wing)"/>
+        <path id="Right Arm" d="M906.96 677C980.39 849 995.4 1005 928.61 1185.99C767.09 1185.99 767.09 1185.99 767.09 1185.99C745.76 1060.65 762.71 915.53 814.14 829.8C845.78 777.07 880.3 731.63 906.96 677Z" fill="var(--color-owl-wing)"/>
+        <path id="Face" d="M512 384.13C515.3 384.13 588.78 353 644.39 353C728.23 353 796.72 400.64 801.24 483.14C801.24 500.36 800.57 508.62 799.99 516.75C796.9 543.14 790.15 569.08 779.9 593.72C765.37 628.79 744.03 660.59 717.14 687.4C690.27 714.22 658.37 735.51 623.25 750C588.14 764.54 550.19 772 512 772C473.81 772 435.86 764.54 400.75 750C365.63 735.51 333.73 714.22 306.86 687.4C279.97 660.59 258.63 628.79 244.1 593.72C233.85 569.08 227.1 543.14 224.01 516.75C223.43 508.62 222.76 500.36 222.76 483.14C227.28 400.64 295.77 353 379.61 353C435.22 353 508.7 384.13 512 384.13Z" fill="var(--color-owl-face)"/>
+        <path id="Left Eye" d="M387.03 445.2C359.05 435.1 328.25 449.69 318.35 477.82C308.25 505.5 322.84 536.3 350.97 546.2C378.65 556.3 409.45 541.71 419.35 513.58C429.45 485.9 414.86 455.1 387.03 445.2Z" fill="var(--color-owl-ink)"/>
+        <path id="Right Eye" d="M636.97 445.2C664.95 435.1 695.75 449.69 705.65 477.82C715.75 505.5 701.16 536.3 673.03 546.2C645.35 556.3 614.55 541.71 604.65 513.58C594.55 485.9 609.14 455.1 636.97 445.2Z" fill="var(--color-owl-ink)"/>
+        <path id="Nose" d="M511.999 573.19C572.239 573.54 536.209 640.61 515.729 676.83C515.729 679.62 508.269 679.62 508.269 676.83C487.789 640.61 451.759 573.54 511.999 573.19Z" fill="var(--color-owl-ink)"/>
+        </g>
+        <g id="Hard_Hat">
+        <path id="Vector 4" d="M410.829 69.4206C267.86 102.022 240.325 224.785 244.428 282.091L782.684 290.581C772.156 126.897 663.402 74.939 610.34 69.4206C569.589 59.6573 599.728 24 506.34 24C439.248 24 443.515 63.9022 410.829 69.4206Z" fill="var(--color-hat)"/>
+        <g id="Group 1">
+        <path id="Vector 2" d="M212.237 251.528C209.181 258.999 204.172 284.921 202.049 296.948C233.603 289.59 296.881 274.026 297.56 270.63C298.409 266.385 299.682 251.528 299.682 232.85C299.682 214.172 291.193 212.474 281.429 212.474C271.666 212.474 272.515 212.05 246.196 219.266C219.878 226.483 216.058 242.189 212.237 251.528Z" fill="var(--color-hat-shade)"/>
+        <path id="Vector 3" d="M813.318 251.957C816.374 259.428 821.383 285.35 823.505 297.378C791.951 290.02 728.674 274.455 727.995 271.059C727.146 266.814 725.872 251.957 725.872 233.279C725.872 214.602 734.362 212.904 744.125 212.904C753.889 212.904 753.04 212.479 779.358 219.695C805.677 226.912 809.497 242.618 813.318 251.957Z" fill="var(--color-hat-shade)"/>
+        </g>
+        <path id="Vector 1" d="M175.049 358.5C223.617 313.905 376.306 302.513 522.426 297.417C751.984 304.212 840.549 344.5 851.549 360C861.512 341.737 864.231 317.293 813.421 293.17C749.908 263.015 627.034 229.463 376.305 252.822C175.722 271.509 149.727 337.264 175.049 358.5Z" fill="var(--color-hat-brim)"/>
+        <g id="Group 2">
+        <path id="Vector 5" d="M408.588 78.7595C407.23 74.0052 408.73 70.5527 409.862 69.8452C430.662 65.6003 440.425 50.3186 442.548 46.9226C444.246 44.2059 449.057 42.2532 451.038 40.9797C445.519 54.5635 448.491 61.7798 452.311 78.7595C456.981 116.964 457.405 173.421 456.132 206.532C454.858 239.642 453.585 245.16 445.519 244.736C437.454 244.311 438.303 234.124 438.303 218.842C438.303 170.025 410.286 84.7024 408.588 78.7595Z" fill="var(--color-hat-rib)"/>
+        <path id="Vector 6" d="M617.208 78.7595C618.567 74.0052 617.067 70.5527 615.935 69.8452C595.135 65.6003 585.372 50.3186 583.249 46.9226C581.551 44.2059 576.74 42.2532 574.759 40.9797C580.278 54.5635 577.306 61.7798 573.486 78.7595C568.816 116.964 568.392 173.421 569.665 206.532C570.939 239.642 572.212 245.16 580.278 244.736C588.343 244.311 587.494 234.124 587.494 218.842C587.494 170.025 615.51 84.7024 617.208 78.7595Z" fill="var(--color-hat-rib)"/>
+        </g>
+        </g>
+        </g>
+        <defs>
+        <clipPath id="grytowl">
+        <rect width="1024" height="1024" fill="#fff"/>
+        </clipPath>
+        </defs>
+      </svg>
+      <h1>Gryt is down</h1>
+      <p class="lede">Something on our side stopped answering. It isn&rsquo;t your connection.</p>
+      <div class="actions">
+        <a class="btn btn--accent" href="https://status.gryt.chat">Check status.gryt.chat</a>
+        <a class="btn btn--neutral" href="">Try again</a>
+      </div>
+    </main>
+
+    <footer class="footrow">
+      <p class="chip">
+        <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M236.8,188.09,149.35,36.22h0a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM222.93,203.8a8.5,8.5,0,0,1-7.48,4.2H40.55a8.5,8.5,0,0,1-7.48-4.2,7.59,7.59,0,0,1,0-7.72L120.52,44.21a8.75,8.75,0,0,1,15,0l87.45,151.87A7.59,7.59,0,0,1,222.93,203.8ZM120,144V104a8,8,0,0,1,16,0v40a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,180Z" /></svg>
+        Service unavailable
+      </p>
+      <span>HTTP 503</span>
+    </footer>
+  </body>
+</html>

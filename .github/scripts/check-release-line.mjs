@@ -1,22 +1,12 @@
-/**
- * Refuses a release nobody has written a changelog line for. Run by
- * release-client.yml and release-server.yml once the version is known and
- * before the first commit is made. GRYT-1107.
- *
- * Two ways to ship a release the site cannot build: no line at all, and a line
- * whose date is not the day the release happened. check-changelog-lines.mjs in
- * the site repository asserts both, inside the Docker build, so either one
- * stops gryt.chat and docs.gryt.chat deploying until somebody fixes it — and
- * the app's changelog.json is emitted by that same build, so the notice about
- * what changed never reaches anybody either.
- */
+// Refuses a release with no changelog line, or one dated another day. The
+// site's build asserts both, and emits the app's changelog.json. GRYT-1107.
 
 const SOURCE =
   process.env.GRYT_RELEASES_URL ??
   "https://raw.githubusercontent.com/Gryt-chat/site/main/content/changelog/releases.ts";
 
-/* The surfaces released from this repository. voice and images have their own,
-   and a 1.11.3 in one of those is a different release from the app's. */
+/* Released from this repository. A 1.11.3 under voice or images is another
+   release entirely. */
 const SURFACES = ["app", "server"];
 
 const [surface, version] = process.argv.slice(2);
@@ -31,8 +21,8 @@ if (!SURFACES.includes(surface)) {
   process.exit(2);
 }
 
-/* A -beta.N is a build of a version rather than a version — 1.4.0 had twenty —
-   and the site's own check skips prereleases for that reason. */
+/* A -beta.N is a build of a version rather than a version. The site's own
+   check skips them for the same reason. */
 if (version.includes("-")) {
   console.log(`changelog line: ${surface} ${version} is a prerelease, no line required`);
   process.exit(0);
@@ -45,8 +35,8 @@ async function read() {
     return readFile(SOURCE, "utf8");
   }
 
-  /* Three tries. A release that fails because raw.githubusercontent.com
-     blinked burns a version number, and the retry costs a second. */
+  /* A release that fails because raw.githubusercontent.com blinked burns a
+     version number, and the retry costs a second. */
   let last;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
@@ -73,8 +63,8 @@ try {
   process.exit(1);
 }
 
-/* The same shape the site's check-changelog-lines.mjs parses. If the file stops
-   matching this, both break together rather than this one passing quietly. */
+/* The shape check-changelog-lines.mjs parses, so the two break together
+   rather than this one passing quietly. */
 const array = source.match(
   new RegExp(`export const ${surface}: ReleaseLine\\[\\] = \\[([\\s\\S]*?)\\n\\];`),
 );
@@ -88,8 +78,8 @@ if (!array) {
 const quoted = version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const entry = array[1].match(new RegExp(`version: "${quoted}",\\s*\\n\\s*date: "([^"]+)"`));
 
-/* Today where GitHub reads it. The site compares each line's date against the
-   release's published date, which is UTC. */
+/* The site compares each line's date against the release's published date,
+   which is UTC. */
 const today = new Date().toISOString().slice(0, 10);
 
 if (!entry) {

@@ -1,11 +1,5 @@
-/**
- * The release gate, against fixtures rather than the live site. It never
- * reaches the network: GRYT_RELEASES_URL takes a path as readily as a URL.
- *
- * The gate is the only thing standing between a dispatched release and a
- * gryt.chat deploy that stops until somebody writes a line, and nothing else
- * exercises it — a release either passes it or is the test.
- */
+// The release gate against fixtures, never the network: GRYT_RELEASES_URL
+// takes a path as readily as a URL. Nothing else exercises it.
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -68,7 +62,7 @@ test("each surface reads its own array", () => {
   assert.equal(run(written, "server", "1.7.0").code, 0);
 
   /* 1.11.3 is the app's. Finding it under server would let a server release
-     ride on a line written for the client. */
+     ride on the client's line. */
   const { code, out } = run(written, "server", "1.11.3");
   assert.equal(code, 1);
   assert.match(out, /No changelog line for server 1\.11\.3/);
@@ -111,8 +105,7 @@ test("a version is matched whole, not as a prefix", () => {
 });
 
 test("the dots in a version are not wildcards", () => {
-  /* Unescaped, 1.11.3 as a pattern matches 1211x3, and a release rides on a
-     line written for something else. */
+  /* Unescaped, 1.11.3 as a pattern also matches 1211x3. */
   const lookalike = fixture("lookalike", { app: [{ version: "1211x3", date: today }] });
   assert.equal(run(lookalike, "app", "1.11.3").code, 1);
 });

@@ -346,10 +346,8 @@ jobs:
           echo "Release server version: $RELEASE_VERSION"
           echo "Tag: $TAG"
 
-      # Runs the moment the version is known and before the first commit is
-      # made. The site's build refuses to pass while a shipped release has no
-      # changelog line, so releasing without one stops gryt.chat deploying
-      # until the line lands (GRYT-1107).
+      # The version is known and nothing is committed yet. Without a line the
+      # site's build fails and gryt.chat stops deploying (GRYT-1107).
       - name: Require a changelog line
         shell: bash
         run: |

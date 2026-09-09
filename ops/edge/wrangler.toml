@@ -1,0 +1,28 @@
+name = "gryt-offline"
+main = "src/index.js"
+compatibility_date = "2026-09-09"
+workers_dev = false
+
+# The page is a file rather than a template literal, so it can be opened in a
+# browser and edited like a page.
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+# Browser-facing hostnames only. ws1 and sfu are the API and the signalling
+# socket, where the client handles a failed connection and an HTML body would not.
+
+# status.gryt.chat is deliberately absent: it is what this page links to, it runs
+# on the VPS on its own tunnel, and it has to stay up when these do not.
+routes = [
+  { pattern = "gryt.chat/*", zone_name = "gryt.chat" },
+  { pattern = "www.gryt.chat/*", zone_name = "gryt.chat" },
+  { pattern = "docs.gryt.chat/*", zone_name = "gryt.chat" },
+  { pattern = "app.gryt.chat/*", zone_name = "gryt.chat" },
+  { pattern = "beta.gryt.chat/*", zone_name = "gryt.chat" },
+  { pattern = "ui.gryt.chat/*", zone_name = "gryt.chat" },
+]
+
+[observability]
+enabled = true

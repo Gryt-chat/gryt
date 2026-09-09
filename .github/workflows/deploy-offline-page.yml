@@ -1,0 +1,51 @@
+name: Deploy offline page
+
+# The Worker that stands in for gryt.chat when the origin does not answer. See
+# ops/edge/README.md for what it does and what it is deliberately not in front of.
+
+# Dispatch only. Everything else on this box self-deploys on a timer, and this one
+# holds the edge in front of every browser-facing hostname, so it goes out by hand.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-offline-page
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy the offline page
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # The routes and the page are checked before anything reaches the edge, so a
+      # page that fetches something is caught here rather than during an outage.
+      - run: node .github/scripts/check-offline-page.mjs
+
+      # Without the secret this says so and stops, rather than failing on wrangler
+      # asking for a login it will never get on a runner.
+      - name: Check the token is there
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is not set on this repository."
+            exit 1
+          fi
+
+      - name: Deploy
+        working-directory: ops/edge
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 deploy

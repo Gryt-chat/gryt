@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Gryt is down</title>
+    <style>
+      /* Everything is inline on purpose. The machine that serves the fonts, the
+         stylesheet and the mark is the one that is down. */
+      :root {
+        --bg: #111318;
+        --card: #1a1d24;
+        --text: #e0e0e6;
+        --dim: #9a9ca6;
+        --accent: #968ff8;
+        --accent-light: #b4afff;
+        --warning: #fbbf24;
+        --ink: #14161d;
+        --border: #2b303d;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: grid;
+        place-content: center;
+        padding: 32px 24px;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      main {
+        max-width: 30rem;
+        min-width: 0;
+      }
+
+      .mark {
+        width: 52px;
+        height: 52px;
+        display: block;
+        margin-bottom: 26px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 5px 11px 5px 9px;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+        background: color-mix(in srgb, var(--warning) 12%, transparent);
+        color: var(--warning);
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 18px;
+      }
+
+      .chip svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: clamp(26px, 5vw, 34px);
+        font-weight: 800;
+        letter-spacing: -0.026em;
+        line-height: 1.15;
+        text-wrap: balance;
+      }
+
+      p {
+        margin: 0;
+        color: var(--dim);
+        text-wrap: pretty;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 28px;
+      }
+
+      a {
+        display: inline-block;
+        padding: 11px 18px;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 15px;
+        text-decoration: none;
+        border: 1px solid transparent;
+      }
+
+      .primary {
+        background: var(--accent);
+        color: var(--ink);
+      }
+
+      .primary:hover {
+        background: var(--accent-light);
+      }
+
+      .secondary {
+        border-color: var(--border);
+        color: var(--text);
+        background: var(--card);
+      }
+
+      .secondary:hover {
+        border-color: var(--accent);
+      }
+
+      a:focus-visible {
+        outline: 2px solid var(--accent-light);
+        outline-offset: 2px;
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        main {
+          animation: rise 0.4s ease-out both;
+        }
+        @keyframes rise {
+          from {
+            opacity: 0;
+            transform: translateY(6px);
+          }
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <svg class="mark" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Gryt">
+          <g clip-path="url(#grytmark)">
+          <rect width="1024" height="1024" fill="#2E2D5F"/>
+          <path d="M117.45 677.727C120.743 664.113 120.36 602.152 119.637 587.363C108.168 353.556 283.596 184.2 515.449 191.21C628.229 194.622 718.768 215.015 802.396 299.432C910.784 408.844 908.561 532.939 906.96 674.973C980.416 846.971 995.413 1003.44 928.604 1184.1C909.952 1234.53 867.051 1304.75 824.991 1339.24C790.453 1359.89 755.156 1380.9 714.224 1385.74C709.786 1397.93 708.22 1406.2 698.584 1414.62C671.044 1416.11 672.356 1412.41 650.517 1432.58C636.333 1434.54 635.588 1434.81 621.437 1424.16C619.727 1422.87 618.028 1421.55 616.348 1420.22C586.972 1422.33 583.755 1428.57 567.16 1401.62L461.79 1401.57C430.607 1447.05 435.866 1402.27 392.078 1431.99C375.144 1433.23 354.006 1420.75 337.187 1415.75C321.629 1411.12 319.352 1403.15 312.868 1388.28C259.874 1377.86 241.992 1355.86 203.048 1339.89C155.686 1305.18 114.107 1232 94.36 1178.04C30.9054 1004.63 43.665 843.414 117.45 677.727Z" fill="#A495E3"/>
+          <path d="M644.863 353C728.718 353 797.231 400.641 801.761 483.172H802C802 484.836 801.984 486.498 801.956 488.16C801.985 489.397 802 490.638 802 491.882C802 500.32 801.331 508.603 800.045 516.68C796.951 543.102 790.208 569.026 779.963 593.702C765.414 628.744 744.09 660.584 717.207 687.404C690.325 714.224 658.411 735.499 623.287 750.014C588.163 764.529 550.518 772 512.5 772C474.482 772 436.837 764.529 401.713 750.014C366.589 735.499 334.675 714.224 307.793 687.404C280.91 660.584 259.586 628.744 245.037 593.702C234.792 569.026 228.048 543.103 224.955 516.681C223.668 508.604 223 500.321 223 491.882C223 490.638 223.015 489.397 223.044 488.16C223.015 486.498 223 484.836 223 483.172H223.239C227.769 400.641 296.282 353 380.137 353C435.721 353 509.197 384.119 512.5 384.119C515.803 384.119 589.279 353 644.863 353Z" fill="#B5A8E6"/>
+          <path d="M637.617 445.204C665.591 435.093 696.445 449.712 706.342 477.765C716.239 505.817 701.39 536.563 673.265 546.251C645.44 555.834 615.095 541.175 605.303 513.42C595.511 485.664 609.94 455.207 637.617 445.204Z" fill="#2E2D5F"/>
+          <path d="M351.43 445.189C379.259 435.201 409.911 449.686 419.866 477.529C429.817 505.372 415.293 536.009 387.442 545.929C359.639 555.83 329.07 541.337 319.137 513.545C309.2 485.75 323.652 455.159 351.43 445.189Z" fill="#2E2D5F"/>
+          <path d="M512.359 573.191C508.812 573.17 516.378 573.212 512.359 573.191C572.603 573.544 536.569 640.612 516.085 676.829C514.504 679.626 510.416 679.514 508.945 676.658C490.115 640.101 452.322 573.191 512.359 573.191Z" fill="#2E2D5F"/>
+          <path d="M906.96 674.972C980.417 846.97 995.414 1003.44 928.605 1184.1C909.953 1234.53 867.051 1304.74 824.992 1339.24C737.388 1214.12 737.93 956.855 814.166 829.785C845.783 777.085 880.299 731.645 906.96 674.972Z" fill="#7C6EC3"/>
+          <path d="M117.45 677.728C148.478 736.742 188.64 787.208 219.025 842.528C286.593 965.554 281.984 1131.04 239.787 1261.69C231.441 1286.49 220.568 1319.3 203.048 1339.89C155.686 1305.18 114.107 1232 94.36 1178.04C30.9054 1004.63 43.665 843.414 117.45 677.728Z" fill="#7C6EC3"/>
+          </g>
+          <defs>
+          <clipPath id="grytmark">
+          <rect width="1024" height="1024" rx="512" fill="white"/>
+          </clipPath>
+          </defs>
+      </svg>
+
+      <p class="chip">
+        <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
+          <path d="M236.8,188.09,149.35,36.22h0a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM222.93,203.8a8.5,8.5,0,0,1-7.48,4.2H40.55a8.5,8.5,0,0,1-7.48-4.2,7.59,7.59,0,0,1,0-7.72L120.52,44.21a8.75,8.75,0,0,1,15,0l87.45,151.87A7.59,7.59,0,0,1,222.93,203.8ZM120,144V104a8,8,0,0,1,16,0v40a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,180Z" />
+        </svg>
+        Service unavailable
+      </p>
+
+      <h1>Gryt is down</h1>
+
+      <p>Something on our side stopped answering. It isn't your connection.</p>
+
+      <div class="actions">
+        <a class="primary" href="https://status.gryt.chat">Check status.gryt.chat</a>
+        <a class="secondary" href="">Try again</a>
+      </div>
+    </main>
+  </body>
+</html>

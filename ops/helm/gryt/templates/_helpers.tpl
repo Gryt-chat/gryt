@@ -130,7 +130,7 @@ Get the image name with registry and tag
 Get the SFU WebSocket host
 */}}
 {{- define "gryt.sfu.wsHost" -}}
-{{- printf "ws://%s-sfu:%d" (include "gryt.fullname" .) (.Values.sfu.service.port | int) -}}
+{{- printf "ws://%s-sfu:%d" (include "gryt.fullname" .) (.Values.sfu.controlPort | default 9092 | int) -}}
 {{- end }}
 
 

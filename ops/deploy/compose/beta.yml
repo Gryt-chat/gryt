@@ -69,6 +69,9 @@ services:
       - "${ICE_UDP_MUX_PORT:-4443}:${ICE_UDP_MUX_PORT:-4443}/udp"
     environment:
       PORT: "5005"
+      # Registration, deliberately unpublished: the port above is public so clients
+      # can reach it, and a published /server lets anyone use this SFU as their relay.
+      SFU_CONTROL_PORT: "${SFU_CONTROL_PORT:-9092}"
       STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
       ICE_UDP_MUX_PORT: ${ICE_UDP_MUX_PORT:-4443}
       ICE_ADVERTISE_IP: ${ICE_ADVERTISE_IP:-}
@@ -122,7 +125,7 @@ services:
       METRICS_PORT: ${METRICS_PORT:-9091}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://127.0.0.1:15738,http://localhost:3667,https://app.gryt.chat,https://beta.gryt.chat}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
-      SFU_WS_HOST: ws://sfu:${SFU_PORT:-5015}
+      SFU_WS_HOST: ws://sfu:${SFU_CONTROL_PORT:-9092}
       SFU_PUBLIC_HOST: ${SFU_PUBLIC_HOST:-ws://localhost:5015}
       STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
       VOICE_MAX_USERS: ${VOICE_MAX_USERS:-20}

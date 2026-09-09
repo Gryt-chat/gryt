@@ -41,6 +41,10 @@ gryt:
 # SFU (Selective Forwarding Unit) configuration
 sfu:
   enabled: true
+
+  # Where servers register. Never exposed by the Service: the Service port is
+  # reachable by clients, and a reachable /server lets anyone register on this SFU.
+  controlPort: 9092
   image:
     repository: ghcr.io/gryt-chat/sfu
     tag: "latest"

@@ -361,6 +361,14 @@ jobs:
           echo "New base version: $BASE_VERSION"
           echo "Release version: $RELEASE_VERSION"
 
+      # The version is known and nothing is committed yet. Without a line the
+      # app says nothing changed and gryt.chat stops deploying (GRYT-1107).
+      - name: Require a changelog line
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/check-release-line.mjs app "${{ steps.version.outputs.version }}"
+
       - name: Update monorepo release.json
         shell: bash
         run: |

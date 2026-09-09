@@ -61,3 +61,4 @@ jobs:
       - run: node .github/scripts/check-publishers-dispatched.mjs
       - run: node .github/scripts/check-offline-page.mjs
       - run: node .github/scripts/check-comment-length.mjs
+      - run: node --test .github/scripts/check-release-line.test.mjs

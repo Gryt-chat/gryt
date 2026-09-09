@@ -346,6 +346,14 @@ jobs:
           echo "Release server version: $RELEASE_VERSION"
           echo "Tag: $TAG"
 
+      # The version is known and nothing is committed yet. Without a line the
+      # site's build fails and gryt.chat stops deploying (GRYT-1107).
+      - name: Require a changelog line
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/check-release-line.mjs server "${{ steps.version.outputs.version }}"
+
       - name: Update monorepo release.json
         shell: bash
         run: |

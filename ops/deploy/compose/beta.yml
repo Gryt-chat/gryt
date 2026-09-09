@@ -128,9 +128,12 @@ services:
       METRICS_PORT: ${METRICS_PORT:-9091}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://127.0.0.1:15738,http://localhost:3667,https://app.gryt.chat,https://beta.gryt.chat}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
-      # 127.0.0.1, not sfu: this service has host networking, where the compose
-      # network does not resolve and only published ports can be reached.
-      SFU_WS_HOST: ws://127.0.0.1:${SFU_CONTROL_PORT:-9092}
+      # The websocket port, not the control port. An SFU that has moved registration
+      # refuses here and names the port to move to, and the server follows that.
+
+      # So this works against an SFU that serves registration here and one that does
+      # not, which is what keeps an upgrade from needing the two changed together.
+      SFU_WS_HOST: ws://127.0.0.1:${SFU_PORT:-5015}
       SFU_PUBLIC_HOST: ${SFU_PUBLIC_HOST:-ws://localhost:5015}
       STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
       VOICE_MAX_USERS: ${VOICE_MAX_USERS:-20}

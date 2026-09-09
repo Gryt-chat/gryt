@@ -1,0 +1,11 @@
+[
+  {
+    "date": "2026-09-09",
+    "macrostructure": "Marquee Hero (fold only)",
+    "theme": "@gryt/ui dark half, inlined",
+    "genre": "modern-minimal",
+    "enrichment": "none — the mark carries it, in a hard hat",
+    "design-system": "packages/ui/design.md",
+    "brief": "Gryt · the page the edge serves when the origin is down"
+  }
+]

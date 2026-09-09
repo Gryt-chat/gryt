@@ -6,22 +6,66 @@
     <meta name="robots" content="noindex" />
     <title>Gryt is down</title>
     <style>
-      /* Everything is inline on purpose. The machine that serves the fonts, the
-         stylesheet and the mark is the one that is down. */
+      /* Hallmark · macrostructure: Marquee Hero (fold only) · genre: modern-minimal
+       * design-system: packages/ui/design.md · theme: @gryt/ui dark half, inlined
+       * tone: utilitarian · anchor hue: gryt violet · enrichment: E-none + hard hat on the mark
+       * pre-emit critique: P5 H5 E4 S5 R5 V4
+       */
+
+      /* Every value is inlined because the box that serves @gryt/ui's stylesheet is
+         the one that is down. The names are design.md's aliases onto --gryt-*. */
       :root {
-        --bg: #111318;
-        --card: #1a1d24;
-        --text: #e0e0e6;
-        --dim: #9a9ca6;
-        --accent: #968ff8;
-        --accent-light: #b4afff;
-        --warning: #fbbf24;
-        --ink: #14161d;
-        --border: #2b303d;
+        color-scheme: dark;
+
+        --color-paper: #111318;
+        --color-paper-2: #1a1d24;
+        --color-paper-3: #1e2028;
+        --color-paper-hover: #334155;
+        --color-ink: #e0e0e6;
+        --color-ink-2: #888888;
+        --color-rule: #2b303d;
+        --color-accent: #968ff8;
+        --color-accent-ink: #0c0a20;
+        --color-focus: #b4afff;
+
+        /* Chip, warning tone: --gryt-warning-3 / -6 / -11. */
+        --color-warn-paper: #30250e;
+        --color-warn-rule: #513c06;
+        --color-warn-ink: #f8d17f;
+
+        /* The hat, and the mark's own dark. Not on the --gryt-* scale: the hat is a
+           drawing, and #2E2D5F is the mark's ground rather than a theme token. */
+        --color-hi-vis: #fbbf24;
+        --color-mark-ink: #2e2d5f;
+
+        --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+
+        --space-3xs: 0.375rem;
+        --space-2xs: 0.5rem;
+        --space-xs: 0.75rem;
+        --space-sm: 1rem;
+        --space-md: 1.5rem;
+        --space-lg: 2rem;
+        --space-xl: 3rem;
+
+        --text-sm: 0.875rem;
+        --text-md: 1.0625rem;
+        --text-display: clamp(2.25rem, 4vw + 0.75rem, 3.5rem);
+
+        --radius-full: 999px;
+        --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+        --dur-short: 180ms;
       }
 
-      * {
+      *,
+      *::before,
+      *::after {
         box-sizing: border-box;
+      }
+
+      html,
+      body {
+        overflow-x: clip;
       }
 
       body {
@@ -29,126 +73,136 @@
         min-height: 100dvh;
         display: grid;
         place-content: center;
-        padding: 32px 24px;
-        background: var(--bg);
-        color: var(--text);
-        font-family:
-          system-ui,
-          -apple-system,
-          "Segoe UI",
-          Roboto,
-          Helvetica,
-          Arial,
-          sans-serif;
+        padding: var(--space-xl) var(--space-md);
+        background: var(--color-paper);
+        color: var(--color-ink);
+        font-family: var(--font-sans);
+        font-size: var(--text-md);
         line-height: 1.6;
         -webkit-font-smoothing: antialiased;
       }
 
       main {
-        max-width: 30rem;
+        max-width: 34rem;
         min-width: 0;
       }
 
       .mark {
-        width: 52px;
-        height: 52px;
+        width: 76px;
+        height: 76px;
         display: block;
-        margin-bottom: 26px;
+        margin-bottom: var(--space-md);
       }
 
+      /* @gryt/ui's Chip, warning tone: pill, hairline, 12px medium. */
       .chip {
         display: inline-flex;
         align-items: center;
-        gap: 7px;
-        padding: 5px 11px 5px 9px;
-        border-radius: 999px;
-        border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
-        background: color-mix(in srgb, var(--warning) 12%, transparent);
-        color: var(--warning);
-        font-size: 13px;
-        font-weight: 600;
-        margin-bottom: 18px;
+        gap: var(--space-3xs);
+        padding: 0.25rem var(--space-xs);
+        border: 1px solid var(--color-warn-rule);
+        border-radius: var(--radius-full);
+        background: var(--color-warn-paper);
+        color: var(--color-warn-ink);
+        font-size: 0.75rem;
+        font-weight: 500;
+        line-height: 1.4;
       }
 
       .chip svg {
-        width: 15px;
-        height: 15px;
+        width: 14px;
+        height: 14px;
         flex: none;
       }
 
       h1 {
-        margin: 0 0 12px;
-        font-size: clamp(26px, 5vw, 34px);
-        font-weight: 800;
-        letter-spacing: -0.026em;
-        line-height: 1.15;
+        margin: var(--space-sm) 0 var(--space-2xs);
+        font-size: var(--text-display);
+        font-weight: 600;
+        letter-spacing: -0.022em;
+        line-height: 1.08;
         text-wrap: balance;
+        overflow-wrap: anywhere;
+        min-width: 0;
       }
 
-      p {
+      .lede {
         margin: 0;
-        color: var(--dim);
+        color: var(--color-ink-2);
         text-wrap: pretty;
+      }
+
+      /* design.md: flat surfaces separated by hairlines. */
+      .rule {
+        height: 1px;
+        margin: var(--space-lg) 0;
+        border: 0;
+        background: var(--color-rule);
       }
 
       .actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 12px;
-        margin-top: 28px;
+        gap: var(--space-2xs);
       }
 
-      a {
-        display: inline-block;
-        padding: 11px 18px;
-        border-radius: 10px;
+      /* @gryt/ui's Button, medium: min-h-10 px-5 text-sm font-semibold, fully rounded. */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-2xs);
+        min-height: 2.5rem;
+        padding: 0 1.25rem;
+        border: 0;
+        border-radius: var(--radius-full);
+        font-size: var(--text-sm);
         font-weight: 600;
-        font-size: 15px;
+        white-space: nowrap;
         text-decoration: none;
-        border: 1px solid transparent;
+        transition:
+          scale var(--dur-short) var(--ease-out),
+          background-color var(--dur-short) var(--ease-out);
       }
 
-      .primary {
-        background: var(--accent);
-        color: var(--ink);
+      .btn--accent {
+        background: var(--color-accent);
+        color: var(--color-accent-ink);
       }
 
-      .primary:hover {
-        background: var(--accent-light);
+      .btn--accent:hover {
+        background: var(--color-focus);
       }
 
-      .secondary {
-        border-color: var(--border);
-        color: var(--text);
-        background: var(--card);
+      .btn--neutral {
+        background: var(--color-paper-3);
+        color: var(--color-ink);
       }
 
-      .secondary:hover {
-        border-color: var(--accent);
+      .btn--neutral:hover {
+        background: var(--color-paper-hover);
       }
 
-      a:focus-visible {
-        outline: 2px solid var(--accent-light);
+      /* Instant, never animated. */
+      .btn:focus-visible {
+        outline: 2px solid var(--color-focus);
         outline-offset: 2px;
       }
 
       @media (prefers-reduced-motion: no-preference) {
-        main {
-          animation: rise 0.4s ease-out both;
+        .btn:hover {
+          scale: 1.03;
         }
-        @keyframes rise {
-          from {
-            opacity: 0;
-            transform: translateY(6px);
-          }
+        .btn:active {
+          scale: 0.96;
         }
       }
     </style>
   </head>
   <body>
     <main>
-      <svg class="mark" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Gryt">
-          <g clip-path="url(#grytmark)">
+      <svg class="mark" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Gryt, in a hard hat">
+          <g clip-path="url(#gm)">
           <rect width="1024" height="1024" fill="#2E2D5F"/>
           <path d="M117.45 677.727C120.743 664.113 120.36 602.152 119.637 587.363C108.168 353.556 283.596 184.2 515.449 191.21C628.229 194.622 718.768 215.015 802.396 299.432C910.784 408.844 908.561 532.939 906.96 674.973C980.416 846.971 995.413 1003.44 928.604 1184.1C909.952 1234.53 867.051 1304.75 824.991 1339.24C790.453 1359.89 755.156 1380.9 714.224 1385.74C709.786 1397.93 708.22 1406.2 698.584 1414.62C671.044 1416.11 672.356 1412.41 650.517 1432.58C636.333 1434.54 635.588 1434.81 621.437 1424.16C619.727 1422.87 618.028 1421.55 616.348 1420.22C586.972 1422.33 583.755 1428.57 567.16 1401.62L461.79 1401.57C430.607 1447.05 435.866 1402.27 392.078 1431.99C375.144 1433.23 354.006 1420.75 337.187 1415.75C321.629 1411.12 319.352 1403.15 312.868 1388.28C259.874 1377.86 241.992 1355.86 203.048 1339.89C155.686 1305.18 114.107 1232 94.36 1178.04C30.9054 1004.63 43.665 843.414 117.45 677.727Z" fill="#A495E3"/>
           <path d="M644.863 353C728.718 353 797.231 400.641 801.761 483.172H802C802 484.836 801.984 486.498 801.956 488.16C801.985 489.397 802 490.638 802 491.882C802 500.32 801.331 508.603 800.045 516.68C796.951 543.102 790.208 569.026 779.963 593.702C765.414 628.744 744.09 660.584 717.207 687.404C690.325 714.224 658.411 735.499 623.287 750.014C588.163 764.529 550.518 772 512.5 772C474.482 772 436.837 764.529 401.713 750.014C366.589 735.499 334.675 714.224 307.793 687.404C280.91 660.584 259.586 628.744 245.037 593.702C234.792 569.026 228.048 543.103 224.955 516.681C223.668 508.604 223 500.321 223 491.882C223 490.638 223.015 489.397 223.044 488.16C223.015 486.498 223 484.836 223 483.172H223.239C227.769 400.641 296.282 353 380.137 353C435.721 353 509.197 384.119 512.5 384.119C515.803 384.119 589.279 353 644.863 353Z" fill="#B5A8E6"/>
@@ -159,10 +213,14 @@
           <path d="M117.45 677.728C148.478 736.742 188.64 787.208 219.025 842.528C286.593 965.554 281.984 1131.04 239.787 1261.69C231.441 1286.49 220.568 1319.3 203.048 1339.89C155.686 1305.18 114.107 1232 94.36 1178.04C30.9054 1004.63 43.665 843.414 117.45 677.728Z" fill="#7C6EC3"/>
           </g>
           <defs>
-          <clipPath id="grytmark">
+          <clipPath id="gm">
           <rect width="1024" height="1024" rx="512" fill="white"/>
           </clipPath>
           </defs>
+          <path d="M296,348 C296,192 728,192 728,348 Z" fill="var(--color-hi-vis)"/>
+          <path d="M152,346 h720 a38,38 0 0 1 0,76 h-720 a38,38 0 0 1 0,-76 z" fill="var(--color-hi-vis)"/>
+          <path d="M152,348 h720" stroke="var(--color-mark-ink)" stroke-width="16"/>
+          <path d="M512,206 V348" stroke="var(--color-mark-ink)" stroke-width="20" stroke-linecap="round"/>
       </svg>
 
       <p class="chip">
@@ -174,11 +232,13 @@
 
       <h1>Gryt is down</h1>
 
-      <p>Something on our side stopped answering. It isn't your connection.</p>
+      <p class="lede">Something on our side stopped answering. It isn&rsquo;t your connection.</p>
+
+      <hr class="rule" />
 
       <div class="actions">
-        <a class="primary" href="https://status.gryt.chat">Check status.gryt.chat</a>
-        <a class="secondary" href="">Try again</a>
+        <a class="btn btn--accent" href="https://status.gryt.chat">Check status.gryt.chat</a>
+        <a class="btn btn--neutral" href="">Try again</a>
       </div>
     </main>
   </body>

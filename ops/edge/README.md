@@ -35,6 +35,11 @@ than the status page.
 
 ## What it isn't in front of
 
+`www.gryt.chat` is a redirect to the bare hostname. Redirect rules run before Workers,
+so a route there would never serve anything — whoever typed `www` lands on `gryt.chat`
+and gets the page from there if it's down.
+
+
 `ws1.sivert.io` and `sfu.sivert.io` are the API and the signalling socket. The
 client already handles a connection it can't make, and an HTML body there would
 only confuse it.

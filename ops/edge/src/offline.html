@@ -6,14 +6,12 @@
     <meta name="robots" content="noindex" />
     <title>Gryt is down</title>
     <style>
-      /* Hallmark · macrostructure: Marquee Hero (fold only) · genre: modern-minimal
+      /* Hallmark · macrostructure: Quote-Led shape, dialog card · genre: modern-minimal
        * design-system: packages/ui/design.md · theme: @gryt/ui dark half, inlined
-       * tone: utilitarian · anchor hue: gryt violet · enrichment: E-none + hard hat on the mark
-       * pre-emit critique: P5 H5 E4 S5 R5 V4
+       * tone: utilitarian · anchor hue: gryt violet · enrichment: the hard-hat owl
+       * pre-emit critique: P5 H5 E5 S5 R4 V4
        */
 
-      /* Every value is inlined because the box that serves @gryt/ui's stylesheet is
-         the one that is down. The names are design.md's aliases onto --gryt-*. */
       :root {
         color-scheme: dark;
 
@@ -28,13 +26,11 @@
         --color-accent-ink: #0c0a20;
         --color-focus: #b4afff;
 
-        /* Chip, warning tone: --gryt-warning-3 / -6 / -11. */
         --color-warn-paper: #30250e;
         --color-warn-rule: #513c06;
         --color-warn-ink: #f8d17f;
+        --color-warn: #fbbf24;
 
-        /* The drawing's own fills. Sivert's hard-hat owl, with its greens moved onto
-           the mark's palette; the face is accent-11 so it still reads at 76px. */
         --color-owl-body: #a495e3;
         --color-owl-wing: #7c6ec3;
         --color-owl-face: #c3c1ff;
@@ -45,6 +41,7 @@
         --color-hat-rib: #f9ae1c;
 
         --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
         --space-3xs: 0.375rem;
         --space-2xs: 0.5rem;
@@ -58,6 +55,8 @@
         --text-md: 1.0625rem;
         --text-display: clamp(2.25rem, 4vw + 0.75rem, 3.5rem);
 
+        --radius-md: 12px;
+        --radius-lg: 20px;
         --radius-full: 999px;
         --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
         --dur-short: 180ms;
@@ -65,21 +64,14 @@
 
       *,
       *::before,
-      *::after {
-        box-sizing: border-box;
-      }
+      *::after { box-sizing: border-box; }
 
       html,
-      body {
-        overflow-x: clip;
-      }
+      body { overflow-x: clip; }
 
       body {
         margin: 0;
         min-height: 100dvh;
-        display: grid;
-        place-content: center;
-        padding: var(--space-xl) var(--space-md);
         background: var(--color-paper);
         color: var(--color-ink);
         font-family: var(--font-sans);
@@ -88,19 +80,7 @@
         -webkit-font-smoothing: antialiased;
       }
 
-      main {
-        max-width: 34rem;
-        min-width: 0;
-      }
-
-      .mark {
-        width: 88px;
-        height: 88px;
-        display: block;
-        margin-bottom: var(--space-md);
-      }
-
-      /* @gryt/ui's Chip, warning tone: pill, hairline, 12px medium. */
+      /* @gryt/ui Chip, warning tone. */
       .chip {
         display: inline-flex;
         align-items: center;
@@ -115,14 +95,10 @@
         line-height: 1.4;
       }
 
-      .chip svg {
-        width: 14px;
-        height: 14px;
-        flex: none;
-      }
+      .chip svg { width: 14px; height: 14px; flex: none; }
 
       h1 {
-        margin: var(--space-sm) 0 var(--space-2xs);
+        margin: 0;
         font-size: var(--text-display);
         font-weight: 600;
         letter-spacing: -0.022em;
@@ -132,27 +108,9 @@
         min-width: 0;
       }
 
-      .lede {
-        margin: 0;
-        color: var(--color-ink-2);
-        text-wrap: pretty;
-      }
+      .lede { margin: 0; color: var(--color-ink-2); text-wrap: pretty; }
 
-      /* design.md: flat surfaces separated by hairlines. */
-      .rule {
-        height: 1px;
-        margin: var(--space-lg) 0;
-        border: 0;
-        background: var(--color-rule);
-      }
-
-      .actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--space-2xs);
-      }
-
-      /* @gryt/ui's Button, medium: min-h-10 px-5 text-sm font-semibold, fully rounded. */
+      /* @gryt/ui Button, medium. */
       .btn {
         display: inline-flex;
         align-items: center;
@@ -166,47 +124,74 @@
         font-weight: 600;
         white-space: nowrap;
         text-decoration: none;
-        transition:
-          scale var(--dur-short) var(--ease-out),
+        transition: scale var(--dur-short) var(--ease-out),
           background-color var(--dur-short) var(--ease-out);
       }
 
-      .btn--accent {
-        background: var(--color-accent);
-        color: var(--color-accent-ink);
-      }
-
-      .btn--accent:hover {
-        background: var(--color-focus);
-      }
-
-      .btn--neutral {
-        background: var(--color-paper-3);
-        color: var(--color-ink);
-      }
-
-      .btn--neutral:hover {
-        background: var(--color-paper-hover);
-      }
-
-      /* Instant, never animated. */
-      .btn:focus-visible {
-        outline: 2px solid var(--color-focus);
-        outline-offset: 2px;
-      }
+      .btn--accent { background: var(--color-accent); color: var(--color-accent-ink); }
+      .btn--accent:hover { background: var(--color-focus); }
+      .btn--neutral { background: var(--color-paper-3); color: var(--color-ink); }
+      .btn--neutral:hover { background: var(--color-paper-hover); }
+      .btn:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 
       @media (prefers-reduced-motion: no-preference) {
-        .btn:hover {
-          scale: 1.03;
-        }
-        .btn:active {
-          scale: 0.96;
-        }
+        .btn:hover { scale: 1.03; }
+        .btn:active { scale: 0.96; }
+      }
+
+      .actions { display: flex; flex-wrap: wrap; gap: var(--space-2xs); }
+
+      /* The app's own surface language: a raised card on a hairline, the owl
+         cresting its top edge. The hazard stripe is the maintenance signal. */
+      body { display: grid; place-content: center; padding: var(--space-xl) var(--space-md); }
+
+      .card {
+        position: relative;
+        width: min(100%, 30rem);
+        margin-top: 44px;
+        padding: var(--space-xl) var(--space-lg) var(--space-lg);
+        border: 1px solid var(--color-rule);
+        border-radius: var(--radius-lg);
+        background: var(--color-paper-2);
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto;
+        height: 5px;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        background: repeating-linear-gradient(
+          -45deg,
+          var(--color-warn) 0 10px,
+          var(--color-warn-rule) 10px 20px
+        );
+      }
+
+      .card .mark {
+        position: absolute;
+        top: -44px;
+        right: var(--space-lg);
+        width: 96px;
+        height: 96px;
+      }
+
+      .card h1 { margin: var(--space-sm) 0 var(--space-2xs); }
+
+      /* paper-3 sits a hair off paper-2, so on the card the neutral button takes
+         the hairline the Chip already uses rather than a third surface. */
+      .card .btn--neutral { border: 1px solid var(--color-rule); }
+
+      .card hr {
+        height: 1px;
+        margin: var(--space-lg) 0 var(--space-md);
+        border: 0;
+        background: var(--color-rule);
       }
     </style>
   </head>
   <body>
-    <main>
+    <main class="card">
       <svg class="mark" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"
            role="img" aria-label="Gryt, in a hard hat">
         <g id="hat_hardhat" clip-path="url(#grytowl)">
@@ -236,24 +221,17 @@
         </g>
         <defs>
         <clipPath id="grytowl">
-        <rect width="1024" height="1024" rx="512" fill="#fff"/>
+        <rect width="1024" height="1024" fill="#fff"/>
         </clipPath>
         </defs>
       </svg>
-
       <p class="chip">
-        <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
-          <path d="M236.8,188.09,149.35,36.22h0a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM222.93,203.8a8.5,8.5,0,0,1-7.48,4.2H40.55a8.5,8.5,0,0,1-7.48-4.2,7.59,7.59,0,0,1,0-7.72L120.52,44.21a8.75,8.75,0,0,1,15,0l87.45,151.87A7.59,7.59,0,0,1,222.93,203.8ZM120,144V104a8,8,0,0,1,16,0v40a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,180Z" />
-        </svg>
+        <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M236.8,188.09,149.35,36.22h0a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM222.93,203.8a8.5,8.5,0,0,1-7.48,4.2H40.55a8.5,8.5,0,0,1-7.48-4.2,7.59,7.59,0,0,1,0-7.72L120.52,44.21a8.75,8.75,0,0,1,15,0l87.45,151.87A7.59,7.59,0,0,1,222.93,203.8ZM120,144V104a8,8,0,0,1,16,0v40a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,180Z" /></svg>
         Service unavailable
       </p>
-
       <h1>Gryt is down</h1>
-
       <p class="lede">Something on our side stopped answering. It isn&rsquo;t your connection.</p>
-
-      <hr class="rule" />
-
+      <hr />
       <div class="actions">
         <a class="btn btn--accent" href="https://status.gryt.chat">Check status.gryt.chat</a>
         <a class="btn btn--neutral" href="">Try again</a>

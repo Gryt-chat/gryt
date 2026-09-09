@@ -44,6 +44,10 @@ spec:
             configMapKeyRef:
               name: {{ include "gryt.fullname" . }}-config
               key: SFU_PORT
+        # Not in the Service, on purpose. The Service port is reachable by clients,
+        # and a reachable /server lets anyone register on this SFU as their own.
+        - name: SFU_CONTROL_PORT
+          value: {{ .Values.sfu.controlPort | default 9092 | quote }}
         - name: STUN_SERVERS
           valueFrom:
             configMapKeyRef:

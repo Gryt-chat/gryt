@@ -19,7 +19,7 @@ export S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-$MINIO_ROOT_PASSWORD}"
 export S3_FORCE_PATH_STYLE="${S3_FORCE_PATH_STYLE:-true}"
 
 # Local defaults for SFU + STUN in dev
-export SFU_WS_HOST="${SFU_WS_HOST:-ws://127.0.0.1:5005}"
+export SFU_WS_HOST="${SFU_WS_HOST:-ws://127.0.0.1:9092}"
 export SFU_PUBLIC_HOST="${SFU_PUBLIC_HOST:-wss://sfu.example.com}"
 export STUN_SERVERS="${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}"
 

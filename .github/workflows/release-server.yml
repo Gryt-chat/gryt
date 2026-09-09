@@ -346,6 +346,16 @@ jobs:
           echo "Release server version: $RELEASE_VERSION"
           echo "Tag: $TAG"
 
+      # Runs the moment the version is known and before the first commit is
+      # made. The site's build refuses to pass while a shipped release has no
+      # changelog line, so releasing without one stops gryt.chat deploying
+      # until the line lands (GRYT-1107).
+      - name: Require a changelog line
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/check-release-line.mjs server "${{ steps.version.outputs.version }}"
+
       - name: Update monorepo release.json
         shell: bash
         run: |

@@ -361,6 +361,17 @@ jobs:
           echo "New base version: $BASE_VERSION"
           echo "Release version: $RELEASE_VERSION"
 
+      # Runs the moment the version is known and before the first commit is
+      # made. The app reads this line to tell the user what changed after it
+      # updates, and the site's build refuses to pass while a shipped release
+      # has no line, so releasing without one also stops gryt.chat deploying
+      # until the line lands (GRYT-1107).
+      - name: Require a changelog line
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/check-release-line.mjs app "${{ steps.version.outputs.version }}"
+
       - name: Update monorepo release.json
         shell: bash
         run: |

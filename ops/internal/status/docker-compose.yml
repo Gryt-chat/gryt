@@ -12,6 +12,8 @@ services:
       - gatus-data:/data
     environment:
       GATUS_CONFIG_PATH: /config
+      # The push token for the voice-tunnel checks; unset fails loudly rather than open.
+      VOICE_TUNNEL_TOKEN: ${VOICE_TUNNEL_TOKEN:?set it in .env, see README}
     # No healthcheck, because this image cannot hold one: it carries `/gatus` and
     # nothing else, so every candidate fails on "executable file not found".
 

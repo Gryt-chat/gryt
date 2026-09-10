@@ -127,17 +127,21 @@ jobs:
           monorepo: ${{ github.repository }}
           monorepo-token: ${{ github.token }}
 
-      - name: Move release submodules to their main
+      - name: Move release submodules into place
         shell: bash
         run: |
           set -euo pipefail
 
-          # Release from what is on each submodule's main, not the superproject's
-          # gitlink: a stale pointer ships a server the client disagrees with.
-          for path in packages/server packages/sfu packages/image-worker; do
-            git -C "$path" fetch origin main
-            git -C "$path" checkout -B main origin/main
-            echo "$path -> $(git -C "$path" rev-parse --short HEAD)"
+          # The server is released from its main, not the superproject's gitlink: a stale
+          # pointer ships a server the client disagrees with.
+          git -C packages/server fetch origin main
+          git -C packages/server checkout -B main origin/main
+          echo "packages/server -> $(git -C packages/server rev-parse --short HEAD) (main)"
+
+          # The SFU and image worker come from their newest release tag, the one Release
+          # Client embeds. Unreleased work on their main waits for their own release.
+          for path in packages/sfu packages/image-worker; do
+            bash .github/scripts/checkout-release-tag.sh "$path" "${{ github.event.inputs.channel }}"
           done
 
       - name: Set up Git user

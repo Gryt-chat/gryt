@@ -1,0 +1,11 @@
+# Every minute. Gatus alarms after five without a push, so a dead timer is visible.
+[Unit]
+Description=Report Gryt voice tunnel health every minute
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

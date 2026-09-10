@@ -41,6 +41,7 @@ SYNCED=(
     "README.md:$DEST/README.md"
     "config/config.yaml:$DEST/config/config.yaml"
     "update.sh:$DEST/update.sh"
+    "tunnel-check.sh:$DEST/tunnel-check.sh"
 )
 
 files_match() {
@@ -106,6 +107,7 @@ update_config() {
         -v /tmp/gatus-validate-config:/config:ro \
         -v /tmp/gatus-validate-data:/data \
         -e GATUS_CONFIG_PATH=/config \
+        --env-file "$DEST/.env" \
         twinproduction/gatus:v5.36.0 >/dev/null 2>&1 || true
 
     local ok=1 i

@@ -1,0 +1,8 @@
+# Pushes the voice tunnels' health to Gatus. Root, because `wg show` needs it.
+[Unit]
+Description=Report Gryt voice tunnel health to the status page
+After=network-online.target wg-quick@wg0.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/gryt-status/tunnel-check.sh

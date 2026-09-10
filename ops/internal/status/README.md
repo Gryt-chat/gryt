@@ -136,6 +136,35 @@ ssh vps 'cd /opt/gryt-status && docker compose pull console && docker compose up
 The password, the tunnel route and how the path prefix works are all documented
 in that repository's README.
 
+## Voice calls are checked from here too
+
+Voice media is UDP. It reaches the SFUs at home through WireGuard, so none of the HTTP
+checks above can see it. In September 2026 the dev box rebooted, `wg-quick@wg0` was
+disabled, and the tunnel stayed down for eight days while every check on this page read
+green. Chat worked, sign-in worked, and nobody off the LAN could hear anybody.
+
+`tunnel-check.sh` runs every minute and reports each Gryt tunnel's last WireGuard
+handshake to Gatus as an [external endpoint](https://github.com/TwiN/gatus#external-endpoints).
+Older than five minutes is down. They show under **Talking** as *Voice calls* (the dev
+box, prod and beta) and *Community voice calls*. The game server's tunnel is not ours to
+report, so it is left out.
+
+Each has a five-minute heartbeat. If the checker stops pushing, whether the timer died or
+the script broke, Gatus marks it down on its own. Silence cannot read as healthy.
+
+The push is authenticated with `VOICE_TUNNEL_TOKEN` from `.env`. It has to be secret,
+because `status.gryt.chat` routes the whole Gatus API to the internet, including the
+endpoint that accepts these results.
+
+Setting it up once, after the first deploy has synced `tunnel-check.sh`:
+
+```bash
+ssh vps 'echo "VOICE_TUNNEL_TOKEN=$(openssl rand -hex 32)" | sudo tee -a /opt/gryt-status/.env >/dev/null'
+ssh vps 'sudo cp /opt/gryt-src/ops/internal/status/gryt-tunnel-check.{service,timer} /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now gryt-tunnel-check.timer'
+```
+
+The units are not synced by `update.sh`, for the same daemon-reload reason as its own.
+
 ## Validate before you deploy
 
 A bad config stops the container, and the page goes down with it. Run the config

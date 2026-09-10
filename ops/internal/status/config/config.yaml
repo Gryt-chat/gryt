@@ -128,3 +128,19 @@ endpoints:
     conditions:
       - "[STATUS] == 200"
       - "[BODY].ok == true"
+
+# Voice media is UDP through WireGuard, invisible to the HTTP checks above. It was down
+# eight days in September 2026 with this page green. tunnel-check.sh pushes these.
+external-endpoints:
+  # gryt.chat's own servers, prod and beta, on the dev box's tunnel.
+  - name: "Voice calls"
+    group: "Talking"
+    token: "${VOICE_TUNNEL_TOKEN}"
+    heartbeat:
+      interval: 5m
+
+  - name: "Community voice calls"
+    group: "Talking"
+    token: "${VOICE_TUNNEL_TOKEN}"
+    heartbeat:
+      interval: 5m

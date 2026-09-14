@@ -22,17 +22,9 @@ might get a shell on.
       │  DNAT udp/10000 -> 10.2.0.6, over WireGuard
       ▼
     VM gryt-community  (192.168.122.213 on virbr0, 10.2.0.6 on wg0)
-      ├─ cloudflared, as a systemd service on the VM
-      └─ compose: server, sfu, minio, image-worker
+      ├─ cloudflared, as a systemd service on the VM   -> out the house connection
+      └─ compose: server, sfu, minio, image-worker      -> out through the VPS
 ```
-
-Everything the VM sends leaves through the VPS (`AllowedIPs = 0.0.0.0/0`). That
-is not about privacy. Media arrives DNAT'd with the client's own public address
-as the source, and a reply that went out the house connection instead would
-reach the client from an address it never negotiated. It also makes
-`ICE_ADVERTISE_IP` one true value rather than something to keep verifying —
-GRYT-768 was the other arrangement drifting out of step, unnoticed for weeks
-because calls kept connecting on a candidate nobody had chosen.
 
 | | Where | Reachable from |
 |---|---|---|
@@ -46,6 +38,39 @@ because calls kept connecting on a candidate nobody had chosen.
 services. It runs as a systemd unit on the VM rather than in the compose
 project, so it is not on the compose network and cannot resolve `server` or
 `sfu`. Those two ports are load-bearing, not debug conveniences.
+
+## Egress
+
+Containers reach the internet through the VPS. The VM's own traffic goes out
+the house connection, and that includes cloudflared.
+
+Containers need the VPS for two reasons. Media arrives DNAT'd with the client's
+own public address as the source, and a reply that left through the house
+connection would reach the client from an address it never negotiated. And a
+link preview shouldn't show the house address to whatever site somebody linked.
+It also keeps `ICE_ADVERTISE_IP` one true value. GRYT-768 was the other
+arrangement drifting out of step, unnoticed for weeks because calls kept
+connecting on a candidate nobody had chosen.
+
+cloudflared goes direct because it holds up better that way. Through the tunnel
+it ran QUIC inside WireGuard and logged 36 to 205 errors a day. Direct, it logged
+19. A tunnel reconnect answers requests with Cloudflare's own error page, which
+has no CORS header, so the client reported those as CORS errors. Cloudflare sees
+the house address this way. Users and linked sites still don't.
+
+[`egress.sh`](egress.sh) does the routing. `wg0.conf` has `Table = off` (see
+[`wg0.conf.example`](wg0.conf.example)), so wg-quick adds no routes, and its
+`PostUp` runs `egress.sh up`. That adds two rules for `172.16.0.0/12`, where
+Docker puts its networks. The first is the main table without its default route,
+so replies to the bridge and to cloudflared stay on the VM. The second is table
+51820, whose only route is the tunnel. It also loads the `inet gryt_egress` nft
+table, which clamps TCP MSS into wg0 and drops container traffic headed for the
+house connection. A missing rule makes containers fail closed instead of leaking.
+
+`gryt-community-egress.service` runs it before Docker at boot, and its timer runs
+it every minute to put back anything that went missing. `egress.sh check` lists
+what's missing. The SFU has to stay on the compose network for this to cover its
+replies: with `network_mode: host` its traffic would be the VM's own.
 
 ## Isolation
 
@@ -80,7 +105,25 @@ curl -s -o /dev/null https://ghcr.io/v2/   # must work
 sudo systemctl restart nftables
 ```
 
-## Two things that will bite
+## Things that will bite
+
+**networkd deletes routing rules it didn't create.** That's its default,
+`ManageForeignRoutingPolicyRules=yes`. An unattended upgrade restarted it on
+2026-09-13 and wg-quick's rules went with it. For a day everything on the VM left
+through the house connection, and voice replies couldn't get back to anyone.
+[`systemd/networkd-foreign-rules.conf`](systemd/networkd-foreign-rules.conf),
+installed as `/etc/systemd/networkd.conf.d/gryt-community.conf`, turns that off.
+The egress timer is there in case something else does the same.
+
+**Container TCP through the tunnel needs its MSS clamped.** Docker's veths are
+1500 and wg0 is 1420. Without the clamp, sites that ignore ICMP stall in the TLS
+handshake. The Microsoft Store page that kept turning up in the link preview
+errors aborted every time through the tunnel, and loaded in half a second with
+the clamp. A curl on the VM itself never shows this, because the host's sockets
+already see wg0's MTU. That's why the VM could fetch a page the server couldn't.
+
+**Some sites refuse the VPS address.** Reddit and makerworld answer 403 to a
+datacenter IP, so their links come back without a card.
 
 **The media port is 10000, not 3478.** The SFU's own documentation recommends
 3478 and it is the right answer nearly everywhere. Measured against this VPS on
@@ -113,8 +156,21 @@ would not start.
 ```bash
 ssh -J unraid sivert@192.168.122.213
 sudo install -d -o sivert -g sivert /opt/gryt-community
-# copy compose.yml, backup.sh and .env.example from this directory
+# copy compose.yml, backup.sh, egress.sh and .env.example from this directory
 cp .env.example .env    # fill in every blank
+```
+
+Egress goes in before the first `docker compose up`, so no container ever starts
+without it:
+
+```bash
+sudo install -m 0755 egress.sh /opt/gryt-community/egress.sh
+sudo install -m 0644 systemd/gryt-community-egress.service systemd/gryt-community-egress.timer /etc/systemd/system/
+sudo install -D -m 0644 systemd/networkd-foreign-rules.conf /etc/systemd/networkd.conf.d/gryt-community.conf
+sudo install -m 0600 wg0.conf.example /etc/wireguard/wg0.conf   # key in /etc/wireguard/privatekey
+sudo systemctl daemon-reload
+sudo systemctl enable --now wg-quick@wg0 gryt-community-egress.service gryt-community-egress.timer
+sudo /opt/gryt-community/egress.sh check
 docker compose up -d
 ```
 

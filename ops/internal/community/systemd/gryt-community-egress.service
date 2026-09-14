@@ -1,0 +1,13 @@
+[Unit]
+Description=Send community.gryt.chat's containers through the VPS
+After=wg-quick@wg0.service nftables.service
+Wants=wg-quick@wg0.service
+# Before Docker, so no container starts ahead of the rule that keeps it off the house connection.
+Before=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/gryt-community/egress.sh up
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+# /etc/wireguard/wg0.conf. Table = off because egress.sh decides what uses the tunnel.
+# The key is read from /etc/wireguard/privatekey, so this file holds no secret.
+[Interface]
+Address = 10.2.0.6/32, fd00:1234:5678::6/128
+Table = off
+PostUp = wg set %i private-key /etc/wireguard/privatekey
+PostUp = /opt/gryt-community/egress.sh up
+PreDown = /opt/gryt-community/egress.sh down
+
+[Peer]
+PublicKey = <the VPS public key, from wg show on the VPS>
+Endpoint = <VPS address>:<WireGuard port>
+AllowedIPs = 0.0.0.0/0, ::/0
+PersistentKeepalive = 25

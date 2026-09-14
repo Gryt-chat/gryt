@@ -145,7 +145,8 @@ Gryt server the page speaks for is the community one, which *Community server* a
 covers.
 
 That leaves nothing here watching the tunnels, and a tunnel down is what hid voice
-being broken for eight days in September 2026. A private alert for it is still to do.
+being broken for eight days in September 2026. That's watched privately now, by
+[`../tunnel-alert`](../tunnel-alert/README.md), which posts to Discord.
 
 ## Validate before you deploy
 

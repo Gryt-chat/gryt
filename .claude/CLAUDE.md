@@ -321,6 +321,15 @@ bit", "probably", "honestly". Avoid aphorisms, antithesis pairs ("not X, but Y")
 sections that end on a punchy one-liner. If a sentence sounds like it belongs in a keynote,
 rewrite it.
 
+**The logo is the violet owl on dark indigo.** The source is
+`packages/client/public/logo.svg` (clipped to a circle) and `public/logo-square.svg` next
+to it. `yarn icons:generate` in the client makes the app icons from the square one. Copy
+from there when a logo is needed. The 2023 mark, a dark owl on a violet disc, is retired.
+Don't use it anywhere, and that includes sample images in docs and demos. On 2026-09-14 a
+1024px copy was still the Avatar demo in the ui docs, with more in reports, auth, the VS
+Code theme and gryt-assets. It was all removed in GRYT-1173. ui, reports and auth now
+run `check-retired-logo.mjs`, which fails CI on the md5 of any known copy.
+
 **Don't tell the reader a point is important.** "Worth noting", "worth a close look",
 "this is the moment the number is settled", "the one people miss" — each of those spends a
 sentence announcing the next one instead of saying anything. Cut the announcement and

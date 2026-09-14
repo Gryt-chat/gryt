@@ -120,6 +120,10 @@ services:
       # Whether the model may reason before it answers. Worth the extra seconds:
       # it is the difference between "the app crashed" and "TypeError in ChannelList".
       REPORTS_TRIAGE_THINK: "${REPORTS_TRIAGE_THINK:-}"
+      # Empty follows REPORTS_TRIAGE_THINK.
+      REPORTS_DRAFT_THINK: "${REPORTS_DRAFT_THINK:-}"
+      # Ollama's own default is 4096, which a long report and its thinking overflow.
+      REPORTS_OLLAMA_NUM_CTX: "${REPORTS_OLLAMA_NUM_CTX:-16384}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       REPORTS_TRIAGE_MODEL: "${REPORTS_TRIAGE_MODEL:-}"
       REPORTS_DISCORD_WEBHOOK_URL: "${REPORTS_DISCORD_WEBHOOK_URL:-}"

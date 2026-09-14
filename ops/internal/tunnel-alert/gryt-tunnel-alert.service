@@ -1,0 +1,11 @@
+[Unit]
+Description=Alert on Discord when a Gryt WireGuard tunnel goes down
+Documentation=https://github.com/Gryt-chat/gryt/blob/main/ops/internal/tunnel-alert/README.md
+After=network-online.target wg-quick@wg0.service
+
+[Service]
+Type=oneshot
+# Straight from the clone gryt-status-update.timer keeps current, so a merge is a deploy.
+ExecStart=/bin/bash /opt/gryt-src/ops/internal/tunnel-alert/tunnel-alert.sh
+StateDirectory=gryt-tunnel-alert
+TimeoutStartSec=2min

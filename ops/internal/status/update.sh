@@ -41,7 +41,6 @@ SYNCED=(
     "README.md:$DEST/README.md"
     "config/config.yaml:$DEST/config/config.yaml"
     "update.sh:$DEST/update.sh"
-    "tunnel-check.sh:$DEST/tunnel-check.sh"
 )
 
 files_match() {

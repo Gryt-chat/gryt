@@ -15,11 +15,11 @@
 
 Both hostnames are routes on the Cloudflare tunnel that serves `ws1.sivert.io`. `test.gryt.chat` goes to `http://dev.lan:5030` and `test-sfu.gryt.chat` goes to `http://dev.lan:5035`. They're set up in the Cloudflare dashboard. Nothing in this repository manages them.
 
-Voice media skips Cloudflare. The SFU tells clients to send UDP to the VPS at `193.200.238.156`, port 10002. A DNAT rule on the VPS forwards that port over WireGuard to dev.lan (`10.2.0.5`), and Docker passes it on to the SFU. The rule lives in `/etc/wireguard/wg0.conf` on the VPS as a `PostUp` line, next to the one for beta's 4443. It has to name 10002 on its own, because the catch-all rule for UDP 1024-65000 sends traffic to a different WireGuard peer.
+Voice media skips Cloudflare. The SFU tells clients to send UDP to the VPS at `193.200.238.156`, port 10002. A DNAT rule on the VPS forwards that port over WireGuard to dev.lan (`10.2.0.5`), and Docker passes it on to the SFU. The rule lives in `/etc/wireguard/wg0.conf` on the VPS as a `PostUp` line, next to the one for beta's 10001. It has to name 10002 on its own, because the catch-all rule for UDP 1024-65000 sends traffic to a different WireGuard peer.
 
-The VPS is at Gigahost, and Gigahost's firewall only lets a few UDP ports through to it. The range for SFU media is 10000-10020. community.gryt.chat has 10000 and this server has 10002. Prod's SFU gets through on 443, which is also on the list. That firewall lives in Gigahost's control panel, so nothing on the VPS shows it, and a blocked port never arrives. This server first used 4444, and no call from outside the LAN ever connected (GRYT-1233).
+The VPS is at Gigahost, and Gigahost's firewall only lets a few UDP ports through to it. The range for SFU media is 10000-10020. community.gryt.chat has 10000, beta has 10001 and this server has 10002. Prod's SFU gets through on 443, which is also on the list. That firewall lives in Gigahost's control panel, so nothing on the VPS shows it, and a blocked port never arrives. This server first used 4444, and no call from outside the LAN ever connected (GRYT-1233). Beta was on 4443 until GRYT-1234, with the same result.
 
-Beta's 4443 is outside the range too, so beta voice from outside the LAN probably doesn't connect either. Moving beta to 10001 is GRYT-1234.
+Beta's port is set in `.env.beta` on dev.lan, which isn't in git, and `beta.yml` defaults to the same 10001. Change both if it ever moves.
 
 If voice never gets past connecting, check two things on the VPS. The rule should be listed, and a few packets sent to port 10002 from outside should show up in conntrack:
 

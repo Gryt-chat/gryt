@@ -66,7 +66,8 @@ services:
     container_name: gryt-beta-sfu
     ports:
       - "${SFU_PORT:-5015}:5005"
-      - "${ICE_UDP_MUX_PORT:-4443}:${ICE_UDP_MUX_PORT:-4443}/udp"
+      # The VPS provider's firewall only lets UDP 10000-10020 through for SFU media. On dev.lan, .env.beta sets this port as well.
+      - "${ICE_UDP_MUX_PORT:-10001}:${ICE_UDP_MUX_PORT:-10001}/udp"
       # Loopback only. The server below runs with host networking, so it cannot
       # reach a container port at all unless that port is published somewhere.
       - "127.0.0.1:${SFU_CONTROL_PORT:-9092}:${SFU_CONTROL_PORT:-9092}"
@@ -76,7 +77,7 @@ services:
       # can reach it, and a published /server lets anyone use this SFU as their relay.
       SFU_CONTROL_PORT: "${SFU_CONTROL_PORT:-9092}"
       STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
-      ICE_UDP_MUX_PORT: ${ICE_UDP_MUX_PORT:-4443}
+      ICE_UDP_MUX_PORT: ${ICE_UDP_MUX_PORT:-10001}
       ICE_ADVERTISE_IP: ${ICE_ADVERTISE_IP:-}
       DISABLE_STUN: ${DISABLE_STUN:-false}
       SFU_REQUIRE_CLIENT_TOKEN: ${SFU_REQUIRE_CLIENT_TOKEN:-}

@@ -128,9 +128,10 @@ datacenter IP, so their links come back without a card.
 **The media port is 10000, not 3478.** The SFU's own documentation recommends
 3478 and it is the right answer nearly everywhere. Measured against this VPS on
 2026-08-31: inbound UDP 3478 never arrives. Nor does 3479, 5349, 5000, 8443,
-20000, 30000, 33434, 40000, 49152, 51820 or 60000. 443, 4443, 10000 and 10001
-do. Nothing on the VPS drops them — a counter in `mangle PREROUTING`, ahead of
-every other rule, stays at zero — so the filtering is upstream of the box. Worth
+20000, 30000, 33434, 40000, 49152, 51820 or 60000. 443, 10000 and 10001 do.
+Nothing on the VPS drops them — a counter in `mangle PREROUTING`, ahead of
+every other rule, stays at zero — so the filtering is upstream of the box. It's
+Gigahost's firewall, and the range it allows for SFU media is 10000-10020. Worth
 re-testing if the VPS or its provider changes, because 3478 is the better port
 for anyone behind a corporate or school firewall.
 

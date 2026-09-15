@@ -15,13 +15,18 @@
 
 Both hostnames are routes on the Cloudflare tunnel that serves `ws1.sivert.io`. `test.gryt.chat` goes to `http://dev.lan:5030` and `test-sfu.gryt.chat` goes to `http://dev.lan:5035`. They're set up in the Cloudflare dashboard. Nothing in this repository manages them.
 
-Voice media skips Cloudflare. The SFU tells clients to send UDP to the VPS at `193.200.238.156`, port 4444. A DNAT rule on the VPS forwards that port over WireGuard to dev.lan (`10.2.0.5`), and Docker passes it on to the SFU. The rule lives in `/etc/wireguard/wg0.conf` on the VPS as a `PostUp` line, next to the one for beta's 4443. It has to name 4444 on its own, because the catch-all rule for UDP 1024-65000 sends traffic to a different WireGuard peer. If a call connects and nobody hears anything, check the rule first. On the VPS:
+Voice media skips Cloudflare. The SFU tells clients to send UDP to the VPS at `193.200.238.156`, port 4444. A DNAT rule on the VPS forwards that port over WireGuard to dev.lan (`10.2.0.5`), and Docker passes it on to the SFU. The rule lives in `/etc/wireguard/wg0.conf` on the VPS as a `PostUp` line, next to the one for beta's 4443. It has to name 4444 on its own, because the catch-all rule for UDP 1024-65000 sends traffic to a different WireGuard peer.
+
+The packets also have to get past a filter in front of the VPS that only lets some UDP ports through. On 2026-09-15, UDP from home got through on 443, 10000 and 65001, but not on 3478, 4443 or 4444 (GRYT-1233). Until 4444 is let through, voice from outside the LAN can't connect.
+
+If voice never gets past connecting, check both on the VPS. The rule should be listed, and a few packets sent to port 4444 from outside should show up in conntrack:
 
 ```bash
 sudo iptables -t nat -S PREROUTING | grep 4444
+sudo grep 'dport=4444 ' /proc/net/nf_conntrack
 ```
 
-The SFU advertises the VPS address and nothing else. So a call from the LAN takes the same path as one from CI.
+A call from the LAN won't tell you whether any of that works. The SFU only advertises the VPS address, but a browser at home also sends the SFU its LAN address, and the SFU reaches it straight over the LAN. To test the VPS path from home, stop the browser's own candidates reaching the SFU, for example by dropping them in `onicecandidate`.
 
 The server's metrics are off (`METRICS_PORT=0`). It uses host networking, so a metrics port would be open to the whole LAN.
 

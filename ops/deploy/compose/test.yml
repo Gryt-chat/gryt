@@ -35,7 +35,7 @@ services:
       SFU_CONTROL_PORT: "${SFU_CONTROL_PORT:-9195}"
       SFU_METRICS_PORT: "${SFU_METRICS_PORT:-9095}"
       ICE_UDP_MUX_PORT: "${ICE_UDP_MUX_PORT:-4444}"
-      # The VPS alone, not the LAN address as well, so a call from the LAN takes the path CI takes.
+      # A browser on the LAN still reaches dev.lan directly, because it sends the SFU its LAN address.
       ICE_ADVERTISE_IP: ${ICE_ADVERTISE_IP:-193.200.238.156}
       DISABLE_STUN: ${DISABLE_STUN:-true}
       STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}

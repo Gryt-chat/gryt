@@ -26,7 +26,8 @@ services:
     logging: *gryt-logging
     ports:
       - "${SFU_PORT:-5035}:5005"
-      - "${ICE_UDP_MUX_PORT:-4444}:${ICE_UDP_MUX_PORT:-4444}/udp"
+      # The VPS provider's firewall only lets UDP 10000-10020 through for SFU media. See TEST.md.
+      - "${ICE_UDP_MUX_PORT:-10002}:${ICE_UDP_MUX_PORT:-10002}/udp"
       # Loopback only. The server reaches registration from the host, and nobody else should.
       - "127.0.0.1:${SFU_CONTROL_PORT:-9195}:${SFU_CONTROL_PORT:-9195}"
       - "127.0.0.1:${SFU_METRICS_PORT:-9095}:${SFU_METRICS_PORT:-9095}"
@@ -34,7 +35,7 @@ services:
       PORT: "5005"
       SFU_CONTROL_PORT: "${SFU_CONTROL_PORT:-9195}"
       SFU_METRICS_PORT: "${SFU_METRICS_PORT:-9095}"
-      ICE_UDP_MUX_PORT: "${ICE_UDP_MUX_PORT:-4444}"
+      ICE_UDP_MUX_PORT: "${ICE_UDP_MUX_PORT:-10002}"
       # A browser on the LAN still reaches dev.lan directly, because it sends the SFU its LAN address.
       ICE_ADVERTISE_IP: ${ICE_ADVERTISE_IP:-193.200.238.156}
       DISABLE_STUN: ${DISABLE_STUN:-true}

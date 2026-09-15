@@ -8,22 +8,24 @@
 |------|--------------|------------|
 | Server | `https://test.gryt.chat` | `5030`, host networking |
 | SFU signalling | `wss://test-sfu.gryt.chat` | `5035`, published to the container's `5005` |
-| SFU media | UDP `193.200.238.156:4444` | UDP `4444` |
+| SFU media | UDP `193.200.238.156:10002` | UDP `10002` |
 | SFU registration | not reachable | `127.0.0.1:9195` |
 | SFU metrics | not reachable | `127.0.0.1:9095` |
 | Image worker health | not reachable | `127.0.0.1:8086` |
 
 Both hostnames are routes on the Cloudflare tunnel that serves `ws1.sivert.io`. `test.gryt.chat` goes to `http://dev.lan:5030` and `test-sfu.gryt.chat` goes to `http://dev.lan:5035`. They're set up in the Cloudflare dashboard. Nothing in this repository manages them.
 
-Voice media skips Cloudflare. The SFU tells clients to send UDP to the VPS at `193.200.238.156`, port 4444. A DNAT rule on the VPS forwards that port over WireGuard to dev.lan (`10.2.0.5`), and Docker passes it on to the SFU. The rule lives in `/etc/wireguard/wg0.conf` on the VPS as a `PostUp` line, next to the one for beta's 4443. It has to name 4444 on its own, because the catch-all rule for UDP 1024-65000 sends traffic to a different WireGuard peer.
+Voice media skips Cloudflare. The SFU tells clients to send UDP to the VPS at `193.200.238.156`, port 10002. A DNAT rule on the VPS forwards that port over WireGuard to dev.lan (`10.2.0.5`), and Docker passes it on to the SFU. The rule lives in `/etc/wireguard/wg0.conf` on the VPS as a `PostUp` line, next to the one for beta's 4443. It has to name 10002 on its own, because the catch-all rule for UDP 1024-65000 sends traffic to a different WireGuard peer.
 
-The packets also have to get past a filter in front of the VPS that only lets some UDP ports through. On 2026-09-15, UDP from home got through on 443, 10000 and 65001, but not on 3478, 4443 or 4444 (GRYT-1233). Until 4444 is let through, voice from outside the LAN can't connect.
+The VPS is at Gigahost, and Gigahost's firewall only lets a few UDP ports through to it. The range for SFU media is 10000-10020. community.gryt.chat has 10000 and this server has 10002. Prod's SFU gets through on 443, which is also on the list. That firewall lives in Gigahost's control panel, so nothing on the VPS shows it, and a blocked port never arrives. This server first used 4444, and no call from outside the LAN ever connected (GRYT-1233).
 
-If voice never gets past connecting, check both on the VPS. The rule should be listed, and a few packets sent to port 4444 from outside should show up in conntrack:
+Beta's 4443 is outside the range too, so beta voice from outside the LAN probably doesn't connect either. Moving beta to 10001 is GRYT-1234.
+
+If voice never gets past connecting, check two things on the VPS. The rule should be listed, and a few packets sent to port 10002 from outside should show up in conntrack:
 
 ```bash
-sudo iptables -t nat -S PREROUTING | grep 4444
-sudo grep 'dport=4444 ' /proc/net/nf_conntrack
+sudo iptables -t nat -S PREROUTING | grep 10002
+sudo grep 'dport=10002 ' /proc/net/nf_conntrack
 ```
 
 A call from the LAN won't tell you whether any of that works. The SFU only advertises the VPS address, but a browser at home also sends the SFU its LAN address, and the SFU reaches it straight over the LAN. To test the VPS path from home, stop the browser's own candidates reaching the SFU, for example by dropping them in `onicecandidate`.

@@ -989,3 +989,18 @@ jobs:
           echo "Tag: $TAG"
           echo "Release: https://github.com/${{ env.RELEASE_OWNER }}/${{ env.RELEASE_REPO }}/releases/tag/$TAG"
           echo "Docker: ${{ env.SERVER_IMAGE }}:$VERSION"
+
+      # A stable release moves latest-beta too, unless a newer beta is already there, so beta never
+      # runs behind prod (GRYT-1236). Last, and gated on the push, so it can't cost the release.
+      - name: Bring latest-beta up to this release
+        if: ${{ !cancelled() && steps.docker.outcome == 'success' && steps.channel.outputs.channel == 'latest' }}
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          TARGET="$(node .github/scripts/beta-follows-latest.mjs "$SERVER_IMAGE" "$VERSION")"
+          if [[ -n "$TARGET" ]]; then
+            docker buildx imagetools create -t "${SERVER_IMAGE}:latest-beta" "${SERVER_IMAGE}@${TARGET}"
+          fi

@@ -1536,6 +1536,39 @@ jobs:
             -d "$PAYLOAD" \
             "$WEBHOOK_URL"
 
+  # A stable release moves latest-beta too, unless a newer beta is already there, so beta never
+  # runs behind prod (GRYT-1236). Its own job, so a registry blip can't hold up the release.
+  beta-follows-latest:
+    name: Bring latest-beta up to this release
+    needs: [prepare-release, build-electron]
+    if: needs.prepare-release.outputs.channel == 'latest'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout monorepo
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Point latest-beta at this release unless a newer beta is there
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          TARGET="$(node .github/scripts/beta-follows-latest.mjs "$DOCKER_IMAGE" "$VERSION")"
+          if [[ -n "$TARGET" ]]; then
+            docker buildx imagetools create -t "${DOCKER_IMAGE}:latest-beta" "${DOCKER_IMAGE}@${TARGET}"
+          fi
+
   # Take back what a failed release left lying around: a run that dies after "Prepare release"
   # has already pushed the tag and created the draft (GRYT-466).
 

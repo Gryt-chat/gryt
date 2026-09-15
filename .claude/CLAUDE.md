@@ -144,10 +144,12 @@ Moving a task is not exposed by the Vikunja MCP server, so use the REST API dire
 POST /api/v1/projects/2/views/12/buckets/<bucket>/tasks   {"task_id": <id>}
 ```
 
-Moving a card into **Done** does **not** set its `done` flag. That needs its own write:
+Moving a card into **Done** does **not** set its `done` flag. That needs its own write,
+and the write replaces the whole task, so send the whole task back:
 
 ```bash
-POST /api/v1/tasks/<id>   {"done": true}
+GET  /api/v1/tasks/<id>                  # the full task object
+POST /api/v1/tasks/<id>   <that object, with "done": true>
 ```
 
 This file claimed the opposite until 2026-08-18, and the CI workflow was written to match,
@@ -155,6 +157,12 @@ so every task CI closed sat in the Done column reporting `done: false`. Thirteen
 had built up. They read as finished on the board and as open to anything filtering on
 `done`, and nothing failed on the way — which is why it went unnoticed for so long. Fixed
 in the reusable workflow, but do the second write yourself when moving a task by hand.
+
+Until 2026-09-15 the example above was `POST /api/v1/tasks/<id> {"done": true}` on its
+own. Vikunja treats that as the complete task, so it set the flag and emptied the
+description. Fourteen tasks lost theirs in one day before an agent noticed, and they came
+back only because the text was still in session transcripts. The same goes for any other
+field: never POST a partial task.
 
 If something merges outside a PR, or CI fails, **check the Review column at the start of
 Vikunja work and close anything whose PR has landed.**

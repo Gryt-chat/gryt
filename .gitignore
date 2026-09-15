@@ -26,6 +26,7 @@ skills-lock.json
 **/.env.*
 !.env.example
 !**/.env.example
+!ops/deploy/compose/.env.test.example
 
 # Non-yarn lockfiles (project uses yarn)
 **/package-lock.json

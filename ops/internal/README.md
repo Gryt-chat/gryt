@@ -171,17 +171,22 @@ a desktop app on **1.6.15-beta.1** — ten releases, including the whole seed-de
 identity feature set, which read from the outside as "that only works on desktop"
 (GRYT-291).
 
-[`refresh-web-client.sh`](refresh-web-client.sh) closes that. It pulls `latest` for prod and
-`latest-beta` for beta, and recreates the container only when the image id actually moved:
+[`refresh-web-client.sh`](refresh-web-client.sh) closes that. It pulls the image each stack's
+compose file names, `latest` for prod and `latest-beta` for beta, and recreates a container
+only when its image id actually moved:
 
 ```bash
 ops/internal/refresh-web-client.sh
 ```
 
-It touches nothing but the `client` service — `--no-deps`, one service named, never a bare
-`up -d` — so the server, the SFU, the image worker and MinIO are never in its way. It
-refuses to run with less than 10GB free, since the auth database is on the same disk. It
-only refreshes a container that is already running, and will not bring a missing one up.
+The test server behind test.gryt.chat and the public demo server are in it too, so neither
+is left on an old image after a release. The demo's compose file lives outside this checkout.
+The script still finds it, since it reads the file list off the container's labels.
+
+It only touches the services it names, one at a time with `--no-deps` and never a bare
+`up -d`, so MinIO and the one-shot init containers stay out of it. It refuses to run with
+less than 10GB free, since the auth database is on the same disk. It only refreshes a
+container that's already running, and won't bring a missing one up.
 
 Nothing in it is specific to one machine, and there are no paths to configure. Each stack's
 compose files, the order they were merged in and the env file they were read with all come
@@ -191,12 +196,13 @@ different list is a different config, which would make `up` recreate the contain
 ten minutes forever. Some of those overlays are untracked and exist only on the host, so
 no list committed here could be right.
 
-Three environment variables, none of them required:
+Environment variables, none of them required:
 
 | | |
 |---|---|
-| `GRYT_STACKS` | stacks to refresh, space separated. Default `prod beta`; each `<s>` means the container `gryt-<s>-client` |
-| `GRYT_SERVICE` | the compose service, if it is not called `client` |
+| `GRYT_STACKS` | stacks to refresh, space separated. Default `prod beta test demo`. Each `<s>` covers the containers named `gryt-<s>-<service>`, and a stack without one of them skips it |
+| `GRYT_SERVICES` | services to refresh on each stack. Default `sfu server server-nt server-pp image-worker image-worker-nt image-worker-pp client` |
+| `GRYT_SERVICE` | the old spelling for a single service. `GRYT_SERVICES` wins if both are set |
 | `GRYT_CONTAINERS` | containers to refresh by name, for anything outside the stack naming. Default `gryt-reports`; the compose service is read off the container's own label |
 | `GRYT_MIN_FREE_GB` | refuse to pull below this much free disk. Default `10` |
 

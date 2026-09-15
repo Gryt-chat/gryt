@@ -1,0 +1,146 @@
+name: gryt-test
+
+# The server the nightly end-to-end suite runs against, at test.gryt.chat.
+# Shaped like beta.yml. TEST.md covers the ports, the tunnel, resets and the invite.
+
+x-logging: &gryt-logging
+  driver: journald
+  options:
+    tag: "{{.Name}}"
+
+services:
+  server-data-init:
+    image: alpine:3
+    container_name: gryt-test-server-data-init
+    command: ["/bin/sh", "-c", "mkdir -p /data && chown -R 1001:1001 /data"]
+    volumes:
+      - gryt-test-server-data:/data
+    networks:
+      - gryt-test
+    restart: "no"
+
+  # ── SFU (Media Server) ────────────────────────────────────────────────────
+  sfu:
+    image: ghcr.io/gryt-chat/sfu:${SFU_VERSION:-latest}
+    container_name: gryt-test-sfu
+    logging: *gryt-logging
+    ports:
+      - "${SFU_PORT:-5035}:5005"
+      - "${ICE_UDP_MUX_PORT:-4444}:${ICE_UDP_MUX_PORT:-4444}/udp"
+      # Loopback only. The server reaches registration from the host, and nobody else should.
+      - "127.0.0.1:${SFU_CONTROL_PORT:-9195}:${SFU_CONTROL_PORT:-9195}"
+      - "127.0.0.1:${SFU_METRICS_PORT:-9095}:${SFU_METRICS_PORT:-9095}"
+    environment:
+      PORT: "5005"
+      SFU_CONTROL_PORT: "${SFU_CONTROL_PORT:-9195}"
+      SFU_METRICS_PORT: "${SFU_METRICS_PORT:-9095}"
+      ICE_UDP_MUX_PORT: "${ICE_UDP_MUX_PORT:-4444}"
+      # The VPS alone, not the LAN address as well, so a call from the LAN takes the path CI takes.
+      ICE_ADVERTISE_IP: ${ICE_ADVERTISE_IP:-193.200.238.156}
+      DISABLE_STUN: ${DISABLE_STUN:-true}
+      STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
+    networks:
+      - gryt-test
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ── Signaling Server ───────────────────────────────────────────────────────
+  server:
+    image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest}
+    container_name: gryt-test-server
+    network_mode: host
+    logging: *gryt-logging
+    environment:
+      PORT: ${SERVER_PORT:-5030}
+      HOST: "0.0.0.0"
+      NODE_ENV: production
+      SERVER_NAME: ${SERVER_NAME:-Gryt test}
+      SERVER_DESCRIPTION: ${SERVER_DESCRIPTION:-Wiped and rebuilt for the nightly end-to-end tests}
+      IMAGE_WORKER_URL: http://127.0.0.1:${IMAGE_WORKER_HEALTH_PORT:-8086}
+      # Off, because host networking would put the metrics port on the LAN.
+      METRICS_PORT: ${METRICS_PORT:-0}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://app.gryt.chat,https://beta.gryt.chat,http://127.0.0.1:15738,http://localhost:3666,http://127.0.0.1:3666,http://localhost:3667,http://127.0.0.1:3667,http://localhost:4173,http://127.0.0.1:4173}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.test}
+      SFU_WS_HOST: ws://127.0.0.1:${SFU_PORT:-5035}
+      SFU_PUBLIC_HOST: ${SFU_PUBLIC_HOST:-wss://test-sfu.gryt.chat}
+      STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
+      VOICE_MAX_USERS: ${VOICE_MAX_USERS:-20}
+      GRYT_SERVER_ENABLED: "true"
+      GRYT_IDENTITY_TIERS: ${GRYT_IDENTITY_TIERS:-local}
+      GRYT_TRUSTED_CERT_ISSUERS: ${GRYT_TRUSTED_CERT_ISSUERS:-https://id.gryt.chat}
+      # Every test joins on the one invite, so the default of 60 an hour runs out mid-suite.
+      GRYT_INVITE_MAX_JOINS_PER_HOUR: ${GRYT_INVITE_MAX_JOINS_PER_HOUR:-2000}
+      GRYT_TRUSTED_PROXY_HOPS: ${GRYT_TRUSTED_PROXY_HOPS:-1}
+      DATA_DIR: /data
+      # Uploads land in /data/uploads, beside the database, so there's no MinIO.
+      STORAGE_BACKEND: filesystem
+      S3_BUCKET: uploads
+    volumes:
+      - gryt-test-server-data:/data
+    depends_on:
+      sfu:
+        condition: service_healthy
+      server-data-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch(`http://localhost:$${process.env.PORT}/health`).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ── Image Worker ──────────────────────────────────────────────────────────
+  image-worker:
+    image: ghcr.io/gryt-chat/image-worker:${IMAGE_WORKER_VERSION:-latest}
+    container_name: gryt-test-image-worker
+    logging: *gryt-logging
+    ports:
+      - "127.0.0.1:${IMAGE_WORKER_HEALTH_PORT:-8086}:8080"
+    environment:
+      DATA_DIR: /data
+      STORAGE_BACKEND: filesystem
+      S3_BUCKET: uploads
+    volumes:
+      - gryt-test-server-data:/data
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - gryt-test
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+networks:
+  gryt-test:
+    driver: bridge
+
+# Named outright rather than prefixed by the project, so test-reset.sh can name it exactly.
+volumes:
+  gryt-test-server-data:
+    name: gryt-test-server-data

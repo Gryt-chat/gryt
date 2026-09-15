@@ -13,7 +13,7 @@ const dir = mkdtempSync(join(tmpdir(), "release-line-"));
 const today = new Date().toISOString().slice(0, 10);
 
 /** A releases.ts holding exactly the entries given, in the site's shape. */
-function fixture(name, { app = [], server = [] }) {
+function fixture(name, { app = [], server = [], voice = [], images = [] }) {
   const entries = (list) =>
     list
       .map(
@@ -27,8 +27,9 @@ function fixture(name, { app = [], server = [] }) {
   const path = join(dir, `${name}.ts`);
   writeFileSync(
     path,
-    `export const app: ReleaseLine[] = [\n${entries(app)}\n];\n\n` +
-      `export const server: ReleaseLine[] = [\n${entries(server)}\n];\n`,
+    Object.entries({ app, server, voice, images })
+      .map(([surface, list]) => `export const ${surface}: ReleaseLine[] = [\n${entries(list)}\n];\n`)
+      .join("\n"),
   );
   return path;
 }
@@ -50,6 +51,8 @@ function run(source, ...args) {
 const written = fixture("written", {
   app: [{ version: "1.11.3", date: today }],
   server: [{ version: "1.7.0", date: today }],
+  voice: [{ version: "1.0.65", date: today }],
+  images: [{ version: "1.2.6", date: today }],
 });
 
 test("a line dated today passes", () => {
@@ -68,6 +71,18 @@ test("each surface reads its own array", () => {
   assert.match(out, /No changelog line for server 1\.11\.3/);
 });
 
+test("voice and images read their own arrays too", () => {
+  assert.equal(run(written, "voice", "1.0.65").code, 0);
+  assert.equal(run(written, "images", "1.2.6").code, 0);
+
+  /* The SFU and the image worker number their releases separately, so one's
+     line must not pass the other's release. */
+  const { code, out } = run(written, "images", "1.0.65");
+  assert.equal(code, 1);
+  assert.match(out, /No changelog line for images 1\.0\.65/);
+  assert.equal(run(written, "voice", "1.2.6").code, 1);
+});
+
 test("a missing line fails, and says what to write", () => {
   const { code, out } = run(written, "app", "9.9.9");
   assert.equal(code, 1);
@@ -75,9 +90,15 @@ test("a missing line fails, and says what to write", () => {
   assert.match(out, /content\/changelog\/releases\.ts/);
   assert.match(out, new RegExp(`version: "9\\.9\\.9"`));
   assert.match(out, new RegExp(`date: "${today}"`));
-  /* The app has the dialog that reads them; the server has no changes array. */
+  /* Only the app has the dialog that reads lines, and a changes array for it. */
   assert.match(out, /kind: "fixed"/);
-  assert.doesNotMatch(run(written, "server", "9.9.9").out, /kind: "fixed"/);
+  assert.match(out, /desktop app reads the line/);
+  for (const surface of ["server", "voice", "images"]) {
+    const other = run(written, surface, "9.9.9");
+    assert.equal(other.code, 1);
+    assert.match(other.out, new RegExp(`No changelog line for ${surface} 9\\.9\\.9`));
+    assert.doesNotMatch(other.out, /kind: "fixed"|desktop app/);
+  }
 });
 
 test("a line dated some other day fails", () => {
@@ -127,5 +148,7 @@ test("a source with no such array fails rather than passing", () => {
 test("bad arguments exit 2, so a mistake is not read as a missing line", () => {
   assert.equal(run(written, "app").code, 2);
   assert.equal(run(written).code, 2);
-  assert.equal(run(written, "voice", "1.0.0").code, 2);
+  /* The SFU's surface is voice. A repository's name is the likeliest slip. */
+  assert.equal(run(written, "sfu", "1.0.65").code, 2);
+  assert.equal(run(written, "image-worker", "1.2.6").code, 2);
 });

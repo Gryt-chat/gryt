@@ -5,9 +5,9 @@ const SOURCE =
   process.env.GRYT_RELEASES_URL ??
   "https://raw.githubusercontent.com/Gryt-chat/site/main/content/changelog/releases.ts";
 
-/* Released from this repository. A 1.11.3 under voice or images is another
-   release entirely. */
-const SURFACES = ["app", "server"];
+/* voice and images release from Gryt-chat/sfu and Gryt-chat/image-worker, which
+   fetch this file from main. Moving or renaming it fails their releases. */
+const SURFACES = ["app", "server", "voice", "images"];
 
 const [surface, version] = process.argv.slice(2);
 
@@ -93,9 +93,12 @@ if (!entry) {
 
   console.error(`No changelog line for ${surface} ${version}.`);
   console.error("");
-  console.error("The desktop app reads the line to say what changed after it updates, and the");
-  console.error("site's build refuses to pass while a release has no line — so releasing this");
-  console.error("now stops gryt.chat deploying until somebody writes it.");
+  /* The app's changelog dialog reads the app array and nothing else. */
+  if (surface === "app") {
+    console.error("The desktop app reads the line to say what changed after it updates.");
+  }
+  console.error("The site's build refuses to pass while a release has no line, so releasing");
+  console.error("this now stops gryt.chat deploying until somebody writes it.");
   console.error("");
   console.error(`Add an entry to the top of the \`${surface}\` array in the site repository:`);
   console.error("");

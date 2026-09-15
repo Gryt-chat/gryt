@@ -15,6 +15,8 @@ ui:
   header: "Gryt Status"
   description: "Live status of the Gryt services you can reach from the internet."
   link: "https://gryt.chat"
+# Hourly on purpose, so each bar on the page is an hour. An outage can take that long
+# to show here; the apps don't read these checks.
 endpoints:
   # ── Signing in ──────────────────────────────────────────────────
   # The discovery document, not the login page: it is what every client
@@ -22,7 +24,7 @@ endpoints:
   - name: "Accounts (Keycloak)"
     group: "Signing in"
     url: "https://auth.gryt.chat/realms/gryt/.well-known/openid-configuration"
-    interval: 60s
+    interval: 1h
     conditions:
       - "[STATUS] == 200"
       - "[BODY].issuer == https://auth.gryt.chat/realms/gryt"
@@ -33,7 +35,7 @@ endpoints:
   - name: "Identity certificates"
     group: "Signing in"
     url: "https://id.gryt.chat/health"
-    interval: 60s
+    interval: 1h
     conditions:
       - "[STATUS] == 200"
       - "[BODY].status == ok"
@@ -50,7 +52,7 @@ endpoints:
   - name: "Community server"
     group: "Talking"
     url: "https://community.gryt.chat/info"
-    interval: 60s
+    interval: 1h
     conditions:
       - "[STATUS] == 200"
       - "has([BODY].joinPolicy) == true"
@@ -60,7 +62,7 @@ endpoints:
   - name: "Web client"
     group: "Apps"
     url: "https://app.gryt.chat/"
-    interval: 60s
+    interval: 1h
     conditions:
       - "[STATUS] == 200"
       - "[BODY] == pat(*<title>Gryt</title>*)"
@@ -69,7 +71,7 @@ endpoints:
   - name: "Beta web client"
     group: "Apps"
     url: "https://beta.gryt.chat/"
-    interval: 120s
+    interval: 1h
     conditions:
       - "[STATUS] == 200"
       - "[BODY] == pat(*<title>Gryt</title>*)"
@@ -79,7 +81,7 @@ endpoints:
   - name: "CLI installer"
     group: "Apps"
     url: "https://get.gryt.chat/"
-    interval: 120s
+    interval: 1h
     conditions:
       - "[STATUS] == 200"
       - "[BODY] == pat(*Installs the Gryt CLI*)"
@@ -88,7 +90,7 @@ endpoints:
   - name: "Homepage"
     group: "Sites"
     url: "https://gryt.chat/"
-    interval: 60s
+    interval: 1h
     conditions:
       - "[STATUS] == 200"
       - "[BODY] == pat(*Voice, Text & Video Chat*)"
@@ -98,7 +100,7 @@ endpoints:
   - name: "Documentation"
     group: "Sites"
     url: "https://docs.gryt.chat/docs"
-    interval: 120s
+    interval: 1h
     conditions:
       - "[STATUS] == 200"
       - "[BODY] == pat(*Gryt Documentation*)"
@@ -106,7 +108,7 @@ endpoints:
   - name: "Feature requests"
     group: "Sites"
     url: "https://feedback.gryt.chat/"
-    interval: 120s
+    interval: 1h
     conditions:
       - "[STATUS] == 200"
       - "[BODY] == pat(*<title>Gryt Chat</title>*)"
@@ -114,7 +116,7 @@ endpoints:
   - name: "Component library"
     group: "Sites"
     url: "https://ui.gryt.chat/"
-    interval: 300s
+    interval: 1h
     conditions:
       - "[STATUS] == 200"
       - "[BODY] == pat(*the component library behind Gryt*)"
@@ -124,7 +126,7 @@ endpoints:
   - name: "Bug report intake"
     group: "Sites"
     url: "https://reports.gryt.chat/"
-    interval: 120s
+    interval: 1h
     conditions:
       - "[STATUS] == 200"
       - "[BODY].ok == true"

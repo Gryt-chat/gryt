@@ -51,8 +51,8 @@ jobs:
     # `continue-on-error: true` bought silence instead: four runs reported success
     # while the Store served a version from four weeks earlier.
 
-    # The upload waits out the Store's automated review, because that is when
-    # snapcraft applies --release. Reviews here have taken 25, 77 and 180 minutes.
+    # The upload waits out the Store's review so this run can report the result.
+    # Reviews that went through took 3 to 30 minutes.
 
     # Affordable out here in a way it was not inside Release Client: this job holds
     # no concurrency group, so nothing queues behind it.
@@ -133,13 +133,8 @@ jobs:
           echo "Downloaded:"
           ls -lah "./$SNAP"
 
-      # Foreground, and it waits.
-
-      # --release is applied by the snapcraft *client*: it polls the review to
-      # completion and then makes a separate call to put the revision on a channel.
-
-      # Killing it once the Store acknowledged the file created 34 revisions on no
-      # channel while latest/stable served 1.5.10 from 13 August, exiting 0.
+      # --release goes to the Store with the upload, and the Store applies it when the
+      # review passes. Timing out or cancelling here doesn't lose it.
       - name: Upload to the Snap Store
         if: steps.registered.outputs.yes == 'true'
         shell: bash
@@ -176,11 +171,8 @@ jobs:
           # one-second poll lines into the log. A three-hour run produced 28000.
           snapcraft upload --release=stable --verbosity=brief "$SNAP"
 
-      # The upload above can end without releasing — timeout, dropped connection,
-      # an error after the revision exists — leaving only the channel assignment.
-
-      # This also drains what is already stuck: the first run after this merges
-      # puts the current version on latest/stable with nobody touching the web UI.
+      # For an approved revision that isn't on stable, as on a dispatch for a tag
+      # that was uploaded before. The Store won't release one it hasn't approved.
       - name: Put the revision on latest/stable if the upload did not
         if: always() && steps.registered.outputs.yes == 'true'
         shell: bash
@@ -225,7 +217,25 @@ jobs:
             exit 0
           fi
 
-          snapcraft release "$SNAP_NAME" "$REV" stable
+          if snapcraft release "$SNAP_NAME" "$REV" stable > release.txt 2>&1; then
+            cat release.txt
+            exit 0
+          fi
+
+          cat release.txt
+
+          # One upload stuck in review holds up every later one, and only Store staff
+          # can re-run it. A timed-out upload plus "not approved" is what that looks like.
+          if grep -q "is not approved" release.txt; then
+            echo "::error::The Snap Store hasn't approved revision $REV ($VERSION), so it can't go on latest/stable."
+            echo "If the upload step sat on \"Status: processing\" until it timed out, an earlier"
+            echo "upload is probably stuck in the Store's review and holding up every revision after it."
+            echo "Nothing in this workflow can clear that. Snap Store staff re-run the stuck review"
+            echo "when asked in https://forum.snapcraft.io/c/store/16 with the snap name and the last"
+            echo "revision that went through. Revisions: https://snapcraft.io/$SNAP_NAME/releases"
+          fi
+
+          exit 1
 
       # Ask the Store what it is actually serving rather than trusting the steps
       # above. Its absence let the Store sit four weeks behind reporting success.

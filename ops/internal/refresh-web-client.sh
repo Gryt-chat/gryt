@@ -8,12 +8,12 @@
 # The SFU is recreated only when nobody is in voice on that stack, because that
 # drops every call. Servers reconnect through session:restore, so they need no gate.
 
-# GRYT_STACKS (prod beta), GRYT_SERVICES as <stack>/<service>, GRYT_CONTAINERS for
-# anything outside that naming, GRYT_MIN_FREE_GB (10) to refuse a pull.
+# GRYT_STACKS (prod beta test demo), GRYT_SERVICES as <stack>/<service>, GRYT_CONTAINERS
+# for anything outside that naming, GRYT_MIN_FREE_GB (10) to refuse a pull.
 
 set -euo pipefail
 
-STACKS="${GRYT_STACKS:-prod beta}"
+STACKS="${GRYT_STACKS:-prod beta test demo}"
 # Ordered so the media plane and the servers land before the client that talks
 # to them.
 DEFAULT_SERVICES="sfu server server-nt server-pp image-worker image-worker-nt image-worker-pp client"

@@ -1,0 +1,32 @@
+# BuildKit for the Pi's image builds, run on Unraid from /mnt/user/appdata/gryt-buildkit.
+# Only on the LAN address, and only for a client cert signed by certs/ca.key.
+name: gryt-buildkit
+
+services:
+  buildkitd:
+    image: moby/buildkit:v0.33.0-rootless
+    container_name: gryt-buildkit
+    restart: unless-stopped
+    command:
+      - --config=/etc/buildkit/buildkitd.toml
+    # BuildKit's rootless guide asks for these, so each build step gets its own /proc and mounts.
+    security_opt:
+      - seccomp=unconfined
+      - apparmor=unconfined
+      - systempaths=unconfined
+    ports:
+      # LAN address only: not the tailscale interface, not 0.0.0.0.
+      - "192.168.50.168:1234:1234"
+    # Capped so everything else on Astro keeps its share.
+    cpus: 12
+    mem_limit: 16g
+    memswap_limit: 16g
+    pids_limit: 8192
+    volumes:
+      - ./buildkitd.toml:/etc/buildkit/buildkitd.toml:ro
+      - ./certs/daemon:/certs:ro
+      - cache:/home/user/.local/share/buildkit
+
+volumes:
+  cache:
+    name: gryt-buildkit-cache

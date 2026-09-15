@@ -10,7 +10,11 @@ This folder contains **internal** infrastructure used to run:
 - `community.gryt.chat` (the one Gryt server we run — see [`community/`](community/))
 - `status.gryt.chat` (the public status page — see [`status/`](status/))
 
-The first five run together from `docker-compose.yml` here, on the Docker host at home.
+`feedback.gryt.chat` and `reports.gryt.chat` run from `docker-compose.yml` here, on the
+Docker host at home. `gryt.chat`, `docs.gryt.chat` and `ui.gryt.chat` used to as well.
+They're on the Raspberry Pi now, with `app.gryt.chat` and `beta.gryt.chat`, deployed from
+[`../deploy/rpi/`](../deploy/rpi/README.md).
+
 `community.gryt.chat` is its own stack on an isolated VM under Astro, with its own
 Cloudflare tunnel rather than the one on this host. Written up in
 [`community/README.md`](community/README.md).
@@ -151,6 +155,11 @@ Static files placed in `ops/internal/downloads/` are served at `/downloads/*` on
 
 ## Keeping the hosted web clients current
 
+This section is about the dev box's copies, and nothing routes to those any more.
+`app.gryt.chat` and `beta.gryt.chat` come from the Pi, which keeps them current itself (see
+[`../deploy/rpi/README.md`](../deploy/rpi/README.md)). Whether the dev box keeps its copies
+at all is GRYT-1209.
+
 `app.gryt.chat` and `beta.gryt.chat` are not built from source like the sites above. They
 are the `ghcr.io/gryt-chat/client` image that `Release Client` pushes on every release,
 running as the `client` service of the `gryt-prod` and `gryt-beta` stacks in
@@ -263,6 +272,9 @@ the `internal` project rather than a `gryt-<stack>-<service>`, so it is named ou
 recreate, same refusal to create a container that is not already there.
 
 ## Keeping the sites built from source current
+
+This is the dev box's old setup as well. `gryt-sites-refresh.timer` is disabled there, and
+the Pi deploys these three now (see [`../deploy/rpi/README.md`](../deploy/rpi/README.md)).
 
 `docs.gryt.chat`, `gryt.chat` and `ui.gryt.chat` have the opposite problem. They are not
 images anybody pushed, they are the `build:` contexts above pointing at the `docs`, `site`

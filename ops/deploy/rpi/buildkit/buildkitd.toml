@@ -1,0 +1,22 @@
+# gryt-buildkit daemon config, mounted read-only into the container.
+
+# Never allow security.insecure or network.host entitlements: a build asking for
+# them fails instead of getting root or the host network on Astro.
+insecure-entitlements = []
+
+[grpc]
+  address = ["tcp://0.0.0.0:1234"]
+
+  [grpc.tls]
+    cert = "/certs/cert.pem"
+    key = "/certs/key.pem"
+    ca = "/certs/ca.pem"
+
+[worker.oci]
+  # Keep a few builds from swamping the box on top of the container's CPU cap.
+  max-parallelism = 8
+  gc = true
+  # Upper bound on cache kept in the volume. site, docs and ui together need a
+  # few GB; this leaves room for history without growing forever.
+  reservedSpace = "10GB"
+  maxUsedSpace = "40GB"

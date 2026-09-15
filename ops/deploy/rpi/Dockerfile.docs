@@ -1,0 +1,55 @@
+# The build stage runs on the builder's own platform and the final stage only copies, so
+# Unraid can build this for the Pi without emulating arm64.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS builder
+
+WORKDIR /app
+
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile --ignore-scripts --ignore-engines --network-timeout 600000 --network-concurrency 1
+
+COPY . .
+RUN npx fumadocs-mdx && yarn build
+
+# sharp is the only native module Next traces into standalone, and yarn fetched it for the
+# build machine. This swaps in the target's musl build; npm needs --force to take a foreign cpu.
+ARG TARGETARCH
+RUN set -eu; \
+    cd .next/standalone; \
+    arch="$TARGETARCH"; [ "$arch" = amd64 ] && arch=x64; \
+    if [ -f node_modules/sharp/package.json ]; then \
+      pkgs="$(node -e 'const d=require("./node_modules/sharp/package.json").optionalDependencies;console.log(Object.entries(d).filter(([n])=>n.endsWith("-linuxmusl-"+process.argv[1])).map(([n,v])=>n+"@"+v).join(" "))' "$arch")"; \
+      [ -n "$pkgs" ]; \
+      rm -rf node_modules/@img/sharp-*; \
+      npm install --prefix /tmp/native --no-save --no-package-lock --no-audit --no-fund --force \
+        --os=linux --cpu="$arch" --libc=musl $pkgs; \
+      cp -r /tmp/native/node_modules/@img/. node_modules/@img/; \
+    fi; \
+    want="$([ "$arch" = arm64 ] && echo 183 || echo 62)"; \
+    find . -name '*.node' | while read -r f; do \
+      m="$(node -e 'const b=require("fs").readFileSync(process.argv[1]);console.log(b.readUInt16LE(18))' "$f")"; \
+      [ "$m" = "$want" ] || { echo "wrong architecture ($m, want $want): $f" >&2; exit 1; }; \
+      echo "native ok: $f"; \
+    done
+
+FROM node:22-alpine
+
+WORKDIR /app
+
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
+ENV NODE_ENV=production
+
+# Next's standalone server binds to $HOSTNAME, which Docker sets to the container id. Without
+# this, 127.0.0.1 is refused from inside the container and the healthcheck fails.
+ENV HOSTNAME=0.0.0.0
+
+EXPOSE 3000
+
+# 127.0.0.1 rather than localhost: on Alpine, localhost can resolve to ::1
+# first, and the server is listening on IPv4.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(e=>{console.error(e.cause?.code||e.message);process.exit(1)})"
+
+CMD ["node", "server.js"]

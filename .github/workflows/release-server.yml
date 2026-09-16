@@ -915,10 +915,10 @@ jobs:
             packages/server/dist-selfhosted/*.zip
             ${{ runner.temp }}/SHA256SUMS.txt
 
-      - name: Notify Discord
+      - name: Build the release announcement
+        id: announcement
         shell: bash
         env:
-          WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
           VERSION: ${{ steps.version.outputs.version }}
           TAG: ${{ steps.version.outputs.tag }}
           CHANNEL: ${{ steps.channel.outputs.channel }}
@@ -926,11 +926,6 @@ jobs:
           REPO: ${{ env.RELEASE_REPO }}
         run: |
           set -euo pipefail
-
-          if [[ -z "${WEBHOOK_URL:-}" ]]; then
-            echo "DISCORD_RELEASE_WEBHOOK_URL secret not set, skipping"
-            exit 0
-          fi
 
           RELEASE_URL="https://github.com/${OWNER}/${REPO}/releases/tag/${TAG}"
 
@@ -944,7 +939,7 @@ jobs:
             DESCRIPTION="New self-hosted server build is available."
           fi
 
-          PAYLOAD="$(jq -n \
+          PAYLOAD="$(jq -cn \
             --arg title "$TITLE" \
             --arg url "$RELEASE_URL" \
             --arg desc "$DESCRIPTION" \
@@ -969,12 +964,14 @@ jobs:
             }'
           )"
 
-          if ! curl -sfS \
-            -H "Content-Type: application/json" \
-            -d "$PAYLOAD" \
-            "$WEBHOOK_URL"; then
-            echo "Discord notification failed, but release already completed. Continuing."
-          fi
+          echo "payload=$PAYLOAD" >> "$GITHUB_OUTPUT"
+
+      - name: Announce the release on Discord and Gryt
+        uses: Gryt-chat/.github/actions/notify@main
+        with:
+          payload: ${{ steps.announcement.outputs.payload }}
+          discord-webhook-url: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+          gryt-webhook-url: ${{ secrets.GRYT_RELEASE_WEBHOOK_URL }}
 
       - name: Print release summary
         shell: bash

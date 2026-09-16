@@ -1283,7 +1283,7 @@ jobs:
           echo "$TAG is installable on $RUNNER_OS ($VARIANT)."
 
   # Runs after every matrix leg, once each has published the release itself. It owns the
-  # whole-release work: checksums, the attestation, the notes appendix, and one Discord post.
+  # whole-release work: checksums, the attestation, the notes appendix, and the announcement.
   publish-release:
     name: Publish release
     needs: [prepare-release, build-electron]
@@ -1483,17 +1483,11 @@ jobs:
 
       # Moved here from the Linux build leg. Announcing from there fired while macOS was
       # still signing, so #releases advertised a build Mac users could not install.
-      - name: Notify Discord
+      - name: Build the release announcement
+        id: announcement
         shell: bash
-        env:
-          WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
         run: |
           set -euo pipefail
-
-          if [[ -z "${WEBHOOK_URL:-}" ]]; then
-            echo "DISCORD_RELEASE_WEBHOOK_URL secret not set, skipping"
-            exit 0
-          fi
 
           TAG="v$VERSION"
           RELEASE_URL="https://github.com/${OWNER}/${REPO}/releases/tag/${TAG}"
@@ -1508,7 +1502,7 @@ jobs:
             DESCRIPTION="New desktop build is available."
           fi
 
-          PAYLOAD="$(jq -n \
+          PAYLOAD="$(jq -cn \
             --arg title "$TITLE" \
             --arg url "$RELEASE_URL" \
             --arg desc "$DESCRIPTION" \
@@ -1531,10 +1525,14 @@ jobs:
             }'
           )"
 
-          curl -sfS \
-            -H "Content-Type: application/json" \
-            -d "$PAYLOAD" \
-            "$WEBHOOK_URL"
+          echo "payload=$PAYLOAD" >> "$GITHUB_OUTPUT"
+
+      - name: Announce the release on Discord and Gryt
+        uses: Gryt-chat/.github/actions/notify@main
+        with:
+          payload: ${{ steps.announcement.outputs.payload }}
+          discord-webhook-url: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+          gryt-webhook-url: ${{ secrets.GRYT_RELEASE_WEBHOOK_URL }}
 
   # A stable release moves latest-beta too, unless a newer beta is already there, so beta never
   # runs behind prod (GRYT-1236). Its own job, so a registry blip can't hold up the release.

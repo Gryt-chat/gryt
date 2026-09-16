@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Posts to Discord when a Gryt WireGuard peer on the VPS goes quiet, and again when it's back.
+# Posts to Discord and Gryt when a Gryt WireGuard peer on the VPS goes quiet, and again when it's back.
 # Runs every minute from gryt-tunnel-alert.timer. See README.md.
 
 set -u
@@ -21,24 +21,41 @@ declare -A PEERS=(
 
 log() { echo "[$(date -Is)] $*"; }
 
-webhook_url() {
-    [[ -r "$ENV_FILE" ]] || return 1
-    grep -E '^TUNNEL_ALERT_WEBHOOK_URL=' "$ENV_FILE" | tail -n 1 | cut -d= -f2- | tr -d '"'"'"
+env_value() {
+    [[ -r "$ENV_FILE" ]] || return 0
+    grep -E "^$1=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- | tr -d '"'"'"
 }
 
-# The URL goes to curl on stdin, so it never shows up in ps or the journal.
+# send <name> <url> <json> <text>. The URL goes to curl on stdin, so it never shows up in ps or the journal.
+send() {
+    local code
+    code=$(printf 'url = "%s"\n' "$2" | curl -s -o /dev/null -w '%{http_code}' -m 10 -K - \
+        -H 'Content-Type: application/json' --data "$3")
+    log "$1 answered HTTP $code: $4"
+    [[ "$code" == 2* ]]
+}
+
+# Counts as delivered once either one takes it, so a Gryt outage doesn't repeat the Discord post.
 post() {
-    local text="$1" url code
-    url="$(webhook_url)"
-    if [[ -z "$url" ]]; then
-        log "no TUNNEL_ALERT_WEBHOOK_URL in $ENV_FILE; not posted: $text"
+    local text="$1" discord gryt delivered=1
+    discord="$(env_value TUNNEL_ALERT_WEBHOOK_URL)"
+    gryt="$(env_value TUNNEL_ALERT_GRYT_WEBHOOK_URL)"
+    if [[ -z "$discord" && -z "$gryt" ]]; then
+        log "no webhook URL in $ENV_FILE; not posted: $text"
         return 1
     fi
-    code=$(printf 'url = "%s"\n' "$url" | curl -s -o /dev/null -w '%{http_code}' -m 10 -K - \
-        -H 'Content-Type: application/json' \
-        --data "{\"content\":\"$text\",\"allowed_mentions\":{\"parse\":[]}}")
-    log "posted (HTTP $code): $text"
-    [[ "$code" == 2* ]]
+
+    if [[ -n "$discord" ]]; then
+        send Discord "$discord" "{\"content\":\"$text\",\"allowed_mentions\":{\"parse\":[]}}" "$text" && delivered=0
+    else
+        log "no TUNNEL_ALERT_WEBHOOK_URL, so Discord was skipped"
+    fi
+    if [[ -n "$gryt" ]]; then
+        send Gryt "$gryt" "{\"text\":\"$text\"}" "$text" && delivered=0
+    else
+        log "no TUNNEL_ALERT_GRYT_WEBHOOK_URL, so Gryt was skipped"
+    fi
+    return "$delivered"
 }
 
 human() {

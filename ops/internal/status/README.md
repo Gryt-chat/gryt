@@ -146,7 +146,7 @@ covers.
 
 That leaves nothing here watching the tunnels, and a tunnel down is what hid voice
 being broken for eight days in September 2026. That's watched privately now, by
-[`../tunnel-alert`](../tunnel-alert/README.md), which posts to Discord.
+[`../tunnel-alert`](../tunnel-alert/README.md), which posts to Discord and Gryt.
 
 ## Validate before you deploy
 

@@ -1,8 +1,8 @@
 # ops/internal/tunnel-alert
 
-Posts to Discord when one of Gryt's WireGuard tunnels on the VPS goes down, and
-again when it comes back. It's private. Nothing about it shows up on
-status.gryt.chat.
+Posts to Discord and to the Gryt community server when one of Gryt's WireGuard
+tunnels on the VPS goes down, and again when it comes back. It's private.
+Nothing about it shows up on status.gryt.chat.
 
 ## Why it exists
 
@@ -31,8 +31,9 @@ missing from `wg0` for 5 minutes. If `wg` fails outright, both peers count as
 missing.
 
 It posts once when a peer goes down and once when it recovers, with how long it
-was down. State is one file per peer in `/var/lib/gryt-tunnel-alert/`. If a
-post fails, it tries again on the next run.
+was down. State is one file per peer in `/var/lib/gryt-tunnel-alert/`. A post
+counts as sent once Discord or Gryt takes it. If both fail, it tries again on
+the next run.
 
 ## How it's deployed
 
@@ -43,14 +44,16 @@ is live within five minutes and nothing gets copied.
 
 The units and the webhook file are a one-off install.
 
-The webhook goes in `/etc/gryt-tunnel-alert.env`, owned by root, mode 600:
+The webhooks go in `/etc/gryt-tunnel-alert.env`, owned by root, mode 600:
 
 ```
 TUNNEL_ALERT_WEBHOOK_URL=https://discord.com/api/webhooks/...
+TUNNEL_ALERT_GRYT_WEBHOOK_URL=https://community.gryt.chat/api/webhooks/...
 ```
 
-It never goes in git. The script passes it to curl on stdin, so it doesn't
-show up in `ps` or the journal either.
+Either line can be missing, and that one gets skipped. Neither goes in git. The
+script passes them to curl on stdin, so they don't show up in `ps` or the
+journal either.
 
 ### Installing
 
@@ -73,6 +76,14 @@ ssh -t vps 'read -rs -p "Webhook URL: " u && echo \
   && sudo bash /opt/gryt-src/ops/internal/tunnel-alert/tunnel-alert.sh --test'
 ```
 
+The Gryt webhook goes in the same way, added to the end of the file:
+
+```bash
+ssh -t vps 'read -rs -p "Gryt webhook URL: " u && echo \
+  && echo "TUNNEL_ALERT_GRYT_WEBHOOK_URL=$u" | sudo tee -a /etc/gryt-tunnel-alert.env >/dev/null \
+  && sudo bash /opt/gryt-src/ops/internal/tunnel-alert/tunnel-alert.sh --test'
+```
+
 The shell on the VPS is bash, so `read -p` works there.
 
 ## Testing it
@@ -83,7 +94,8 @@ The shell on the VPS is bash, so `read -p` works there.
 ssh vps 'sudo bash /opt/gryt-src/ops/internal/tunnel-alert/tunnel-alert.sh --test'
 ```
 
-It prints the HTTP status. Discord answers 204 when the post went through.
+It prints one line per webhook with the HTTP status. Discord answers 204 and
+Gryt answers 200 when the post went through.
 
 To see what it's deciding:
 

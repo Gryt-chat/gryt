@@ -127,6 +127,7 @@ services:
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       REPORTS_TRIAGE_MODEL: "${REPORTS_TRIAGE_MODEL:-}"
       REPORTS_DISCORD_WEBHOOK_URL: "${REPORTS_DISCORD_WEBHOOK_URL:-}"
+      REPORTS_GRYT_WEBHOOK_URL: "${REPORTS_GRYT_WEBHOOK_URL:-}"
       # Filing a report as a task on the board (GRYT-534). A write credential, so
       # empty here; without it the button is not offered rather than broken.
 

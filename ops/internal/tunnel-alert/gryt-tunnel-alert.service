@@ -1,5 +1,5 @@
 [Unit]
-Description=Alert on Discord when a Gryt WireGuard tunnel goes down
+Description=Alert on Discord and Gryt when a Gryt WireGuard tunnel goes down
 Documentation=https://github.com/Gryt-chat/gryt/blob/main/ops/internal/tunnel-alert/README.md
 After=network-online.target wg-quick@wg0.service
 

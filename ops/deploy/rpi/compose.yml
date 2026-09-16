@@ -1,85 +1,128 @@
 name: gryt-web
 
+# Two containers per site, and Caddy in front on the tunnel's ports. update.sh starts the
+# colour that isn't live, and switches Caddy to it once it's healthy.
+
+# The images check every 30s. Checking every 2s until the first pass lets a new container
+# take traffic seconds after it starts.
+x-first-check: &first-check
+  start_period: 3m
+  start_interval: 2s
+
+x-site: &site
+  build:
+    context: ./site
+    network: host
+  image: gryt-site:local
+  restart: unless-stopped
+  healthcheck: *first-check
+
+x-docs: &docs
+  build:
+    context: ./docs
+    dockerfile: ../local/Dockerfile.docs
+    network: host
+  image: gryt-docs:local
+  restart: unless-stopped
+  healthcheck: *first-check
+
+x-ui: &ui
+  build:
+    context: ./ui
+    network: host
+  image: gryt-ui:local
+  restart: unless-stopped
+  healthcheck: *first-check
+
+x-client: &client
+  restart: unless-stopped
+  environment:
+    GRYT_OIDC_ISSUER: https://auth.gryt.chat/realms/gryt
+    GRYT_OIDC_REALM: gryt
+    GRYT_OIDC_CLIENT_ID: gryt-web
+    GRYT_IDENTITY_URL: https://id.gryt.chat
+    GRYT_AUTH_API: https://auth.gryt.chat
+    GRYT_AUTH_CALLBACK_URL: https://gryt.chat/auth/callback
+  healthcheck:
+    test:
+      - CMD
+      - wget
+      - --no-verbose
+      - --tries=1
+      - --spider
+      - http://127.0.0.1/health
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    <<: *first-check
+
 services:
-  site:
-    build:
-      context: ./site
-      network: host
-    image: gryt-site:local
-    container_name: gryt-site
+  # proxy/ holds the Caddyfile update.sh copies from here, and the live/ files it switches.
+  # /data and /config hold nothing worth a write to the Pi's USB stick.
+  proxy:
+    image: caddy:2.11.4-alpine
+    container_name: gryt-proxy
     restart: unless-stopped
     ports:
-      - "8080:80"
+      - "8080-8084:8080-8084"
+    volumes:
+      - ./proxy:/etc/caddy:ro
+    tmpfs:
+      - /data
+      - /config
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -q
+        - -O
+        - /dev/null
+        - http://127.0.0.1:2019/config/
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      <<: *first-check
 
-  docs:
-    build:
-      context: ./docs
-      dockerfile: ../local/Dockerfile.docs
-      network: host
-    image: gryt-docs:local
-    container_name: gryt-docs
-    restart: unless-stopped
-    ports:
-      - "8081:3000"
+  site-blue:
+    <<: *site
+    container_name: gryt-site-blue
 
-  app:
+  site-green:
+    <<: *site
+    container_name: gryt-site-green
+
+  docs-blue:
+    <<: *docs
+    container_name: gryt-docs-blue
+
+  docs-green:
+    <<: *docs
+    container_name: gryt-docs-green
+
+  app-blue:
+    <<: *client
     image: ghcr.io/gryt-chat/client:latest
-    container_name: gryt-app
-    restart: unless-stopped
-    ports:
-      - "8082:80"
-    environment:
-      GRYT_OIDC_ISSUER: https://auth.gryt.chat/realms/gryt
-      GRYT_OIDC_REALM: gryt
-      GRYT_OIDC_CLIENT_ID: gryt-web
-      GRYT_IDENTITY_URL: https://id.gryt.chat
-      GRYT_AUTH_API: https://auth.gryt.chat
-      GRYT_AUTH_CALLBACK_URL: https://gryt.chat/auth/callback
-    healthcheck:
-      test:
-        - CMD
-        - wget
-        - --no-verbose
-        - --tries=1
-        - --spider
-        - http://127.0.0.1/health
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    container_name: gryt-app-blue
 
-  beta:
+  app-green:
+    <<: *client
+    image: ghcr.io/gryt-chat/client:latest
+    container_name: gryt-app-green
+
+  beta-blue:
+    <<: *client
     image: ghcr.io/gryt-chat/client:latest-beta
-    container_name: gryt-beta
-    restart: unless-stopped
-    ports:
-      - "8083:80"
-    environment:
-      GRYT_OIDC_ISSUER: https://auth.gryt.chat/realms/gryt
-      GRYT_OIDC_REALM: gryt
-      GRYT_OIDC_CLIENT_ID: gryt-web
-      GRYT_IDENTITY_URL: https://id.gryt.chat
-      GRYT_AUTH_API: https://auth.gryt.chat
-      GRYT_AUTH_CALLBACK_URL: https://gryt.chat/auth/callback
-    healthcheck:
-      test:
-        - CMD
-        - wget
-        - --no-verbose
-        - --tries=1
-        - --spider
-        - http://127.0.0.1/health
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    container_name: gryt-beta-blue
 
-  ui:
-    build:
-      context: ./ui
-      network: host
-    image: gryt-ui:local
-    container_name: gryt-ui
-    restart: unless-stopped
-    ports:
-      - "8084:80"
+  beta-green:
+    <<: *client
+    image: ghcr.io/gryt-chat/client:latest-beta
+    container_name: gryt-beta-green
+
+  ui-blue:
+    <<: *ui
+    container_name: gryt-ui-blue
+
+  ui-green:
+    <<: *ui
+    container_name: gryt-ui-green

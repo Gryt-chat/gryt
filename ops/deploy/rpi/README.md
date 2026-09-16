@@ -11,17 +11,23 @@ This directory is the Pi's deployment, plus the config for the builder on Unraid
 
 On the Pi, in the compose project `gryt-web`:
 
-| Container | Port | Serves | Comes from |
+| Port | Serves | Containers | Comes from |
 |---|---|---|---|
-| `gryt-site` | 8080 | gryt.chat, get.gryt.chat | built from Gryt-chat/site |
-| `gryt-docs` | 8081 | docs.gryt.chat | built from Gryt-chat/docs with `Dockerfile.docs` from here |
-| `gryt-app` | 8082 | app.gryt.chat | `ghcr.io/gryt-chat/client:latest` |
-| `gryt-beta` | 8083 | beta.gryt.chat | `ghcr.io/gryt-chat/client:latest-beta` |
-| `gryt-ui` | 8084 | ui.gryt.chat | built from Gryt-chat/ui |
+| 8080 | gryt.chat, get.gryt.chat | `gryt-site-blue`, `gryt-site-green` | built from Gryt-chat/site |
+| 8081 | docs.gryt.chat | `gryt-docs-blue`, `gryt-docs-green` | built from Gryt-chat/docs with `Dockerfile.docs` from here |
+| 8082 | app.gryt.chat | `gryt-app-blue`, `gryt-app-green` | `ghcr.io/gryt-chat/client:latest` |
+| 8083 | beta.gryt.chat | `gryt-beta-blue`, `gryt-beta-green` | `ghcr.io/gryt-chat/client:latest-beta` |
+| 8084 | ui.gryt.chat | `gryt-ui-blue`, `gryt-ui-green` | built from Gryt-chat/ui |
+
+Caddy runs as `gryt-proxy` and holds all five ports. It sends each port to one
+container of the pair, and `proxy/live/<site>` says which one. The other
+container is stopped, except while a deploy has both running.
 
 The Cloudflare tunnel runs on the Pi as `cloudflared.service`, set up with a
 token. The routes from hostname to port live in the Cloudflare dashboard, so no
-file here has them.
+file here has them. The connector on dev.lan reaches the same ports as
+`rpi.lan:8080` and so on, so they have to be open on the LAN and not only on
+localhost.
 
 AdGuard Home (the LAN's DNS) and Vaultwarden run on the same Docker daemon. They
 aren't Gryt's, and nothing in this directory touches them.
@@ -32,18 +38,15 @@ Where each file here ends up:
 |---|---|---|
 | `update.sh` | `/home/sivert/gryt/update.sh` on the Pi | `update.sh` copies it |
 | `compose.yml` | `/home/sivert/gryt/compose.yml` | `update.sh` copies it |
+| `Caddyfile` | `/home/sivert/gryt/proxy/Caddyfile` | `update.sh` copies it |
 | `Dockerfile.docs` | `/home/sivert/gryt/local/Dockerfile.docs` | `update.sh` copies it |
 | `gryt-update.service`, `gryt-update.timer` | `/etc/systemd/system/` on the Pi | by hand, with sudo |
 | `buildkit/` | `/mnt/user/appdata/gryt-buildkit/` on Unraid | by hand |
 
-The copying only starts once the Pi has been
-[switched over](#switching-the-pi-over-to-this-directory). Until then the Pi
-runs its own copies.
-
 Some things stay out of git on purpose. The client certificate in
 `~/.config/gryt-buildkit` on the Pi, everything under `certs/` on Unraid and the
-tunnel token are secrets. The site, docs and ui clones and `.deployed/` are state
-that belongs to the box.
+tunnel token are secrets. The site, docs and ui clones, `.deployed/` and
+`proxy/live/` are state that belongs to the box.
 
 ## What a run does
 
@@ -54,19 +57,24 @@ another one exits straight away. Then it works through three steps in order.
 ### 1. The files in this directory
 
 `/home/sivert/gryt` is a clone of this repository. The script fetches it and
-fast-forwards to `origin/main`. Then it compares `update.sh`, `compose.yml` and
-`Dockerfile.docs` with the copies that are running.
+fast-forwards to `origin/main`. Then it compares `update.sh`, `compose.yml`,
+`Dockerfile.docs` and the `Caddyfile` with the copies that are running.
 
 The script writes a changed file next to the old one, checks it and renames it
-into place. `update.sh` has to pass `bash -n`, and `compose.yml` has to pass
-`docker compose config`. A broken `update.sh` would stop every run after it,
-including the one bringing the fix. So a file that fails the check stays out,
-and the log says so. A new `update.sh` takes over from the next run.
+into place. `update.sh` has to pass `bash -n`, `compose.yml` has to pass
+`docker compose config`, and the `Caddyfile` has to pass `caddy validate` in the
+Caddy image `compose.yml` names. A broken `update.sh` would stop every run after
+it, including the one bringing the fix. So a file that fails the check stays
+out, and the log says so. A new `update.sh` takes over from the next run.
 
-When `compose.yml` changes, the script runs `docker compose up -d --no-build`
-for the containers that are running. Compose recreates the ones whose settings
-changed and leaves the others alone. Build settings don't count. Those apply the
-next time that service builds.
+When `compose.yml` changes, a site whose settings changed gets swapped the same
+way a new build does. A change to the `proxy` service recreates Caddy, and the
+ports are closed for about half a second while that happens. Build settings
+don't count. Those apply the next time that service builds.
+
+When the `Caddyfile` changes, Caddy reloads it. A reload can reset a connection
+that arrives within a millisecond or two of it, which is why deploys don't
+reload Caddy at all.
 
 When `Dockerfile.docs` changes, docs rebuilds in the same run, even if it was
 backing off after a failed build.
@@ -82,11 +90,12 @@ gitlink bump in the superproject.
 
 For each, the script fetches and refuses anything that isn't a clean
 fast-forward. Then it builds the image (see [the builder](#the-builder-on-unraid))
-and runs `docker compose up -d --no-deps` for that one service.
-`.deployed/<name>.sha` gets the commit once the container is up.
+and [swaps it in](#how-a-deploy-swaps-containers). `.deployed/<name>.sha` gets
+the commit once the new container is live.
 
 A failed build leaves the running container alone and backs off: 5 minutes, then
-10, 20 and 40, up to six hours for the same commit.
+10, 20 and 40, up to six hours for the same commit. So does a build that never
+gets healthy.
 
 A build that runs for 40 minutes is killed and counts as a failed one, so the
 services after it still get their turn. On 2026-09-07 a `bun install` wedged
@@ -97,7 +106,49 @@ anywhere else.
 ### 3. app and beta
 
 These are images, so there's no commit to compare. The script pulls the tag and
-recreates the container when the image id under it has changed.
+swaps in a new container when the image id under it has changed. An image that
+never gets healthy backs off the same way a failed build does.
+
+## How a deploy swaps containers
+
+1. The script runs `sync` and waits for the Pi's disk to catch up.
+2. It starts the container of the pair that isn't live, from the new image. The
+   live one keeps serving.
+3. It waits up to 3 minutes for the new container's healthcheck. The check runs
+   every 2 seconds until it first passes.
+4. It checks that Caddy can reach the new container, then writes its name into
+   `proxy/live/<site>`. Caddy reads that file on every request, so the next
+   request goes to the new container. Caddy doesn't reload.
+5. It asks for the page through the published port, the way the tunnel does. If
+   that fails, the old name goes back into the file.
+6. The old container keeps running for 30 seconds more, for requests it's still
+   answering, and then it's stopped. It stays on the Pi until the next deploy of
+   that site, and so does its image.
+
+If the new container crashes, isn't healthy after 3 minutes or can't be reached,
+the script stops it again. The old one serves the whole time. The log has the
+container's last lines, or the output of its last healthcheck. The image tag
+goes back to the image the live container runs, so nothing else gets created
+from the failed build.
+
+### Why it waits for the disk
+
+Docker's data on the Pi is on a USB stick, mounted at `/mnt/docker`. In the
+eight days up to 2026-09-16 its writes took 153ms each on average. Loading a
+site image from Unraid leaves about 85MB still to write, and on 2026-09-16 the
+stick wrote that out at 0.2 to 1.2MB a second.
+
+Creating a container writes to the same disk, so it waited behind all of that.
+After the builds moved to Unraid in GRYT-1204, every site and docs deploy spent
+3 to 8 minutes creating the new container. `docker compose up` only stops the
+old container once the new one exists, and starts the new one after that. In the
+three deploys checked, that left the site down for between 30 seconds and a
+minute and a half. When the Pi built images itself, the layers got written
+during the build, and creating a container mostly took under two and a half
+minutes.
+
+The wait hasn't gone away. The `sync` in step 1 does it up front and logs how
+long it took, and the live container serves the whole time.
 
 ### Reading the log
 
@@ -112,6 +163,75 @@ in the source, and a timeout is usually the machine.
 […] [docs] BUILD FAILED; running container untouched
 […] [app] image 962b75da1f75 -> e2d59aec8237
 ```
+
+A deploy that goes live, and one that doesn't:
+
+```
+[…] [site] disk writes caught up in …s
+[…] [site] starting site-green next to site-blue
+[…] [site] site-green ready after …s
+[…] [site] live on site-green
+[…] [site] deployed 7d8eacf8d2a2
+[…] [site] site-blue still starting after 180s. Last check: 1 "…404 Not Found\n"
+[…] [site] stopped site-blue again; site-green is still live
+[…] [site] DEPLOY FAILED (1x in a row); the last build is still live
+```
+
+## Rolling back
+
+From the smallest to the biggest.
+
+### One site to its last build
+
+The container the last deploy replaced is still there, stopped. This starts it,
+waits for it to be healthy, points Caddy at it and stops the newer one 30 seconds
+later. Change `s=site` to `docs` or `ui` for those two:
+
+```bash
+ssh rpi 's=site; set -e; cd /home/sivert/gryt
+new=$(cat proxy/live/$s); old=$s-blue; [ "$new" = $s-blue ] && old=$s-green
+docker start gryt-$old
+until [ "$(docker inspect -f "{{.State.Health.Status}}" gryt-$old)" = healthy ]; do sleep 2; done
+echo $old > proxy/live/$s.incoming && mv proxy/live/$s.incoming proxy/live/$s
+echo "$s is back on $old"; sleep 30; docker stop gryt-$new'
+```
+
+If the old container never gets healthy, the loop keeps waiting, and Ctrl-C
+leaves the site as it was. The site stays on the old build until the next commit
+to its repository, which deploys the usual way.
+
+It doesn't stick for app and beta. The next run sees that the live container
+isn't on the image the tag points at, and swaps the newer one back in.
+
+### Everything, right away
+
+For when Caddy is the problem:
+
+```bash
+ssh rpi /home/sivert/gryt/update.sh direct
+```
+
+It waits for a run that's already going, which can take up to 40 minutes if a
+build is running. Then it recreates `gryt-site`, `gryt-docs`, `gryt-app`,
+`gryt-beta` and `gryt-ui` the way they were before Caddy, from the images that
+are live. It moves 8080–8084 over to them, and the ports are closed for about
+half a second. If they don't start, Caddy starts again. Deploys stop until the
+marker is removed:
+
+```bash
+ssh rpi rm /home/sivert/gryt/.deployed/direct-ports
+```
+
+The next run moves the ports back to Caddy, with the containers that were live.
+
+### For good
+
+Revert the change on `main`. The next run gives 8080–8084 back to the sites'
+own containers, from the images that are live, before it installs the old
+`update.sh`. If that fails it tries again on the next run. From then on deploys
+work the way they did before Caddy, so the site goes down for a while on every
+deploy again. The old script doesn't check health either. In testing it put a ui
+build live that crashed on start, one this script had refused.
 
 ## The builder on Unraid
 
@@ -164,50 +284,6 @@ build stage runs on `$BUILDPLATFORM`. A step swaps sharp's native module for the
 target's musl build. And yarn gets a ten-minute network timeout with one
 connection at a time.
 
-## Switching the Pi over to this directory
-
-This is a one-time step for Sivert. Until it runs, the Pi uses its own
-`update.sh`, `compose.yml` and `local/Dockerfile.docs`. Its checkout of this
-repository is still on a commit from 2026-09-08, because nothing pulls it.
-
-The command below fast-forwards that checkout and renames this directory's
-`update.sh` into place. It doesn't stop anything or need sudo. The timer keeps
-its schedule, and a run that's already going finishes on the old script. Then
-the command waits for the next run and prints what it synced. Ctrl-C during the
-wait is safe.
-
-```bash
-ssh rpi 'set -e
-cd /home/sivert/gryt
-git fetch --quiet origin main
-git merge --ff-only --quiet origin/main
-grep -q update_config ops/deploy/rpi/update.sh
-rm -f update.sh.incoming
-cp ops/deploy/rpi/update.sh update.sh.incoming
-chmod 755 update.sh.incoming
-bash -n update.sh.incoming
-mv update.sh.incoming update.sh
-since=$(date "+%F %T")
-echo "update.sh is the repository copy now. Waiting for the next run..."
-for i in $(seq 100); do
-  log=$(journalctl -u gryt-update.service --since "$since" --no-pager -o cat | grep -F "[config]" || true)
-  if echo "$log" | grep -qE "current|deployed|skipping|not installed|failed"; then echo "$log"; exit 0; fi
-  sleep 15
-done
-echo "No run has got that far yet. journalctl -u gryt-update.service -n 40 shows where it is."'
-```
-
-If a step before the `mv` fails, `set -e` stops there and the running script
-isn't touched. The `grep` refuses an `update.sh` that doesn't have the copying
-step yet.
-
-The first run should print `local/Dockerfile.docs updated`, then `deployed`.
-The repository's `Dockerfile.docs` only differs from the Pi's in its comments.
-That still counts as a change, so docs rebuilds once, mostly from cache.
-
-The units don't need installing for this. The ones on the Pi match the ones here
-byte for byte.
-
 ## Installing from scratch
 
 ### Unraid
@@ -228,19 +304,17 @@ the Pi out, and its log would only say the builder is unreachable.
 ### The Pi
 
 It needs Docker with the compose and buildx plugins, git, and `sivert` in the
-`docker` group. Clone this repository and the three sites, put the files in
-place and start the two client containers:
+`docker` group. Clone this repository and the three sites, and put `update.sh`
+in place. The first run copies the other files, starts app and beta behind
+Caddy, and builds the three sites:
 
 ```bash
 ssh rpi 'set -e
 git clone https://github.com/Gryt-chat/gryt.git /home/sivert/gryt
 cd /home/sivert/gryt
 for r in site docs ui; do git clone --depth 1 "https://github.com/Gryt-chat/$r.git" "$r"; done
-cp ops/deploy/rpi/update.sh ops/deploy/rpi/compose.yml .
-chmod 755 update.sh
-mkdir -p local
-cp ops/deploy/rpi/Dockerfile.docs local/
-docker compose -f compose.yml up -d app beta'
+cp ops/deploy/rpi/update.sh .
+chmod 755 update.sh'
 ```
 
 Copy the client certificate from Unraid to the Pi. It goes through a pipe and is
@@ -272,8 +346,6 @@ ssh -t rpi 'sudo install -m 644 /home/sivert/gryt/ops/deploy/rpi/gryt-update.ser
   && sudo systemctl enable --now gryt-update.timer'
 ```
 
-`.deployed/` starts out empty, so the first run builds site, docs and ui.
-
 The tunnel isn't covered here. It's `cloudflared` with a token from the
 Cloudflare dashboard, routing each hostname to its port from the table at the
 top.
@@ -298,6 +370,7 @@ build is tried again on a later run.
 ```bash
 ssh rpi 'systemctl list-timers gryt-update.timer --no-pager'
 ssh rpi 'journalctl -u gryt-update.service -n 60 --no-pager -o cat'
+ssh rpi 'cd /home/sivert/gryt && head proxy/live/* && docker ps --filter name=gryt- --format "{{.Names}}\t{{.Status}}"'
 ssh rpi 'docker buildx inspect --bootstrap gryt-unraid | grep Status'
 ssh unraid 'docker ps --filter name=gryt-buildkit'
 ```
@@ -306,16 +379,21 @@ ssh unraid 'docker ps --filter name=gryt-buildkit'
 
 ## Before touching it
 
-- **Make changes in this directory.** Once the Pi is switched over, a hand edit
-  on the Pi to `update.sh`, `compose.yml` or `local/Dockerfile.docs` gets
-  overwritten on the next run. A hand edit inside the checkout, under
+- **Make changes in this directory.** A hand edit on the Pi to `update.sh`,
+  `compose.yml`, `proxy/Caddyfile` or `local/Dockerfile.docs` gets overwritten
+  on the next run. A hand edit inside the checkout, under
   `/home/sivert/gryt/ops/`, stops step 1 until it's undone, and the log says
   `local tracked changes present`.
 - **Don't run `docker system prune` on the Pi.** AdGuard and Vaultwarden share
   its Docker daemon, and the local fallback build needs the build cache.
-- **A failed build leaves the site up.** The running container stays on the last
-  good build, on purpose.
+- **Name the service in any `docker compose` command.** A bare `up -d` starts
+  both containers of every site, and `down` takes every site offline.
+- **A failed build or an unhealthy container leaves the site up.** The live
+  container stays on the last good build, on purpose.
 - **`.deployed/<name>.sha` is what's deployed.** A clone can be ahead of it when
   a build failed after the fast-forward.
+- **`proxy/live/<site>` is what Caddy serves.** Write a new file next to it and
+  rename it over, the way the rollback above does, so Caddy never reads half a
+  name.
 - **The checkout's submodules aren't initialised.** Nothing under `packages/` is
   used on the Pi. The sites come from the three clones.

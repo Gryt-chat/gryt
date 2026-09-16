@@ -1,0 +1,54 @@
+# Each site goes to the container named in live/<site>, which Caddy reads on every request.
+# update.sh swaps a site by renaming a new file over it, so a deploy never reloads Caddy.
+
+# Via is dropped both ways. nginx doesn't gzip a request that carries one, and visitors never
+# saw it before Caddy.
+{
+	admin localhost:2019
+	persist_config off
+	auto_https off
+	grace_period 30s
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+:8080 {
+	header -Via
+	reverse_proxy {file./etc/caddy/live/site}:80 {
+		header_up -Via
+		lb_try_duration 5s
+	}
+}
+
+:8081 {
+	header -Via
+	reverse_proxy {file./etc/caddy/live/docs}:3000 {
+		header_up -Via
+		lb_try_duration 5s
+	}
+}
+
+:8082 {
+	header -Via
+	reverse_proxy {file./etc/caddy/live/app}:80 {
+		header_up -Via
+		lb_try_duration 5s
+	}
+}
+
+:8083 {
+	header -Via
+	reverse_proxy {file./etc/caddy/live/beta}:80 {
+		header_up -Via
+		lb_try_duration 5s
+	}
+}
+
+:8084 {
+	header -Via
+	reverse_proxy {file./etc/caddy/live/ui}:80 {
+		header_up -Via
+		lb_try_duration 5s
+	}
+}

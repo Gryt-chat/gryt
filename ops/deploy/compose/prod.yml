@@ -3,7 +3,7 @@ name: gryt-prod
 services:
   # ── Object Storage ───────────────────────────────────────────────────────
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     container_name: gryt-prod-minio
     command: ["server", "/data", "--console-address", ":9001"]
     ports:
@@ -24,7 +24,7 @@ services:
       start_period: 10s
 
   minio-init:
-    image: minio/mc:latest
+    image: quay.io/minio/mc:latest
     container_name: gryt-prod-minio-init
     depends_on:
       minio:

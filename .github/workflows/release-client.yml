@@ -1483,54 +1483,15 @@ jobs:
 
       # Moved here from the Linux build leg. Announcing from there fired while macOS was
       # still signing, so #releases advertised a build Mac users could not install.
-      - name: Build the release announcement
-        id: announcement
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          TAG="v$VERSION"
-          RELEASE_URL="https://github.com/${OWNER}/${REPO}/releases/tag/${TAG}"
-
-          if [[ "$CHANNEL" == "beta" ]]; then
-            TITLE="BETA Client release"
-            COLOR=16750848
-            DESCRIPTION="New desktop build is available for testing."
-          else
-            TITLE="STABLE Client release"
-            COLOR=5763719
-            DESCRIPTION="New desktop build is available."
-          fi
-
-          PAYLOAD="$(jq -cn \
-            --arg title "$TITLE" \
-            --arg url "$RELEASE_URL" \
-            --arg desc "$DESCRIPTION" \
-            --arg version "$VERSION" \
-            --arg release "Open release" \
-            --argjson color "$COLOR" \
-            '{
-              embeds: [{
-                title: $title,
-                url: $url,
-                description: $desc,
-                color: $color,
-                fields: [
-                  { name: "Version", value: $version, inline: true },
-                  { name: "Release", value: ("[" + $release + "](" + $url + ")"), inline: true }
-                ],
-                footer: { text: "Gryt Client" },
-                timestamp: (now | todate)
-              }]
-            }'
-          )"
-
-          echo "payload=$PAYLOAD" >> "$GITHUB_OUTPUT"
-
       - name: Announce the release on Discord and Gryt
-        uses: Gryt-chat/.github/actions/notify@main
+        uses: Gryt-chat/.github/actions/release-notify@main
         with:
-          payload: ${{ steps.announcement.outputs.payload }}
+          component: Client
+          version: ${{ env.VERSION }}
+          channel: ${{ env.CHANNEL }}
+          repository: Gryt-chat/gryt
+          tag: v${{ env.VERSION }}
+          github-token: ${{ github.token }}
           discord-webhook-url: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
           gryt-webhook-url: ${{ secrets.GRYT_RELEASE_WEBHOOK_URL }}
 

@@ -915,61 +915,17 @@ jobs:
             packages/server/dist-selfhosted/*.zip
             ${{ runner.temp }}/SHA256SUMS.txt
 
-      - name: Build the release announcement
-        id: announcement
-        shell: bash
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-          TAG: ${{ steps.version.outputs.tag }}
-          CHANNEL: ${{ steps.channel.outputs.channel }}
-          OWNER: ${{ env.RELEASE_OWNER }}
-          REPO: ${{ env.RELEASE_REPO }}
-        run: |
-          set -euo pipefail
-
-          RELEASE_URL="https://github.com/${OWNER}/${REPO}/releases/tag/${TAG}"
-
-          if [[ "$CHANNEL" == "beta" ]]; then
-            TITLE="BETA Server release"
-            COLOR=16750848
-            DESCRIPTION="New self-hosted server build is available for testing."
-          else
-            TITLE="STABLE Server release"
-            COLOR=5763719
-            DESCRIPTION="New self-hosted server build is available."
-          fi
-
-          PAYLOAD="$(jq -cn \
-            --arg title "$TITLE" \
-            --arg url "$RELEASE_URL" \
-            --arg desc "$DESCRIPTION" \
-            --arg version "$VERSION" \
-            --arg release "Open release" \
-            --arg docker "ghcr.io/gryt-chat/server:$VERSION" \
-            --argjson color "$COLOR" \
-            '{
-              embeds: [{
-                title: $title,
-                url: $url,
-                description: $desc,
-                color: $color,
-                fields: [
-                  { name: "Version", value: $version, inline: true },
-                  { name: "Release", value: ("[" + $release + "](" + $url + ")"), inline: true },
-                  { name: "Docker", value: ("`" + $docker + "`"), inline: false }
-                ],
-                footer: { text: "Gryt Server" },
-                timestamp: (now | todate)
-              }]
-            }'
-          )"
-
-          echo "payload=$PAYLOAD" >> "$GITHUB_OUTPUT"
-
       - name: Announce the release on Discord and Gryt
-        uses: Gryt-chat/.github/actions/notify@main
+        uses: Gryt-chat/.github/actions/release-notify@main
         with:
-          payload: ${{ steps.announcement.outputs.payload }}
+          component: Server
+          version: ${{ steps.version.outputs.version }}
+          channel: ${{ steps.channel.outputs.channel }}
+          repository: Gryt-chat/server
+          tag: ${{ steps.version.outputs.tag }}
+          artifact-label: Docker
+          artifact-value: ghcr.io/gryt-chat/server:${{ steps.version.outputs.version }}
+          github-token: ${{ secrets.RELEASE_PAT }}
           discord-webhook-url: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
           gryt-webhook-url: ${{ secrets.GRYT_RELEASE_WEBHOOK_URL }}
 

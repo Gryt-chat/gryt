@@ -14,10 +14,8 @@ on:
     types: [submitted]
   pull_request_review_comment:
     types: [created]
-  commit_comment:
-    types: [created]
   discussion:
-    types: [created, answered, closed, reopened]
+    types: [created, answered, unanswered]
   discussion_comment:
     types: [created]
 

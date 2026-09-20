@@ -49,7 +49,10 @@ function run(source, ...args) {
 }
 
 const written = fixture("written", {
-  app: [{ version: "1.11.3", date: today }],
+  app: [
+    { version: "1.11.3", date: today },
+    { version: "1.12.0-beta.1", date: today },
+  ],
   server: [{ version: "1.7.0", date: today }],
   voice: [{ version: "1.0.65", date: today }],
   images: [{ version: "1.2.6", date: today }],
@@ -115,10 +118,22 @@ test("a version with no date after it fails as malformed", () => {
   assert.match(out, /no date directly after its version/);
 });
 
-test("a prerelease needs no line", () => {
-  const { code, out } = run(written, "app", "1.12.0-beta.1");
-  assert.equal(code, 0);
-  assert.match(out, /prerelease, no line required/);
+test("an app prerelease needs its exact line", () => {
+  const writtenBeta = run(written, "app", "1.12.0-beta.1");
+  assert.equal(writtenBeta.code, 0);
+  assert.match(writtenBeta.out, /app 1\.12\.0-beta\.1 has one/);
+
+  const missingBeta = run(written, "app", "1.12.0-beta.2");
+  assert.equal(missingBeta.code, 1);
+  assert.match(missingBeta.out, /No changelog line for app 1\.12\.0-beta\.2/);
+});
+
+test("non-app prereleases still need no line", () => {
+  for (const surface of ["server", "voice", "images"]) {
+    const { code, out } = run(written, surface, "9.9.9-beta.1");
+    assert.equal(code, 0);
+    assert.match(out, /prerelease, no line required/);
+  }
 });
 
 test("a version is matched whole, not as a prefix", () => {

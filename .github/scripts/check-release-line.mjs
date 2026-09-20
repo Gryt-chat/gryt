@@ -21,9 +21,8 @@ if (!SURFACES.includes(surface)) {
   process.exit(2);
 }
 
-/* App prereleases still need an exact line: What's New waits for the running
-   app version to appear in the site's feed before it marks that version seen.
-   Other component prereleases do not drive that dialog and keep the old rule. */
+/* App prereleases need an exact line for What's New.
+   Other component prereleases keep the old rule. */
 if (version.includes("-") && surface !== "app") {
   console.log(`changelog line: ${surface} ${version} is a prerelease, no line required`);
   process.exit(0);

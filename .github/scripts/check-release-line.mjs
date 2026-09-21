@@ -117,10 +117,18 @@ if (!entry) {
   }
   console.error(`    line: "One sentence, present tense, from the reader's side.",`);
   if (surface === "app") {
-    console.error(`    changes: [{ kind: "fixed", text: "..." }],`);
+    console.error(`    changes: [{ kind: "fixed", area: "voice", text: "..." }],`);
   }
   console.error(`  },`);
   console.error("");
+  /* Read from the site's AREAS, so a new area shows up here without a change. */
+  const block = source.match(/export const AREAS = \{([\s\S]*?)\n\}/)?.[1] ?? "";
+  const areas = [...block.matchAll(/^\s*"?([\w-]+)"?:/gm)].map(([, id]) => id);
+  if (surface === "app" && areas.length > 0) {
+    console.error(`Each change's area is one of ${areas.join(", ")}.`);
+    console.error("Pick the one somebody would look under. The site's build fails without it.");
+    console.error("");
+  }
   console.error("Merge that, then run this release again.");
   process.exit(1);
 }

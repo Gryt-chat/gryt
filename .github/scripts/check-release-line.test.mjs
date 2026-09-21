@@ -13,7 +13,7 @@ const dir = mkdtempSync(join(tmpdir(), "release-line-"));
 const today = new Date().toISOString().slice(0, 10);
 
 /** A releases.ts holding exactly the entries given, in the site's shape. */
-function fixture(name, { app = [], server = [], voice = [], images = [] }) {
+function fixture(name, { app = [], server = [], voice = [], images = [], areas }) {
   const entries = (list) =>
     list
       .map(
@@ -24,12 +24,18 @@ function fixture(name, { app = [], server = [], voice = [], images = [] }) {
       )
       .join("\n");
 
+  /* The site writes one key per line, and quotes the ones with a hyphen. */
+  const keys = Object.entries(areas ?? {})
+    .map(([id, label]) => `  ${/-/.test(id) ? JSON.stringify(id) : id}: ${JSON.stringify(label)},\n`)
+    .join("");
+
   const path = join(dir, `${name}.ts`);
   writeFileSync(
     path,
-    Object.entries({ app, server, voice, images })
-      .map(([surface, list]) => `export const ${surface}: ReleaseLine[] = [\n${entries(list)}\n];\n`)
-      .join("\n"),
+    (areas ? `export const AREAS = {\n${keys}} as const;\n\n` : "") +
+      Object.entries({ app, server, voice, images })
+        .map(([surface, list]) => `export const ${surface}: ReleaseLine[] = [\n${entries(list)}\n];\n`)
+        .join("\n"),
   );
   return path;
 }
@@ -49,6 +55,7 @@ function run(source, ...args) {
 }
 
 const written = fixture("written", {
+  areas: { voice: "Voice & video", chat: "Chat", "self-hosting": "Self-hosting" },
   app: [
     { version: "1.11.3", date: today },
     { version: "1.12.0-beta.1", date: today },
@@ -94,7 +101,8 @@ test("a missing line fails, and says what to write", () => {
   assert.match(out, new RegExp(`version: "9\\.9\\.9"`));
   assert.match(out, new RegExp(`date: "${today}"`));
   /* Only the app has the dialog that reads lines, and a changes array for it. */
-  assert.match(out, /kind: "fixed"/);
+  assert.match(out, /changes: \[\{ kind: "fixed", area: "voice", text: "\.\.\." \}\]/);
+  assert.match(out, /area is one of voice, chat, self-hosting\./);
   assert.match(out, /desktop app reads the line/);
   assert.match(out, /stops gryt\.chat deploying/);
   assert.doesNotMatch(out, /channel:/);
@@ -102,8 +110,19 @@ test("a missing line fails, and says what to write", () => {
     const other = run(written, surface, "9.9.9");
     assert.equal(other.code, 1);
     assert.match(other.out, new RegExp(`No changelog line for ${surface} 9\\.9\\.9`));
-    assert.doesNotMatch(other.out, /kind: "fixed"|desktop app/);
+    assert.doesNotMatch(other.out, /kind: "fixed"|desktop app|area/);
   }
+});
+
+test("the areas it lists are the site's own, and it lists none from a site without them", () => {
+  /* A new area on the site shows up here without touching this script. */
+  const more = fixture("more-areas", { areas: { voice: "Voice & video", bots: "Bots" } });
+  assert.match(run(more, "app", "9.9.9").out, /area is one of voice, bots\./);
+
+  const none = fixture("no-areas", {});
+  const { out } = run(none, "app", "9.9.9");
+  assert.match(out, /area: "voice"/, "the template lost its area");
+  assert.doesNotMatch(out, /area is one of/);
 });
 
 test("a line dated some other day fails", () => {

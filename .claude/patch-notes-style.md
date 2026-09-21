@@ -118,6 +118,17 @@ else:
 If something was exploitable, that belongs here whether or not anyone exploited it.
 A patch note is not a place to be reassuring.
 
+## Areas
+
+In the site's `content/changelog/releases.ts`, every change in a line's `changes`
+has an `area` beside its `kind`. It's one of `voice`, `chat`, `notifications`,
+`servers`, `settings`, `phone` or `self-hosting`, and What's new and the release
+page put a heading over each. Pick the area somebody would look under to find the
+change. The video debug overlay goes under `voice`, even though its switch is in
+App > Advanced. Anything about the server built into the desktop app goes under
+`self-hosting`. A security fix takes an area too, since security is its kind. The
+site's build fails on a new app change without one.
+
 ## Pictures and clips
 
 Every picture is introduced by the sentence before it. If you cannot write that

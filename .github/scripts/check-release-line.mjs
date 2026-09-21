@@ -21,9 +21,11 @@ if (!SURFACES.includes(surface)) {
   process.exit(2);
 }
 
+const prerelease = version.includes("-");
+
 /* App prereleases need an exact line for What's New.
    Other component prereleases keep the old rule. */
-if (version.includes("-") && surface !== "app") {
+if (prerelease && surface !== "app") {
   console.log(`changelog line: ${surface} ${version} is a prerelease, no line required`);
   process.exit(0);
 }
@@ -97,8 +99,11 @@ if (!entry) {
   if (surface === "app") {
     console.error("The desktop app reads the line to say what changed after it updates.");
   }
-  console.error("The site's build refuses to pass while a release has no line, so releasing");
-  console.error("this now stops gryt.chat deploying until somebody writes it.");
+  /* The site's check-changelog-lines.mjs skips prereleases, so only a stable release blocks it. */
+  if (!prerelease) {
+    console.error("The site's build refuses to pass while a release has no line, so releasing");
+    console.error("this now stops gryt.chat deploying until somebody writes it.");
+  }
   console.error("");
   console.error(`Add an entry to the top of the \`${surface}\` array in the site repository:`);
   console.error("");
@@ -107,6 +112,9 @@ if (!entry) {
   console.error(`  {`);
   console.error(`    version: "${version}",`);
   console.error(`    date: "${today}",`);
+  if (prerelease) {
+    console.error(`    channel: "beta",`);
+  }
   console.error(`    line: "One sentence, present tense, from the reader's side.",`);
   if (surface === "app") {
     console.error(`    changes: [{ kind: "fixed", text: "..." }],`);
@@ -121,8 +129,8 @@ if (entry[1] !== today) {
   console.error(`The ${surface} ${version} line is dated ${entry[1]}, and today is ${today}.`);
   console.error("");
   console.error("The site checks every line's date against the day the release was published,");
-  console.error("in UTC, and fails its build when they disagree. Shipping now would break");
-  console.error("gryt.chat the same way a missing line does.");
+  console.error("in UTC, and fails its build when they disagree, betas included. Shipping");
+  console.error("now would stop gryt.chat deploying.");
   console.error("");
   console.error(`Change that entry's date to "${today}" in the site repository, or wait and`);
   console.error("release on the day the line already names.");

@@ -12,6 +12,7 @@ on:
       - API reference
       - Avatar parity
       - Deploy offline page
+      - Gryt Git notification
       - Permission labels
       - Publish snap to the Snap Store
       - Publish the Homebrew cask

@@ -1,0 +1,25 @@
+name: gryt-lan-proxy
+
+services:
+  lan-proxy:
+    build: .
+    image: gryt-lan-proxy:local
+    container_name: gryt-lan-proxy
+    # On the host like cloudflared, so dev.lan resolves the same way and the
+    # services see connections from the same address as through the tunnel.
+    network_mode: host
+    env_file: .env
+    volumes:
+      # The directory, not the file: git replaces the Caddyfile on update, and a
+      # file mount would keep reading the old one.
+      - ./:/etc/caddy:ro
+      - gryt-lan-proxy-data:/data
+      - gryt-lan-proxy-config:/config
+    restart: unless-stopped
+
+volumes:
+  # The ACME account and both certificates.
+  gryt-lan-proxy-data:
+    name: gryt-lan-proxy-data
+  gryt-lan-proxy-config:
+    name: gryt-lan-proxy-config

@@ -1,0 +1,13 @@
+[Unit]
+Description=Compare the LAN proxy with the Cloudflare tunnel's routes, and check its certificates
+Documentation=https://github.com/Gryt-chat/gryt/blob/main/ops/internal/lan-proxy/README.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# A symlink into the checkout, like the refresh scripts, so a merged change needs no reinstall.
+ExecStart=/usr/local/bin/gryt-lan-proxy-check --certs --notify
+# LAN_PROXY_WEBHOOK_URL, a Discord webhook. Without it a problem shows only in the journal.
+EnvironmentFile=-/etc/gryt-lan-proxy-check.env
+StateDirectory=gryt-lan-proxy-check

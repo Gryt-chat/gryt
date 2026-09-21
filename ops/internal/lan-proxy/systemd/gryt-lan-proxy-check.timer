@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the LAN proxy against the tunnel every hour
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

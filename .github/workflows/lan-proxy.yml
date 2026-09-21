@@ -1,0 +1,50 @@
+name: LAN proxy
+
+# Builds ops/internal/lan-proxy the way dev.lan will, validates the Caddyfile inside that
+# image, and tests the check that compares it with the tunnel. The live comparison runs on dev.lan.
+
+on:
+  pull_request:
+    paths:
+      - ops/internal/lan-proxy/**
+      - .github/workflows/lan-proxy.yml
+  push:
+    branches: [main]
+    paths:
+      - ops/internal/lan-proxy/**
+      - .github/workflows/lan-proxy.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lan-proxy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Build and validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Test the ingress check
+        run: node --test ops/internal/lan-proxy/check-ingress.test.mjs
+
+      - name: Build the image
+        run: docker build -t gryt-lan-proxy ops/internal/lan-proxy
+
+      # The Cloudflare module refuses to load without a token shaped like a real one.
+      - name: Validate and format-check the Caddyfile
+        run: |
+          docker run --rm -e CF_API_TOKEN=ci-placeholder-not-a-real-token-00000000 \
+            -v "$PWD/ops/internal/lan-proxy:/etc/caddy:ro" gryt-lan-proxy \
+            caddy validate --config /etc/caddy/Caddyfile
+          docker run --rm -v "$PWD/ops/internal/lan-proxy:/etc/caddy:ro" gryt-lan-proxy \
+            caddy fmt /etc/caddy/Caddyfile > /dev/null

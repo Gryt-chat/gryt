@@ -1,0 +1,84 @@
+# The Gryt names cloudflared serves from this machine, answered on the LAN.
+# Every route has to match the tunnel's. check-ingress.mjs compares them.
+{
+	# 443/udp on this machine is the prod SFU's media port. No HTTP/3, so no
+	# Alt-Svc header sends browsers there.
+	servers {
+		protocols h1 h2
+	}
+	# Only 443. The DNS challenge needs no port 80, and the apps never use plain HTTP.
+	auto_https disable_redirects
+}
+
+# Set to the real client, the way Cloudflare does, so nobody on the LAN can claim another address.
+(upstream) {
+	reverse_proxy {args[0]} {
+		header_up Cf-Connecting-Ip {client_ip}
+	}
+}
+
+# Two wildcard certificates cover every site below, so none of the names end up in CT logs.
+# 1.1.1.1 because AdGuard answers these names with this machine's address.
+*.sivert.io, *.gryt.chat {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+		resolvers 1.1.1.1 1.0.0.1
+	}
+	respond "Not routed on the LAN" 421
+}
+
+ws1.sivert.io {
+	import upstream http://dev.lan:5000
+}
+
+sfu.sivert.io {
+	import upstream http://dev.lan:5005
+}
+
+nt.sivert.io {
+	import upstream http://dev.lan:5001
+}
+
+pp.sivert.io {
+	import upstream http://dev.lan:5002
+}
+
+beta.sivert.io {
+	import upstream http://dev.lan:5010
+}
+
+beta-sfu.sivert.io {
+	import upstream http://dev.lan:5015
+}
+
+demo.gryt.chat {
+	import upstream http://dev.lan:5020
+}
+
+test.gryt.chat {
+	import upstream http://dev.lan:5030
+}
+
+test-sfu.gryt.chat {
+	import upstream http://dev.lan:5035
+}
+
+auth.gryt.chat {
+	import upstream http://dev.lan:18080
+}
+
+id.gryt.chat {
+	import upstream http://dev.lan:18081
+}
+
+reports.gryt.chat {
+	import upstream http://dev.lan:9476
+}
+
+feedback.gryt.chat {
+	import upstream http://dev.lan:9473
+}
+
+monitoring.gryt.chat {
+	import upstream http://dev.lan:13000
+}

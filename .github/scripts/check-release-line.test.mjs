@@ -96,6 +96,8 @@ test("a missing line fails, and says what to write", () => {
   /* Only the app has the dialog that reads lines, and a changes array for it. */
   assert.match(out, /kind: "fixed"/);
   assert.match(out, /desktop app reads the line/);
+  assert.match(out, /stops gryt\.chat deploying/);
+  assert.doesNotMatch(out, /channel:/);
   for (const surface of ["server", "voice", "images"]) {
     const other = run(written, surface, "9.9.9");
     assert.equal(other.code, 1);
@@ -126,6 +128,25 @@ test("an app prerelease needs its exact line", () => {
   const missingBeta = run(written, "app", "1.12.0-beta.2");
   assert.equal(missingBeta.code, 1);
   assert.match(missingBeta.out, /No changelog line for app 1\.12\.0-beta\.2/);
+});
+
+test("a missing app beta line is written as a beta, and doesn't claim to block the site", () => {
+  const { code, out } = run(written, "app", "1.12.0-beta.2");
+  assert.equal(code, 1);
+  assert.match(out, new RegExp(`date: "${today}",\\n\\s*channel: "beta",`));
+  assert.match(out, /desktop app reads the line/);
+  /* The site's build only asks stable releases for a line. */
+  assert.doesNotMatch(out, /gryt\.chat deploying/);
+});
+
+test("the entry it prints passes once it's pasted in", () => {
+  for (const version of ["9.9.9", "9.9.9-beta.1"]) {
+    const { out } = run(written, "app", version);
+    const entry = out.slice(out.indexOf("  {\n"), out.indexOf("  },\n") + 4);
+    const pasted = join(dir, `pasted-${version}.ts`);
+    writeFileSync(pasted, `export const app: ReleaseLine[] = [\n${entry}\n];\n`);
+    assert.equal(run(pasted, "app", version).code, 0, entry);
+  }
 });
 
 test("non-app prereleases still need no line", () => {

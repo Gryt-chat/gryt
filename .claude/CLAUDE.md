@@ -5,8 +5,8 @@ fifteen git submodules under `packages/`. Read these rules before making changes
 
 ## Review-required paths
 
-Gryt publishes a [public AI policy](https://docs.gryt.chat/docs/guide/ai). You may work in
-these paths, but they never merge without Sivert reading the whole diff:
+Gryt publishes a [public AI policy](https://docs.gryt.chat/docs/about/ai). You may work in
+these paths, but code in them never merges without Sivert reading the whole diff:
 
 ```
 packages/sfu/**                                    # WebRTC media plane, RTP, ICE, SVC
@@ -29,8 +29,10 @@ the review do its job.
 
 Rules for these paths:
 
-- **Always a branch and a PR. Never commit to `main` and never merge your own PR here** —
-  merging is Sivert's, after he has read it.
+- **Always a branch and a PR. Never commit to `main`.** A PR here that only changes a
+  README or other docs text can be merged once CI is green. If it touches anything else
+  (code, config, CI, a Dockerfile, a lockfile, a test), the whole PR waits for Sivert to
+  read and merge it. Check `gh pr view --json files`, not the title.
 - **Keep the diff small and reviewable.** A 600-line refactor in the SFU is not reviewable
   in practice, so it will not get a real review. Split it up.
 - **Say what to look at.** In the PR body, call out the parts you're least sure about, and
@@ -59,7 +61,7 @@ Three of these look like exceptions but aren't:
 Everything else — docs, the site, client UI, `ops/`, build scripts, CI config, tests — gets
 normal review.
 
-If you change the list above, change [`guide/ai.mdx`](../packages/docs/content/docs/guide/ai.mdx)
+If you change the list above, change [`about/ai.mdx`](../packages/docs/content/docs/about/ai.mdx)
 in the same breath. Those two drifting apart is the failure mode that matters most here.
 
 ## Git

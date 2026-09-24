@@ -43,10 +43,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Slim is what the site offers by default, so a slim failure stays a hard
-        # failure here; full is additive, so it gets its own app id and a build
-        # that failing doesn't take slim down with it. Either way, publish-release
-        # doesn't gate on this job's result, same as before this bundle existed.
+        # Slim is a hard failure, same as before full existed. Full is additive,
+        # so its own failure doesn't take slim down (continue-on-error below).
         variant:
           - slim
           - full
@@ -66,9 +64,8 @@ jobs:
             packaging/flatpak
             .github/scripts
 
-      # The -slim in the slim file name is what tells the site and anyone reading the
-      # release which build this is; the full one has no suffix, same convention the
-      # other Linux formats use.
+      # The -slim suffix is what tells the site which build this is; full has
+      # none, the same convention the other Linux formats use.
       - name: Download the .deb from the release
         id: deb
         shell: bash

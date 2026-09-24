@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Usage: build-flatpak.sh <deb> <version> <out.flatpak> <appid>. <appid> is chat.gryt.Gryt
-# for the slim build or chat.gryt.Gryt.Full for the full one, and names the manifest and
-# its sources in packaging/flatpak. Needs flatpak-builder and the flathub remote;
-# release-flatpak.yml runs it in Flathub's own build image.
+# Usage: build-flatpak.sh <deb> <version> <out.flatpak> <appid>. <appid> names the
+# manifest in packaging/flatpak: chat.gryt.Gryt for slim, chat.gryt.Gryt.Full for full.
 set -euo pipefail
 
 DEB="$(realpath "$1")"

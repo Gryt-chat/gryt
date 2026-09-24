@@ -1,0 +1,32 @@
+# Baseline: the pgsty community build the stack moved to as a stopgap.
+name: gryt-eval-minio
+services:
+  store:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    container_name: gryt-eval-minio
+    command: ["server", "/data"]
+    ports: ["127.0.0.1:19100:9000"]
+    environment:
+      MINIO_ROOT_USER: ${EVAL_ACCESS_KEY:-evaladmin}
+      MINIO_ROOT_PASSWORD: ${EVAL_SECRET_KEY:-evalsecret-evalsecret}
+    volumes: [gryt-eval-minio-data:/data]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      retries: 20
+  init:
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
+    container_name: gryt-eval-minio-init
+    depends_on: { store: { condition: service_healthy } }
+    environment:
+      MINIO_ROOT_USER: ${EVAL_ACCESS_KEY:-evaladmin}
+      MINIO_ROOT_PASSWORD: ${EVAL_SECRET_KEY:-evalsecret-evalsecret}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mc alias set local http://store:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb -p local/gryt
+volumes:
+  gryt-eval-minio-data:
+    name: gryt-eval-minio-data

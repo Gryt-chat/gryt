@@ -1,0 +1,44 @@
+# Garage v2 single node. --single-node assigns the layout, and --default-bucket
+# creates the key and the bucket from the environment: no init service needed.
+name: gryt-eval-garage
+services:
+  store:
+    image: dxflrs/garage:v2.4.1
+    container_name: gryt-eval-garage
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    ports: ["127.0.0.1:19200:3900"]
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:-0f5a3c7e1b9d2f4a6c8e0b2d4f6a8c0e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f1a}
+      GARAGE_DEFAULT_ACCESS_KEY: ${EVAL_ACCESS_KEY:-GK0123456789abcdef01234567}
+      GARAGE_DEFAULT_SECRET_KEY: ${EVAL_SECRET_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      GARAGE_DEFAULT_BUCKET: gryt
+    configs:
+      - source: garage_toml
+        target: /etc/garage.toml
+    # The image has no shell or curl; the CLI talks to the node over RPC.
+    healthcheck:
+      test: ["CMD", "/garage", "health"]
+      interval: 10s
+      retries: 10
+    volumes:
+      - gryt-eval-garage-meta:/var/lib/garage/meta
+      - gryt-eval-garage-data:/var/lib/garage/data
+# s3_region has to match the server's S3_REGION, or every call fails with
+# AuthorizationHeaderMalformed. Gryt signs for "auto".
+configs:
+  garage_toml:
+    content: |
+      metadata_dir = "/var/lib/garage/meta"
+      data_dir = "/var/lib/garage/data"
+      db_engine = "${GARAGE_DB_ENGINE:-lmdb}"
+      replication_factor = 1
+      rpc_bind_addr = "[::]:3901"
+      rpc_public_addr = "127.0.0.1:3901"
+      [s3_api]
+      s3_region = "${GARAGE_REGION:-auto}"
+      api_bind_addr = "[::]:3900"
+volumes:
+  gryt-eval-garage-meta:
+    name: gryt-eval-garage-meta
+  gryt-eval-garage-data:
+    name: gryt-eval-garage-data

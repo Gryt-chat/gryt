@@ -1,0 +1,107 @@
+# Copies uploads out of an old MinIO volume into the server's data volume, once.
+# Steps and volume names: docs.gryt.chat → Docker Compose → Moving off MinIO.
+
+# Stop the stack, run this from the same folder, then `down` it afterwards:
+# docker compose -f migrate-minio.yml up --abort-on-container-exit --exit-code-from migrate
+name: gryt-minio-migration
+
+services:
+  # Its own MinIO on the old volume, read-only, reachable only by the copy below.
+  # Any root login works, because the objects on disk don't depend on it.
+  old-minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: migrate
+      MINIO_ROOT_PASSWORD: migrate-read-only
+    volumes:
+      - minio-data:/data:ro
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+
+  migrate:
+    image: rclone/rclone:1.71
+    depends_on:
+      old-minio:
+        condition: service_healthy
+    environment:
+      BUCKET: ${S3_BUCKET:-gryt}
+      RCLONE_CONFIG: /dev/null
+      RCLONE_CONFIG_OLD_TYPE: s3
+      RCLONE_CONFIG_OLD_PROVIDER: Minio
+      RCLONE_CONFIG_OLD_ENDPOINT: http://old-minio:9000
+      RCLONE_CONFIG_OLD_ACCESS_KEY_ID: migrate
+      RCLONE_CONFIG_OLD_SECRET_ACCESS_KEY: migrate-read-only
+    volumes:
+      - server-data:/data
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        src="old:$$BUCKET"
+        dst=/data/gryt
+
+        # Where the filesystem backend looks: /data/gryt/<key>, and the
+        # content type in <key>.meta beside it.
+        if [ -d "$$dst" ] && [ -n "$$(find "$$dst" -type f | head -n 1)" ]; then
+          echo "$$dst already has files in it, so nothing was copied."
+          echo "If they're from an earlier run that failed, delete that folder and run this again."
+          exit 1
+        fi
+
+        echo "Listing bucket $$BUCKET..."
+        if ! rclone lsf -R --files-only --format pm --separator "|" "$$src" > /tmp/objects; then
+          echo "Couldn't read bucket $$BUCKET. Set S3_BUCKET if yours has another name."
+          exit 1
+        fi
+        total=$$(wc -l < /tmp/objects)
+        if [ "$$total" -eq 0 ]; then
+          echo "Bucket $$BUCKET is empty, so there's nothing to copy."
+          exit 1
+        fi
+        if grep -q -e '\.meta|' -e '["\\]' /tmp/objects; then
+          echo "These keys or content types can't be stored as files, so nothing was copied:"
+          grep -e '\.meta|' -e '["\\]' /tmp/objects
+          exit 1
+        fi
+
+        echo "Copying $$total objects into $$dst..."
+        mkdir -p "$$dst"
+        rclone copy "$$src" "$$dst" --transfers 8 --checkers 16
+        while IFS="|" read -r key type; do
+          if [ -n "$$type" ]; then printf '{"contentType":"%s"}' "$$type" > "$$dst/$$key.meta"; fi
+        done < /tmp/objects
+
+        echo "Checking the SHA-256 of every object on both sides..."
+        rclone hashsum sha256 --download "$$src" | sort > /tmp/before
+        (cd "$$dst" && find . -type f ! -name '*.meta' -exec sha256sum {} + | sed 's#  \./#  #' | sort) > /tmp/after
+        copied=$$(wc -l < /tmp/after)
+        if [ "$$copied" -ne "$$total" ] || ! diff /tmp/before /tmp/after; then
+          echo "The copy doesn't match the bucket: $$total objects there, $$copied files here."
+          echo "Nothing else in the server's data changed. Delete $$dst before trying again."
+          exit 1
+        fi
+        types=0
+        while IFS="|" read -r key type; do
+          if [ -n "$$type" ]; then
+            [ "$$(cat "$$dst/$$key.meta")" = "{\"contentType\":\"$$type\"}" ] || { echo "Wrong content type on $$key"; exit 1; }
+            types=$$((types + 1))
+          fi
+        done < /tmp/objects
+
+        chown -R 1001:1001 "$$dst"
+        echo "Done. $$copied objects copied, every SHA-256 matches, $$types content types written."
+    restart: "no"
+
+# Found by name, and never created or deleted by this file. These are what
+# prod.yml made; `docker volume ls` shows yours.
+volumes:
+  minio-data:
+    external: true
+    name: ${MINIO_VOLUME:-gryt-prod_gryt-prod-minio-data}
+  server-data:
+    external: true
+    name: ${DATA_VOLUME:-gryt-prod_gryt-prod-server-data}

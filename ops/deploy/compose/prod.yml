@@ -1,50 +1,6 @@
 name: gryt-prod
 
 services:
-  # ── Object Storage ───────────────────────────────────────────────────────
-  minio:
-    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
-    container_name: gryt-prod-minio
-    command: ["server", "/data", "--console-address", ":9001"]
-    ports:
-      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    volumes:
-      - gryt-prod-minio-data:/data
-    networks:
-      - gryt-prod
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  minio-init:
-    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
-    container_name: gryt-prod-minio-init
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      S3_BUCKET: ${S3_BUCKET:-gryt}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        echo "Configuring MinIO..."
-        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
-        mc mb -p "local/$$S3_BUCKET" 2>/dev/null || true
-        echo "Bucket ready: $$S3_BUCKET"
-    networks:
-      - gryt-prod
-    restart: "no"
-
   server-data-init:
     image: alpine:3
     container_name: gryt-prod-server-data-init
@@ -102,7 +58,6 @@ services:
     network_mode: host
     extra_hosts:
       - "sfu:127.0.0.1"
-      - "minio:127.0.0.1"
     environment:
       PORT: ${SERVER_PORT:-5000}
       HOST: "0.0.0.0"
@@ -144,25 +99,16 @@ services:
       # so every client shares a rate-limit bucket and the invite lockout goes wide.
       GRYT_TRUSTED_PROXY_HOPS: ${GRYT_TRUSTED_PROXY_HOPS:-1}
       DATA_DIR: /data
-      # ${MINIO_PORT} here, not the plain `minio:9000` the image-worker uses: this
-      # service is host-networked and reaches MinIO through the published port.
-
-      # The image-worker is on the compose bridge, where the port is always 9000.
-      # Both are right; making them match would break one.
-      S3_ENDPOINT: http://minio:${MINIO_PORT:-9000}
-      S3_REGION: auto
-      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      S3_BUCKET: ${S3_BUCKET:-gryt}
-      S3_FORCE_PATH_STYLE: "true"
+      # Uploads go in /data/gryt, beside the database, and the image worker mounts
+      # the same volume. Moving an install off MinIO: docs.gryt.chat, Docker Compose.
+      STORAGE_BACKEND: filesystem
+      S3_BUCKET: gryt
     volumes:
       - gryt-prod-server-data:/data
       - /etc/avahi/services:/etc/avahi/services
     depends_on:
       sfu:
         condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
       server-data-init:
         condition: service_completed_successfully
     restart: unless-stopped
@@ -192,12 +138,8 @@ services:
       - "127.0.0.1:${IMAGE_WORKER_HEALTH_PORT:-8081}:8080"
     environment:
       DATA_DIR: /data
-      S3_ENDPOINT: http://minio:9000
-      S3_REGION: auto
-      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      S3_BUCKET: ${S3_BUCKET:-gryt}
-      S3_FORCE_PATH_STYLE: "true"
+      STORAGE_BACKEND: filesystem
+      S3_BUCKET: gryt
     volumes:
       - gryt-prod-server-data:/data
     depends_on:
@@ -221,7 +163,7 @@ services:
 
   # ── A second server (optional) ────────────────────────────────────────────
   # One compose file can run as many Gryt servers as you like. Each needs its own
-  # data volume, SERVER_NAME, PORT and worker; SFU, MinIO and bucket are shared.
+  # data volume, SERVER_NAME, PORT and worker; the SFU is shared.
 
   # Two servers sharing one gryt.db corrupt each other, and the SFU keys voice
   # rooms on SERVER_NAME, so a duplicate stops the second server's voice starting.
@@ -236,7 +178,6 @@ services:
   #   network_mode: host
   #   extra_hosts:
   #     - "sfu:127.0.0.1"
-  #     - "minio:127.0.0.1"
   #   environment:
   #     PORT: ${SERVER2_PORT:-5010}
   #     HOST: "0.0.0.0"
@@ -261,20 +202,13 @@ services:
   #     GRYT_INVITE_MAX_JOINS_PER_HOUR: ${GRYT_INVITE_MAX_JOINS_PER_HOUR:-60}
   #     GRYT_TRUSTED_PROXY_HOPS: ${GRYT_TRUSTED_PROXY_HOPS:-1}
   #     DATA_DIR: /data
-  #     S3_ENDPOINT: http://minio:${MINIO_PORT:-9000}
-  #     S3_REGION: auto
-  #     S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-  #     S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
-  #     # The same bucket. Every key is a UUID, so nothing collides.
-  #     S3_BUCKET: ${S3_BUCKET:-gryt}
-  #     S3_FORCE_PATH_STYLE: "true"
+  #     STORAGE_BACKEND: filesystem
+  #     S3_BUCKET: gryt
   #   volumes:
   #     - gryt-prod-server-2-data:/data
   #   depends_on:
   #     sfu:
   #       condition: service_healthy
-  #     minio-init:
-  #       condition: service_completed_successfully
   #     server-2-data-init:
   #       condition: service_completed_successfully
   #   restart: unless-stopped
@@ -305,12 +239,8 @@ services:
   #     - "127.0.0.1:${IMAGE_WORKER2_HEALTH_PORT:-8082}:8080"
   #   environment:
   #     DATA_DIR: /data
-  #     S3_ENDPOINT: http://minio:9000
-  #     S3_REGION: auto
-  #     S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-  #     S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
-  #     S3_BUCKET: ${S3_BUCKET:-gryt}
-  #     S3_FORCE_PATH_STYLE: "true"
+  #     STORAGE_BACKEND: filesystem
+  #     S3_BUCKET: gryt
   #   volumes:
   #     - gryt-prod-server-2-data:/data
   #   depends_on:
@@ -433,6 +363,5 @@ volumes:
   gryt-prod-server-data:
   ## Uncomment alongside the server-2 block above.
   # gryt-prod-server-2-data:
-  gryt-prod-minio-data:
   gryt-prod-prometheus-data:
   gryt-prod-grafana-data:

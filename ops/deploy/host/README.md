@@ -3,7 +3,7 @@
 This folder contains a **single compose stack** that runs:
 - **server** (Socket.IO signaling + REST, with embedded SQLite)
 - **sfu** (WebRTC media SFU)
-- **minio** (S3-compatible uploads) + **minio-init**
+- **image-worker** (thumbnails and recompression for uploads, which live as files in the server's data volume)
 - **client** (web UI — dev/local only, behind `--profile web`)
 
 ### Quick start

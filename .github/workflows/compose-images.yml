@@ -1,0 +1,80 @@
+name: Compose images
+
+# Every image a self-hoster's `docker compose pull` would fetch, checked
+# anonymously against its registry. GRYT-1439.
+
+on:
+  schedule:
+    - cron: "17 * * * *" # hourly, off the :00 rush
+  workflow_dispatch:
+    inputs:
+      sync_issues:
+        description: "Also run the GitHub issue sync (real writes, not dry-run)"
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - ops/deploy/**
+      - .github/workflows/compose-images.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check yq is present
+        run: yq --version
+
+      - name: Check every image resolves anonymously
+        id: check
+        continue-on-error: true
+        run: |
+          mkdir -p .work
+          node .github/scripts/check-compose-images.mjs
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-image-results
+          path: .work/compose-image-results.json
+          retention-days: 7
+
+      - name: Fail the job if any image failed
+        if: steps.check.outcome == 'failure'
+        run: |
+          echo "One or more images failed the anonymous pull check — see the job summary." >&2
+          exit 1
+
+  sync-issues:
+    name: Sync issues
+    needs: check
+    # Only the scheduled run files real issues — a PR should go red on its
+    # own check. workflow_dispatch is for proving the issue flow by hand.
+    if: |
+      always() &&
+      (github.event_name == 'schedule' ||
+       (github.event_name == 'workflow_dispatch' && inputs.sync_issues))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the check job's results
+        uses: actions/download-artifact@v4
+        with:
+          name: compose-image-results
+          path: .work
+
+      - name: Open, update, or close image-check issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GRYT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node .github/scripts/sync-image-issues.mjs .work/compose-image-results.json

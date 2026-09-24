@@ -11,6 +11,7 @@ on:
     workflows:
       - API reference
       - Avatar parity
+      - Compose images
       - Deploy offline page
       - Gryt Git notification
       - Permission labels

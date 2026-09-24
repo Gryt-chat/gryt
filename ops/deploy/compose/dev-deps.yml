@@ -1,7 +1,7 @@
 services:
   # MinIO (S3-compatible object storage) for uploads
   minio:
-    image: minio/minio:latest
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     container_name: gryt-dev-minio
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
@@ -17,7 +17,7 @@ services:
   # Create the default bucket used by the server in dev.
   # This runs once and exits (safe to re-run).
   minio-init:
-    image: minio/mc:latest
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
     container_name: gryt-dev-minio-init
     depends_on:
       - minio

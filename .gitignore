@@ -61,3 +61,5 @@ ops/downloads/**
 ops/deploy/compose/local.yml
 ops/deploy/compose/pp.yml
 
+# Local run output of the compose image checker
+.work/

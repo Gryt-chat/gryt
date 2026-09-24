@@ -53,7 +53,9 @@ jobs:
             packaging/flatpak
             .github/scripts
 
-      - name: Download the full .deb from the release
+      # Slim, because that's the site's default Linux download. The -slim in the name is
+      # what tells the site and anyone reading the release which build this is.
+      - name: Download the slim .deb from the release
         id: deb
         shell: bash
         env:
@@ -62,14 +64,14 @@ jobs:
           set -euo pipefail
 
           VERSION="${TAG#v}"
-          DEB="Gryt-Chat-${VERSION}-linux-amd64.deb"
+          DEB="Gryt-Chat-${VERSION}-linux-amd64-slim.deb"
           mkdir -p input
           gh release download "$TAG" --repo "$OWNER/$REPO" --pattern "$DEB" --dir input --clobber
 
           {
             echo "version=$VERSION"
             echo "deb=input/$DEB"
-            echo "bundle=Gryt-Chat-${VERSION}-linux-x86_64.flatpak"
+            echo "bundle=Gryt-Chat-${VERSION}-linux-x86_64-slim.flatpak"
           } >> "$GITHUB_OUTPUT"
 
       - name: Build the bundle

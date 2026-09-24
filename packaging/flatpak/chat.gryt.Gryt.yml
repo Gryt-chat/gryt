@@ -1,4 +1,4 @@
-# Built by .github/workflows/release-flatpak.yml from the release .deb, which the
+# Built by .github/workflows/release-flatpak.yml from the release's slim .deb, which the
 # script copies in as gryt-chat.deb. Nothing here is submitted to Flathub (GRYT-969).
 id: chat.gryt.Gryt
 # Runtime and base app move together, and with the image tag in release-flatpak.yml.

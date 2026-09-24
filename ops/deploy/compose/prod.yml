@@ -1,50 +1,6 @@
 name: gryt-prod
 
 services:
-  # ── Object Storage ───────────────────────────────────────────────────────
-  minio:
-    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
-    container_name: gryt-prod-minio
-    command: ["server", "/data", "--console-address", ":9001"]
-    ports:
-      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    volumes:
-      - gryt-prod-minio-data:/data
-    networks:
-      - gryt-prod
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  minio-init:
-    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
-    container_name: gryt-prod-minio-init
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      S3_BUCKET: ${S3_BUCKET:-gryt}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        echo "Configuring MinIO..."
-        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
-        mc mb -p "local/$$S3_BUCKET" 2>/dev/null || true
-        echo "Bucket ready: $$S3_BUCKET"
-    networks:
-      - gryt-prod
-    restart: "no"
-
   server-data-init:
     image: alpine:3
     container_name: gryt-prod-server-data-init
@@ -53,6 +9,132 @@ services:
       - gryt-prod-server-data:/data
     networks:
       - gryt-prod
+    restart: "no"
+
+  # ── Moving off MinIO ──────────────────────────────────────────────────────
+  # Copies uploads out of the old MinIO volume on the first start, then checks them.
+  # Later starts see the marker in /data/gryt and exit at once.
+  storage-migrate:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    container_name: gryt-prod-storage-migrate
+    network_mode: none
+    entrypoint: ["bash", "-c"]
+    command:
+      - |
+        set -uo pipefail
+        say() { echo "storage-migrate: $$*"; }
+        fail() { say "$$*"; exit 1; }
+        data=/gryt-data out=/gryt-data/gryt old=/data bucket=$${OLD_S3_BUCKET:-gryt}
+        marker=$$out/.migrated-from-minio
+        mark() { mkdir -p "$$out" && echo "$$(date -u +%FT%TZ) $$1" > "$$marker" && chown 1001:1001 "$$data" "$$out" "$$marker"; }
+
+        # 1 and 2: done before, or nothing to move. Both have to stay fast.
+        if [ -f "$$marker" ]; then say "Already done: $$(cat "$$marker")"; exit 0; fi
+        if [ ! -f "$$old/.minio.sys/format.json" ]; then
+          mark "no MinIO data to move" || fail "Couldn't write $$marker."
+          say "No MinIO data in the old volume, so there's nothing to move."; exit 0
+        fi
+
+        # 3: files already here and MinIO has data too. Guessing which one wins could lose uploads.
+        shopt -s globstar dotglob nullglob
+        found=0; for f in "$$out"/**; do [ -f "$$f" ] && found=$$((found + 1)); done
+        if [ "$$found" -gt 0 ]; then
+          say "Stopped: /data/gryt already has $$found files, and the old MinIO volume has data as well."
+          say "If they're left from a migration that failed, delete /data/gryt and start the stack again."
+          say "If you copied the uploads over yourself, create /data/gryt/.migrated-from-minio instead."
+          fail "Steps: https://docs.gryt.chat/docs/host/docker-compose#moving-off-minio"
+        fi
+
+        user=$${MINIO_ROOT_USER:-} pass=$${MINIO_ROOT_PASSWORD:-}
+        if [ -z "$$user" ] || [ -z "$$pass" ]; then
+          say "MINIO_ROOT_USER or MINIO_ROOT_PASSWORD isn't set in .env, so trying MinIO's default login."
+          user=$${user:-minioadmin} pass=$${pass:-minioadmin}
+        fi
+        say "Found MinIO data. Copying bucket $$bucket into /data/gryt. The old volume is read-only and stays as it is."
+        minio_on() {
+          MINIO_ROOT_USER=$$user MINIO_ROOT_PASSWORD=$$pass minio server "$$1" \
+            --address 127.0.0.1:9000 --console-address 127.0.0.1:9001 > /tmp/minio.log 2>&1 &
+          pid=$$!
+          for _ in $$(seq 120); do
+            timeout 2 mc ready local > /dev/null 2>&1 && return 0
+            kill -0 "$$pid" 2> /dev/null || return 1
+            sleep 1
+          done
+          kill "$$pid"; return 1
+        }
+        # At /data, the path the old stack used, MinIO has nothing to rewrite. A version
+        # that still wants to write gets a copy inside this container instead.
+        if ! minio_on "$$old"; then
+          tail -n 5 /tmp/minio.log
+          read -r _ _ _ room _ < <(df -Pk /tmp | tail -n 1)
+          [ "$$room" -gt $$(($$(du -sk "$$old" | cut -f1) + 102400)) ] || fail "MinIO won't start on the read-only volume, and there's no room to copy it."
+          say "MinIO won't start read-only, so copying its volume into this container first."
+          mkdir -p /tmp/minio-copy && cp -a "$$old/." /tmp/minio-copy/ && minio_on /tmp/minio-copy || { cat /tmp/minio.log; fail "The old MinIO didn't start. Its log is above."; }
+        fi
+        mc alias set old http://127.0.0.1:9000 "$$user" "$$pass" > /dev/null 2>&1 \
+          || fail "The old MinIO refused the login. Set MINIO_ROOT_USER and MINIO_ROOT_PASSWORD in .env to what it used."
+
+        buckets=$$(mc ls --json old) || fail "Couldn't list the old MinIO's buckets."
+        if [[ $$buckets != *"\"key\":\"$$bucket/\""* ]]; then
+          [[ $$buckets == *'"key":'* ]] && fail "The old MinIO has no bucket called $$bucket. Set S3_BUCKET in .env to the one Gryt used: $$(mc ls old)"
+          mark "the old MinIO had no buckets" || fail "Couldn't write $$marker."
+          say "The old MinIO has no buckets, so there's nothing to move."; exit 0
+        fi
+
+        mc stat -r --json "old/$$bucket" > /tmp/objects || fail "Couldn't list bucket $$bucket."
+        keys=() types=() bytes=0
+        while IFS= read -r line; do
+          [[ $$line == *'"status":"success"'* && $$line =~ \"name\":\"([^\"]*)\" ]] || fail "Couldn't read the listing: $$line"
+          key=$${BASH_REMATCH[1]#"$$bucket/"} type=""
+          [[ $$line =~ \"Content-Type\":\"([^\"]*)\" ]] && type=$${BASH_REMATCH[1]}
+          [[ $$line =~ \"size\":([0-9]+) ]] && bytes=$$((bytes + BASH_REMATCH[1]))
+          if [[ $$line == *'\'* || $$key == *.meta || $$key == /* || $$key == *..* ]]; then
+            fail "The key $$key can't be stored as a file. Nothing was copied."
+          fi
+          keys+=("$$key") types+=("$$type")
+        done < /tmp/objects
+        total=$${#keys[@]} mb=$$((bytes / 1048576))
+        if [ "$$total" -eq 0 ]; then
+          mark "bucket $$bucket was empty" || fail "Couldn't write $$marker."
+          say "Bucket $$bucket is empty, so there's nothing to move."; exit 0
+        fi
+        read -r _ _ _ free _ < <(df -Pk "$$data" | tail -n 1)
+        [ "$$free" -gt $$((bytes / 1024 + 10240)) ] || fail "Not enough space: $$mb MB to copy and $$((free / 1024)) MB free."
+
+        say "Copying $$total objects, $$mb MB..."
+        mc mirror --quiet "old/$$bucket" "$$out" > /tmp/mirror.log 2>&1 \
+          || { tail -n 20 /tmp/mirror.log; fail "The copy failed. Delete /data/gryt before trying again."; }
+        for i in "$${!keys[@]}"; do
+          [ -z "$${types[i]}" ] || printf '{"contentType":"%s"}' "$${types[i]}" > "$$out/$${keys[i]}.meta" \
+            || fail "Couldn't write the content type for $${keys[i]}."
+        done
+
+        say "Checking the SHA-256 of every object against the old MinIO..."
+        for i in "$${!keys[@]}"; do
+          key=$${keys[i]}
+          a=$$(mc cat "old/$$bucket/$$key" | sha256sum) || fail "Couldn't read $$key back from the old MinIO."
+          b=$$(sha256sum < "$$out/$$key") || b=missing
+          [ "$${a%% *}" = "$${b%% *}" ] || fail "The copy of $$key doesn't match the original, so the server won't start. Delete /data/gryt and start the stack again."
+          if [ -n "$${types[i]}" ] && [ "$$(cat "$$out/$$key.meta")" != "{\"contentType\":\"$${types[i]}\"}" ]; then
+            fail "The content type for $$key didn't save."
+          fi
+        done
+        copied=0; for f in "$$out"/**; do [[ -f $$f && $$f != *.meta ]] && copied=$$((copied + 1)); done
+        [ "$$copied" -eq "$$total" ] || fail "MinIO has $$total objects and /data/gryt has $$copied files. Delete /data/gryt and start the stack again."
+
+        chown -R 1001:1001 "$$out" && mark "copied $$total objects, $$mb MB, from bucket $$bucket" || fail "Couldn't write $$marker."
+        say "Done in $${SECONDS}s: $$total objects and $$mb MB copied, every SHA-256 matches. You can delete the old volume once a backup has run."
+    environment:
+      OLD_S3_BUCKET: ${S3_BUCKET:-gryt}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
+    volumes:
+      # The old stack's volume, at the path it had. Empty on a new install.
+      - gryt-prod-minio-data:/data:ro
+      - gryt-prod-server-data:/gryt-data
+    depends_on:
+      server-data-init:
+        condition: service_completed_successfully
     restart: "no"
 
   # ── SFU (Media Server) ────────────────────────────────────────────────────
@@ -99,10 +181,12 @@ services:
   server:
     image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest}
     container_name: gryt-prod-server
+    # Waits for storage-migrate's marker, even when started alone with --no-deps,
+    # so it never serves an empty uploads folder while MinIO still has the files.
+    command: ["sh", "-c", "m=/data/gryt/.migrated-from-minio; test -f $$m || echo 'Waiting for storage-migrate to move uploads off MinIO. Start the whole stack: docker compose up -d'; until test -f $$m; do sleep 5; done; exec node bundle.js"]
     network_mode: host
     extra_hosts:
       - "sfu:127.0.0.1"
-      - "minio:127.0.0.1"
     environment:
       PORT: ${SERVER_PORT:-5000}
       HOST: "0.0.0.0"
@@ -144,26 +228,19 @@ services:
       # so every client shares a rate-limit bucket and the invite lockout goes wide.
       GRYT_TRUSTED_PROXY_HOPS: ${GRYT_TRUSTED_PROXY_HOPS:-1}
       DATA_DIR: /data
-      # ${MINIO_PORT} here, not the plain `minio:9000` the image-worker uses: this
-      # service is host-networked and reaches MinIO through the published port.
-
-      # The image-worker is on the compose bridge, where the port is always 9000.
-      # Both are right; making them match would break one.
-      S3_ENDPOINT: http://minio:${MINIO_PORT:-9000}
-      S3_REGION: auto
-      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      S3_BUCKET: ${S3_BUCKET:-gryt}
-      S3_FORCE_PATH_STYLE: "true"
+      # Uploads go in /data/gryt, beside the database, and the image worker mounts
+      # the same volume. storage-migrate moves an older install's uploads there.
+      STORAGE_BACKEND: filesystem
+      S3_BUCKET: gryt
     volumes:
       - gryt-prod-server-data:/data
       - /etc/avahi/services:/etc/avahi/services
     depends_on:
       sfu:
         condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
       server-data-init:
+        condition: service_completed_successfully
+      storage-migrate:
         condition: service_completed_successfully
     restart: unless-stopped
     deploy:
@@ -192,17 +269,15 @@ services:
       - "127.0.0.1:${IMAGE_WORKER_HEALTH_PORT:-8081}:8080"
     environment:
       DATA_DIR: /data
-      S3_ENDPOINT: http://minio:9000
-      S3_REGION: auto
-      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      S3_BUCKET: ${S3_BUCKET:-gryt}
-      S3_FORCE_PATH_STYLE: "true"
+      STORAGE_BACKEND: filesystem
+      S3_BUCKET: gryt
     volumes:
       - gryt-prod-server-data:/data
     depends_on:
       server:
         condition: service_healthy
+      storage-migrate:
+        condition: service_completed_successfully
     networks:
       - gryt-prod
     restart: unless-stopped
@@ -221,7 +296,7 @@ services:
 
   # ── A second server (optional) ────────────────────────────────────────────
   # One compose file can run as many Gryt servers as you like. Each needs its own
-  # data volume, SERVER_NAME, PORT and worker; SFU, MinIO and bucket are shared.
+  # data volume, SERVER_NAME, PORT and worker; the SFU is shared.
 
   # Two servers sharing one gryt.db corrupt each other, and the SFU keys voice
   # rooms on SERVER_NAME, so a duplicate stops the second server's voice starting.
@@ -236,7 +311,6 @@ services:
   #   network_mode: host
   #   extra_hosts:
   #     - "sfu:127.0.0.1"
-  #     - "minio:127.0.0.1"
   #   environment:
   #     PORT: ${SERVER2_PORT:-5010}
   #     HOST: "0.0.0.0"
@@ -261,21 +335,16 @@ services:
   #     GRYT_INVITE_MAX_JOINS_PER_HOUR: ${GRYT_INVITE_MAX_JOINS_PER_HOUR:-60}
   #     GRYT_TRUSTED_PROXY_HOPS: ${GRYT_TRUSTED_PROXY_HOPS:-1}
   #     DATA_DIR: /data
-  #     S3_ENDPOINT: http://minio:${MINIO_PORT:-9000}
-  #     S3_REGION: auto
-  #     S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-  #     S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
-  #     # The same bucket. Every key is a UUID, so nothing collides.
-  #     S3_BUCKET: ${S3_BUCKET:-gryt}
-  #     S3_FORCE_PATH_STYLE: "true"
+  #     STORAGE_BACKEND: filesystem
+  #     S3_BUCKET: gryt
   #   volumes:
   #     - gryt-prod-server-2-data:/data
   #   depends_on:
   #     sfu:
   #       condition: service_healthy
-  #     minio-init:
-  #       condition: service_completed_successfully
   #     server-2-data-init:
+  #       condition: service_completed_successfully
+  #     storage-migrate-2:
   #       condition: service_completed_successfully
   #   restart: unless-stopped
   #   healthcheck:
@@ -284,6 +353,17 @@ services:
   #     timeout: 10s
   #     retries: 3
   #     start_period: 40s
+  ##
+  ## Only matters if server-2 ran on MinIO before: the two shared a bucket, so it
+  ## gets its own copy of all of it. On a new second server it does nothing.
+  # storage-migrate-2:
+  #   extends: storage-migrate
+  #   container_name: gryt-prod-storage-migrate-2
+  #   volumes:
+  #     - gryt-prod-server-2-data:/gryt-data
+  #   depends_on:
+  #     storage-migrate:
+  #       condition: service_completed_successfully
   ##
   # server-2-data-init:
   #   image: alpine:3
@@ -305,12 +385,8 @@ services:
   #     - "127.0.0.1:${IMAGE_WORKER2_HEALTH_PORT:-8082}:8080"
   #   environment:
   #     DATA_DIR: /data
-  #     S3_ENDPOINT: http://minio:9000
-  #     S3_REGION: auto
-  #     S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-  #     S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
-  #     S3_BUCKET: ${S3_BUCKET:-gryt}
-  #     S3_FORCE_PATH_STYLE: "true"
+  #     STORAGE_BACKEND: filesystem
+  #     S3_BUCKET: gryt
   #   volumes:
   #     - gryt-prod-server-2-data:/data
   #   depends_on:
@@ -431,8 +507,9 @@ networks:
 
 volumes:
   gryt-prod-server-data:
+  # Only read, by storage-migrate. Delete it once a backup has run without it.
+  gryt-prod-minio-data:
   ## Uncomment alongside the server-2 block above.
   # gryt-prod-server-2-data:
-  gryt-prod-minio-data:
   gryt-prod-prometheus-data:
   gryt-prod-grafana-data:

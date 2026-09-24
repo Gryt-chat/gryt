@@ -627,3 +627,16 @@ pass when the member list arrives.
 
    Recommend **a**. It matches how blocking works against people who outrank
    you, and moderation doesn't need a DM.
+
+## Decisions (Sivert, 2026-09-24)
+
+1. **Friend** means mutual: one person sends a request, the other accepts.
+2. **Your friends list** lives only on your own devices. Nothing central holds it.
+3. **Across servers:** never. A friend on one server is a separate friend request on another.
+4. **Local identities** get friends per server, with the list on the device, the same as accounts.
+5. **Scope:** one global default for "Who can send me messages" and "Who can call me", which each server can override.
+6. **Defaults:** messages from anyone on the server, calls from friends only.
+7. **Making the message setting stricter** applies to every open conversation, not only new ones.
+8. **No bypass** for moderators or the owner.
+
+Follow-up, since 2 and 6 meet: each server keeps the friendship pairs between its own members. It already sees them when it relays a request, and it needs them to enforce "calls from friends only" against a modified app. Your whole list, across servers, still exists only on your devices, and no server sees more than its own pairs.

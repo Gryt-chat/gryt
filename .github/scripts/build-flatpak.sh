@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
-# Usage: build-flatpak.sh <deb> <version> <out.flatpak>. Needs flatpak-builder and
-# the flathub remote; release-flatpak.yml runs it in Flathub's own build image.
+# Usage: build-flatpak.sh <deb> <version> <out.flatpak> <appid>. <appid> names the
+# manifest in packaging/flatpak: chat.gryt.Gryt for slim, chat.gryt.Gryt.Full for full.
 set -euo pipefail
 
 DEB="$(realpath "$1")"
 VERSION="$2"
 OUT="$(realpath -m "$3")"
+APPID="$4"
 HERE="$(cd "$(dirname "$0")/../.." && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-cp "$HERE"/packaging/flatpak/chat.gryt.Gryt.* "$WORK/"
+# Named explicitly rather than a glob: chat.gryt.Gryt.* also matches
+# chat.gryt.Gryt.Full.*, which would pull the other variant's files in too.
+cp "$HERE/packaging/flatpak/$APPID.yml" "$WORK/"
+cp "$HERE/packaging/flatpak/$APPID.sh" "$WORK/"
+cp "$HERE/packaging/flatpak/$APPID.desktop" "$WORK/"
+cp "$HERE/packaging/flatpak/$APPID.metainfo.xml" "$WORK/"
 cp "$DEB" "$WORK/gryt-chat.deb"
 
 # The <release> in the metainfo is a placeholder. appstreamcli wants the date and
@@ -19,8 +25,8 @@ NOW="$(date -u +%s)"
 TODAY="$(date -u -d "@$NOW" +%F)"
 sed -i -E \
   "s|<release version=\"[^\"]*\" date=\"[^\"]*\" timestamp=\"[^\"]*\">|<release version=\"${VERSION}\" date=\"${TODAY}\" timestamp=\"${NOW}\">|" \
-  "$WORK/chat.gryt.Gryt.metainfo.xml"
-grep -q "<release version=\"${VERSION}\"" "$WORK/chat.gryt.Gryt.metainfo.xml"
+  "$WORK/$APPID.metainfo.xml"
+grep -q "<release version=\"${VERSION}\"" "$WORK/$APPID.metainfo.xml"
 
 # --system in CI, where the build image already has the runtime installed there.
 SCOPE="${FLATPAK_SCOPE:---user}"
@@ -35,13 +41,13 @@ flatpak-builder \
   --force-clean \
   --default-branch=stable \
   --repo=repo \
-  builddir chat.gryt.Gryt.yml
+  builddir "$APPID.yml"
 
 # --runtime-repo lets `flatpak install` fetch the runtime from Flathub on a machine
 # that has never added it.
 mkdir -p "$(dirname "$OUT")"
 flatpak build-bundle \
   --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
-  repo "$OUT" chat.gryt.Gryt stable
+  repo "$OUT" "$APPID" stable
 
 ls -la "$OUT"

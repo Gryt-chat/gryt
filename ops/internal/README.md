@@ -179,6 +179,11 @@ only when its image id actually moved:
 ops/internal/refresh-web-client.sh
 ```
 
+It's a thin wrapper now: the pulling and recreating live in
+[`../deploy/auto-update/gryt-auto-update.sh`](../deploy/auto-update/gryt-auto-update.sh),
+the same script self-hosters install (GRYT-1456). This file only pins the
+defaults below, so nothing changes for this box.
+
 The test server behind test.gryt.chat and the public demo server are in it too, so neither
 is left on an old image after a release. The demo's compose file lives outside this checkout.
 The script still finds it, since it reads the file list off the container's labels.

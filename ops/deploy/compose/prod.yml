@@ -81,6 +81,12 @@ services:
           say "The old MinIO has no buckets, so there's nothing to move."; exit 0
         fi
 
+        # An empty bucket has nothing to stat, and `mc stat -r` fails on it.
+        listing=$$(mc ls -r "old/$$bucket") || fail "Couldn't list bucket $$bucket."
+        if [ -z "$$listing" ]; then
+          mark "bucket $$bucket was empty" || fail "Couldn't write $$marker."
+          say "Bucket $$bucket is empty, so there's nothing to move."; exit 0
+        fi
         mc stat -r --json "old/$$bucket" > /tmp/objects || fail "Couldn't list bucket $$bucket."
         keys=() types=() bytes=0
         while IFS= read -r line; do

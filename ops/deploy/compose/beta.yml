@@ -3,7 +3,7 @@ name: gryt-beta
 services:
   # ── Object Storage ───────────────────────────────────────────────────────
   minio:
-    image: minio/minio:latest
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     container_name: gryt-beta-minio
     command: ["server", "/data", "--console-address", ":9001"]
     ports:
@@ -29,7 +29,7 @@ services:
       start_period: 10s
 
   minio-init:
-    image: minio/mc:latest
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
     container_name: gryt-beta-minio-init
     depends_on:
       minio:

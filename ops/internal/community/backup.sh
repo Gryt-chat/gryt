@@ -48,7 +48,7 @@ docker run --rm --pull=never \
   --network "$NETWORK" \
   -e MINIO_ROOT_USER -e MINIO_ROOT_PASSWORD -e S3_BUCKET \
   -v "$dest/objects:/backup" \
-  --entrypoint /bin/sh minio/mc:latest -c '
+  --entrypoint /bin/sh pgsty/mc:RELEASE.2026-09-16T00-00-00Z -c '
     set -e
     mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null
     mc mirror --overwrite --remove "local/$S3_BUCKET" /backup >/dev/null

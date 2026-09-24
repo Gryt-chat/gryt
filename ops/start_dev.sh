@@ -151,7 +151,7 @@ if [[ "$DEV_WITH_S3" == "1" ]]; then
   # Best-effort init (compose service) + explicit bucket ensure (so avatar/file uploads don't 502).
   docker compose -f ops/deploy/compose/dev-deps.yml up -d minio-init >/dev/null 2>&1 || true
   echo "Ensuring MinIO bucket exists: ${S3_BUCKET}"
-  docker run --rm --network host --entrypoint /bin/sh minio/mc:latest -lc "\
+  docker run --rm --network host --entrypoint /bin/sh pgsty/mc:RELEASE.2026-09-16T00-00-00Z -lc "\
     mc alias set local http://127.0.0.1:9000 '${MINIO_ROOT_USER}' '${MINIO_ROOT_PASSWORD}' >/dev/null 2>&1 \
     && mc mb -p 'local/${S3_BUCKET}' >/dev/null 2>&1 || true"
   echo ""

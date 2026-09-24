@@ -33,7 +33,7 @@ services:
   # Not published at all. The server and the worker reach it over the compose
   # network by name, which is the only thing that needs to.
   minio:
-    image: minio/minio:latest
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     container_name: gryt-community-minio
     logging: *logging
     command: ["server", "/data", "--console-address", ":9001"]
@@ -53,7 +53,7 @@ services:
       start_period: 10s
 
   minio-init:
-    image: minio/mc:latest
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
     container_name: gryt-community-minio-init
     depends_on:
       minio:

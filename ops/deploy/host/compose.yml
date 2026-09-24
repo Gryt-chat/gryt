@@ -112,7 +112,7 @@ services:
       start_period: 40s
 
   minio:
-    image: minio/minio:latest
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     container_name: gryt-minio
     logging: *default-logging
     command: ["server", "/data", "--console-address", ":9001"]
@@ -127,7 +127,7 @@ services:
     restart: unless-stopped
 
   minio-init:
-    image: minio/mc:latest
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
     container_name: gryt-minio-init
     depends_on:
       - minio

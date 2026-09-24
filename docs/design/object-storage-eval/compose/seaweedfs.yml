@@ -1,0 +1,27 @@
+# SeaweedFS all-in-one (master, volume, filer, S3 gateway in one process).
+name: gryt-eval-seaweedfs
+services:
+  store:
+    image: chrislusf/seaweedfs:4.47
+    container_name: gryt-eval-seaweedfs
+    command: ["server", "-dir=/data", "-s3", "-s3.port=8333", "-s3.config=/etc/seaweedfs/s3.json", "-volume.max=0", "-master.volumeSizeLimitMB=${SEAWEED_VOLUME_MB:-1024}", "-ip=127.0.0.1", "-ip.bind=0.0.0.0"]
+    ports: ["127.0.0.1:19300:8333"]
+    # Unset by default. Set SEAWEED_MEM_LIMIT=512m to see what a small box sees.
+    mem_limit: ${SEAWEED_MEM_LIMIT:-0}
+    environment:
+      GOMEMLIMIT: ${SEAWEED_GOMEMLIMIT:-}
+    configs:
+      - source: s3_json
+        target: /etc/seaweedfs/s3.json
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8333/healthz"]
+      interval: 10s
+      retries: 10
+    volumes: [gryt-eval-seaweedfs-data:/data]
+configs:
+  s3_json:
+    content: |
+      {"identities":[{"name":"gryt","credentials":[{"accessKey":"${EVAL_ACCESS_KEY:-evaladmin}","secretKey":"${EVAL_SECRET_KEY:-evalsecret-evalsecret}"}],"actions":["Admin","Read","Write","List","Tagging"]}]}
+volumes:
+  gryt-eval-seaweedfs-data:
+    name: gryt-eval-seaweedfs-data

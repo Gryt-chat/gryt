@@ -1,0 +1,20 @@
+# RustFS single node, single drive.
+name: gryt-eval-rustfs
+services:
+  store:
+    image: rustfs/rustfs:1.0.0
+    container_name: gryt-eval-rustfs
+    ports: ["127.0.0.1:19400:9000"]
+    environment:
+      RUSTFS_ACCESS_KEY: ${EVAL_ACCESS_KEY:-evaladmin}
+      RUSTFS_SECRET_KEY: ${EVAL_SECRET_KEY:-evalsecret-evalsecret}
+      RUSTFS_VOLUMES: /data
+      RUSTFS_CONSOLE_ENABLE: "false"
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:9000/health"]
+      interval: 10s
+      retries: 10
+    volumes: [gryt-eval-rustfs-data:/data]
+volumes:
+  gryt-eval-rustfs-data:
+    name: gryt-eval-rustfs-data

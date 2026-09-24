@@ -1,7 +1,7 @@
 name: Build the Flatpak bundle
 
-# Called by release-client.yml once the Linux build has put the .deb on the release.
-# Dispatched by hand it is a dry run unless `upload` is ticked: the bundle stays an artifact.
+# Called by release-client.yml once the Linux build has put both .debs on the release.
+# Dispatched by hand it is a dry run unless `upload` is ticked: the bundles stay artifacts.
 
 on:
   workflow_call:
@@ -30,7 +30,7 @@ permissions:
 
 jobs:
   flatpak:
-    name: Build the Flatpak bundle
+    name: Build the Flatpak bundle (${{ matrix.variant }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -39,6 +39,19 @@ jobs:
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
       options: --privileged
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Slim is what the site offers by default, so a slim failure stays a hard
+        # failure here; full is additive, so it gets its own app id and a build
+        # that failing doesn't take slim down with it. Either way, publish-release
+        # doesn't gate on this job's result, same as before this bundle existed.
+        variant:
+          - slim
+          - full
+
+    continue-on-error: ${{ matrix.variant == 'full' }}
 
     env:
       OWNER: Gryt-chat
@@ -53,25 +66,37 @@ jobs:
             packaging/flatpak
             .github/scripts
 
-      # Slim, because that's the site's default Linux download. The -slim in the name is
-      # what tells the site and anyone reading the release which build this is.
-      - name: Download the slim .deb from the release
+      # The -slim in the slim file name is what tells the site and anyone reading the
+      # release which build this is; the full one has no suffix, same convention the
+      # other Linux formats use.
+      - name: Download the .deb from the release
         id: deb
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          VARIANT: ${{ matrix.variant }}
         run: |
           set -euo pipefail
 
           VERSION="${TAG#v}"
-          DEB="Gryt-Chat-${VERSION}-linux-amd64-slim.deb"
+          if [[ "$VARIANT" == "slim" ]]; then
+            DEB="Gryt-Chat-${VERSION}-linux-amd64-slim.deb"
+            BUNDLE="Gryt-Chat-${VERSION}-linux-x86_64-slim.flatpak"
+            APPID="chat.gryt.Gryt"
+          else
+            DEB="Gryt-Chat-${VERSION}-linux-amd64.deb"
+            BUNDLE="Gryt-Chat-${VERSION}-linux-x86_64.flatpak"
+            APPID="chat.gryt.Gryt.Full"
+          fi
+
           mkdir -p input
           gh release download "$TAG" --repo "$OWNER/$REPO" --pattern "$DEB" --dir input --clobber
 
           {
             echo "version=$VERSION"
             echo "deb=input/$DEB"
-            echo "bundle=Gryt-Chat-${VERSION}-linux-x86_64-slim.flatpak"
+            echo "bundle=$BUNDLE"
+            echo "appid=$APPID"
           } >> "$GITHUB_OUTPUT"
 
       - name: Build the bundle
@@ -83,13 +108,14 @@ jobs:
           bash .github/scripts/build-flatpak.sh \
             "${{ steps.deb.outputs.deb }}" \
             "${{ steps.deb.outputs.version }}" \
-            "dist/${{ steps.deb.outputs.bundle }}"
+            "dist/${{ steps.deb.outputs.bundle }}" \
+            "${{ steps.deb.outputs.appid }}"
 
       # Kept a week either way, so a dry run has something to install and test.
       - name: Keep the bundle as an artifact
         uses: actions/upload-artifact@v4
         with:
-          name: flatpak-${{ steps.deb.outputs.version }}
+          name: flatpak-${{ steps.deb.outputs.version }}-${{ matrix.variant }}
           path: dist/${{ steps.deb.outputs.bundle }}
           retention-days: 7
           if-no-files-found: error

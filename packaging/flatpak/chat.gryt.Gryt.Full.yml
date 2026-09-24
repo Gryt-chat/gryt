@@ -1,0 +1,67 @@
+# Built by .github/workflows/release-flatpak.yml from the release's full .deb, which the
+# script copies in as gryt-chat.deb. Nothing here is submitted to Flathub (GRYT-969).
+#
+# Same app, full build: it keeps the server you can host from inside the app. A different
+# id from chat.gryt.Gryt (the slim build) so the two install side by side rather than one
+# replacing the other, and so slim's existing installs keep updating in place.
+id: chat.gryt.Gryt.Full
+# Runtime and base app move together, and with the image tag in release-flatpak.yml.
+# 26.08 exists for both now; 25.08 is what this was tested on.
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+base: org.electronjs.Electron2.BaseApp
+base-version: '25.08'
+command: gryt-chat
+separate-locales: false
+
+# Identical to chat.gryt.Gryt.yml. The embedded server (packages/client/electron/
+# embeddedServerManager.ts) only binds ports and spawns child processes inside the
+# sandbox, and only writes under app.getPath("userData") — already private and
+# writable per app without a --filesystem grant. --share=network already opens
+# every port, in both directions, so hosting from in here needs nothing extra.
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  - --device=dri
+  # The camera. The mic comes in over pulseaudio, screen sharing over the portal.
+  - --device=all
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --filesystem=xdg-download
+
+modules:
+  - name: gryt-chat
+    buildsystem: simple
+    build-commands:
+      - ar x gryt-chat.deb
+      - tar -xf data.tar.xz
+      - mkdir -p /app/lib/gryt-chat
+      - cp -a "opt/Gryt Chat/." /app/lib/gryt-chat/
+      # package-type is what makes electron-updater install a new .deb. Without it
+      # the updater has nothing it can install, so the app never replaces itself.
+      - rm -f /app/lib/gryt-chat/resources/package-type /app/lib/gryt-chat/resources/app-update.yml
+      - rm -f /app/lib/gryt-chat/resources/apparmor-profile /app/lib/gryt-chat/chrome-sandbox
+      - install -Dm755 chat.gryt.Gryt.Full.sh /app/bin/gryt-chat
+      - install -Dm644 chat.gryt.Gryt.Full.desktop /app/share/applications/chat.gryt.Gryt.Full.desktop
+      - install -Dm644 chat.gryt.Gryt.Full.metainfo.xml /app/share/metainfo/chat.gryt.Gryt.Full.metainfo.xml
+      - |
+        found=0
+        for icon in usr/share/icons/hicolor/*/apps/gryt-chat.png; do
+          size="$(basename "$(dirname "$(dirname "$icon")")")"
+          install -Dm644 "$icon" "/app/share/icons/hicolor/${size}/apps/chat.gryt.Gryt.Full.png"
+          found=1
+        done
+        test "$found" = 1
+    sources:
+      - type: file
+        path: chat.gryt.Gryt.Full.sh
+      - type: file
+        path: chat.gryt.Gryt.Full.desktop
+      - type: file
+        path: chat.gryt.Gryt.Full.metainfo.xml
+      - type: file
+        path: gryt-chat.deb

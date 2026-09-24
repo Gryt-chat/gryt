@@ -1282,8 +1282,8 @@ jobs:
           gh release edit "$TAG" --repo "$OWNER/$REPO" --draft=false
           echo "$TAG is installable on $RUNNER_OS ($VARIANT)."
 
-  # From the slim .deb the Linux leg uploaded, so the app is not compiled twice. Before
-  # publish-release so SHA256SUMS and the attestation cover the bundle.
+  # From the .debs the Linux leg uploaded, so the app is not compiled twice. Before
+  # publish-release so SHA256SUMS and the attestation cover the bundles.
   build-flatpak:
     name: Build the Flatpak bundle
     needs: [prepare-release, build-electron]

@@ -11,6 +11,7 @@ on:
     workflows:
       - API reference
       - Avatar parity
+      - Build the Flatpak bundle
       - Compose images
       - Deploy offline page
       - Gryt Git notification

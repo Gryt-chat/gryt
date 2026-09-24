@@ -1,0 +1,105 @@
+name: Build the Flatpak bundle
+
+# Called by release-client.yml once the Linux build has put the .deb on the release.
+# Dispatched by hand it is a dry run unless `upload` is ticked: the bundle stays an artifact.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+      upload:
+        required: true
+        type: boolean
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build from, e.g. v1.11.42'
+        required: true
+        type: string
+      upload:
+        description: 'Attach the bundle to that release'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  flatpak:
+    name: Build the Flatpak bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Flathub's own build image: flatpak-builder, gh, and the 25.08 runtime and SDK
+    # already installed. --privileged because bwrap needs namespaces.
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
+      options: --privileged
+
+    env:
+      OWNER: Gryt-chat
+      REPO: gryt
+      TAG: ${{ inputs.tag }}
+
+    steps:
+      - name: Checkout the packaging
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            packaging/flatpak
+            .github/scripts
+
+      # Slim, because that's the site's default Linux download. The -slim in the name is
+      # what tells the site and anyone reading the release which build this is.
+      - name: Download the slim .deb from the release
+        id: deb
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${TAG#v}"
+          DEB="Gryt-Chat-${VERSION}-linux-amd64-slim.deb"
+          mkdir -p input
+          gh release download "$TAG" --repo "$OWNER/$REPO" --pattern "$DEB" --dir input --clobber
+
+          {
+            echo "version=$VERSION"
+            echo "deb=input/$DEB"
+            echo "bundle=Gryt-Chat-${VERSION}-linux-x86_64-slim.flatpak"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build the bundle
+        shell: bash
+        env:
+          FLATPAK_SCOPE: --system
+        run: |
+          set -euo pipefail
+          bash .github/scripts/build-flatpak.sh \
+            "${{ steps.deb.outputs.deb }}" \
+            "${{ steps.deb.outputs.version }}" \
+            "dist/${{ steps.deb.outputs.bundle }}"
+
+      # Kept a week either way, so a dry run has something to install and test.
+      - name: Keep the bundle as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-${{ steps.deb.outputs.version }}
+          path: dist/${{ steps.deb.outputs.bundle }}
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Attach the bundle to the release
+        if: inputs.upload
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" "dist/${{ steps.deb.outputs.bundle }}" \
+            --repo "$OWNER/$REPO" --clobber

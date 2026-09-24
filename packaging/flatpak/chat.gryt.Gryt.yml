@@ -1,0 +1,58 @@
+# Built by .github/workflows/release-flatpak.yml from the release .deb, which the
+# script copies in as gryt-chat.deb. Nothing here is submitted to Flathub (GRYT-969).
+id: chat.gryt.Gryt
+# Runtime and base app move together, and with the image tag in release-flatpak.yml.
+# 26.08 exists for both now; 25.08 is what this was tested on.
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+base: org.electronjs.Electron2.BaseApp
+base-version: '25.08'
+command: gryt-chat
+separate-locales: false
+
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  - --device=dri
+  # The camera. The mic comes in over pulseaudio, screen sharing over the portal.
+  - --device=all
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --filesystem=xdg-download
+
+modules:
+  - name: gryt-chat
+    buildsystem: simple
+    build-commands:
+      - ar x gryt-chat.deb
+      - tar -xf data.tar.xz
+      - mkdir -p /app/lib/gryt-chat
+      - cp -a "opt/Gryt Chat/." /app/lib/gryt-chat/
+      # package-type is what makes electron-updater install a new .deb. Without it
+      # the updater has nothing it can install, so the app never replaces itself.
+      - rm -f /app/lib/gryt-chat/resources/package-type /app/lib/gryt-chat/resources/app-update.yml
+      - rm -f /app/lib/gryt-chat/resources/apparmor-profile /app/lib/gryt-chat/chrome-sandbox
+      - install -Dm755 chat.gryt.Gryt.sh /app/bin/gryt-chat
+      - install -Dm644 chat.gryt.Gryt.desktop /app/share/applications/chat.gryt.Gryt.desktop
+      - install -Dm644 chat.gryt.Gryt.metainfo.xml /app/share/metainfo/chat.gryt.Gryt.metainfo.xml
+      - |
+        found=0
+        for icon in usr/share/icons/hicolor/*/apps/gryt-chat.png; do
+          size="$(basename "$(dirname "$(dirname "$icon")")")"
+          install -Dm644 "$icon" "/app/share/icons/hicolor/${size}/apps/chat.gryt.Gryt.png"
+          found=1
+        done
+        test "$found" = 1
+    sources:
+      - type: file
+        path: chat.gryt.Gryt.sh
+      - type: file
+        path: chat.gryt.Gryt.desktop
+      - type: file
+        path: chat.gryt.Gryt.metainfo.xml
+      - type: file
+        path: gryt-chat.deb

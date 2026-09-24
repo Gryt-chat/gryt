@@ -1282,11 +1282,23 @@ jobs:
           gh release edit "$TAG" --repo "$OWNER/$REPO" --draft=false
           echo "$TAG is installable on $RUNNER_OS ($VARIANT)."
 
+  # From the full .deb the Linux leg uploaded, so the app is not compiled twice. Before
+  # publish-release so SHA256SUMS and the attestation cover the bundle.
+  build-flatpak:
+    name: Build the Flatpak bundle
+    needs: [prepare-release, build-electron]
+    uses: ./.github/workflows/release-flatpak.yml
+    with:
+      tag: v${{ needs.prepare-release.outputs.version }}
+      upload: true
+
   # Runs after every matrix leg, once each has published the release itself. It owns the
   # whole-release work: checksums, the attestation, the notes appendix, and the announcement.
   publish-release:
     name: Publish release
-    needs: [prepare-release, build-electron]
+    needs: [prepare-release, build-electron, build-flatpak]
+    # The Flatpak is additive, like slim: a failed bundle is a red job, not a missing release.
+    if: ${{ !cancelled() && needs.prepare-release.result == 'success' && needs.build-electron.result == 'success' }}
     runs-on: ubuntu-latest
 
     env:
@@ -1377,6 +1389,7 @@ jobs:
             dist/*.snap
             dist/*.dmg
             dist/*.zip
+            dist/*.flatpak
             dist/SHA256SUMS.txt
 
       - name: Upload SHA256SUMS

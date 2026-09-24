@@ -56,6 +56,9 @@ services:
     image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest}
     container_name: gryt-prod-server-nt
     logging: *gryt-logging
+    # Waits for storage-migrate's marker, even when started alone with --no-deps,
+    # so it never serves an empty uploads folder while MinIO still has the files.
+    command: ["sh", "-c", "m=/data/gryt/.migrated-from-minio; test -f $$m || echo 'Waiting for storage-migrate to move uploads off MinIO. Start the whole stack: docker compose up -d'; until test -f $$m; do sleep 5; done; exec node bundle.js"]
     ports:
       - "${NT_SERVER_PORT:-5001}:5000"
     environment:

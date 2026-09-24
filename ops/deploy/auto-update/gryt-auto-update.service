@@ -1,0 +1,26 @@
+[Unit]
+Description=Pull the newest Gryt images for this deployment
+Documentation=https://docs.gryt.chat/docs/guide/docker-compose
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/gryt-auto-update
+
+# Everything that varies per machine lives here. See gryt-auto-update.env.example.
+# On a plain `docker compose -f prod.yml up -d` deployment, none of it is
+# needed — the script auto-detects the running gryt-*-server containers.
+EnvironmentFile=-/etc/default/gryt-auto-update
+
+# Runs as root, which is the usual arrangement for a unit talking to the
+# Docker socket. To run as someone else instead, drop in an override:
+#
+#   systemctl edit gryt-auto-update.service
+#   [Service]
+#   User=youruser
+#   SupplementaryGroups=docker
+
+# One run should never sit on the Docker socket for long. If the registry is
+# slow enough to hit this, the next timer firing picks it up.
+TimeoutStartSec=600

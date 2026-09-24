@@ -1,0 +1,24 @@
+[Unit]
+Description=Check for newer Gryt images once a night
+
+[Timer]
+# Once a night rather than dev.lan's ten minutes: a self-hosted server has one
+# admin rather than a public release to catch up to, and running every ten
+# minutes on every self-hosted box would mean thousands of manifest requests
+# against GHCR on the same schedule. Nightly is the cadence unattended-upgrades
+# and most Watchtower setups already use, so it is not asking a self-hoster to
+# trust something unfamiliar.
+#
+# OnCalendar, with Persistent=true, so a box that was off at 03:00 still gets
+# checked once it is back — a monotonic timer (as dev.lan's is) has no such
+# option, and a self-hosted box is far more likely to be asleep or rebooting
+# than a server that is up all night by design.
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+
+# Spread across three hours so self-hosted boxes do not all hit GHCR at
+# 03:00:00 sharp.
+RandomizedDelaySec=3h
+
+[Install]
+WantedBy=timers.target

@@ -16,9 +16,7 @@ services:
   # Web client, dev and local only: it will not authenticate against
   # auth.gryt.chat unless your domain is a registered redirect URI.
   client:
-    build:
-      context: ../..
-      dockerfile: Dockerfile.client
+    image: ghcr.io/gryt-chat/client:${CLIENT_VERSION:-latest}
     container_name: gryt-client
     logging: *default-logging
     profiles: ["web"]
@@ -38,10 +36,11 @@ services:
         condition: service_healthy
 
   server:
-    build:
-      context: ../..
-      dockerfile: Dockerfile.server
+    image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest}
     container_name: gryt-server
+    # Waits for storage-migrate's marker, even when started alone with --no-deps,
+    # so it never serves an empty uploads folder while MinIO still has the files.
+    command: ["sh", "-c", "m=/data/gryt/.migrated-from-minio; test -f $$m || echo 'Waiting for storage-migrate to move uploads off MinIO. Start the whole stack: docker compose up -d'; until test -f $$m; do sleep 5; done; exec node bundle.js"]
     logging: *default-logging
     env_file:
       - ./.env
@@ -61,7 +60,6 @@ services:
     ports:
       - "${BIND_ADDR:-127.0.0.1}:${SERVER_HTTP_PORT:-5000}:5000"
     volumes:
-      - ../../server/public:/app/public:ro
       - gryt-server-data:/data
     restart: unless-stopped
     healthcheck:
@@ -226,9 +224,7 @@ services:
     restart: "no"
 
   sfu:
-    build:
-      context: ../..
-      dockerfile: Dockerfile.sfu
+    image: ghcr.io/gryt-chat/sfu:${SFU_VERSION:-latest}
     container_name: gryt-sfu
     logging: *default-logging
     env_file:

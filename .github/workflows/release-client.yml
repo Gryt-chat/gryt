@@ -1068,8 +1068,8 @@ jobs:
 
           # electron-builder 26.x builds AppImages against libfuse2, which fuse3-only distros
           # no longer ship (GRYT-953). Pinned by sha256, so a moved runtime fails the checksum.
-          RUNTIME_URL="https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64"
-          RUNTIME_SHA256="1cc49bcf1e2ccd593c379adb17c9f85a36d619088296504de95b1d06215aebbf"
+          RUNTIME_URL="https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64"
+          RUNTIME_SHA256="2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d"
           RUNTIME="${RUNNER_TEMP}/appimage-runtime-x86_64"
           curl -fsSL -o "$RUNTIME" "$RUNTIME_URL"
           echo "${RUNTIME_SHA256}  ${RUNTIME}" | sha256sum -c -

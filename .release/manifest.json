@@ -1,25 +1,25 @@
 {
   "product": "gryt",
-  "version": "1.12.1",
-  "baseVersion": "1.12.1",
-  "channel": "latest",
-  "monorepoCommit": "e918e46b65f18a17a3c82e0d4e6469b10ed9f267",
-  "createdAt": "2026-09-28T18:03:41.462Z",
+  "version": "1.13.0-beta.1",
+  "baseVersion": "1.13.0",
+  "channel": "beta",
+  "monorepoCommit": "8d63497dd942614880f331c78b94284f478daa06",
+  "createdAt": "2026-09-29T11:09:35.900Z",
   "components": {
     "client": {
       "repo": "Gryt-chat/client",
       "path": "packages/client",
-      "commit": "a34a89a1c2549ea3f9f74f1bea5a6830e0ba526d"
+      "commit": "50270a1329b99feeb037489708417689ad0f927d"
     },
     "server": {
       "repo": "Gryt-chat/server",
       "path": "packages/server",
-      "commit": "2dca6ad437dd0c0b8c6e4fca25d24978518f4a13"
+      "commit": "8d1d326359fb2ecc8112263341e48c8b6718502d"
     },
     "sfu": {
       "repo": "Gryt-chat/sfu",
       "path": "packages/sfu",
-      "commit": "f50285d38aea8afdc47e3ce0f7cd95301af9fb51"
+      "commit": "1617bf3d4d99b3030c8c095abb22bc303706527a"
     },
     "imageWorker": {
       "repo": "Gryt-chat/image-worker",

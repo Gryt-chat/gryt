@@ -3,15 +3,15 @@
   <h1>Gryt</h1>
   <p><strong>Open-source WebRTC voice, video and text chat</strong></p>
   <p>
-    <a href="https://github.com/Gryt-chat/gryt/releases/latest"><img src="https://img.shields.io/github/v/release/Gryt-chat/gryt?cacheSeconds=3600" alt="GitHub Release" /></a>
-    <a href="https://github.com/Gryt-chat/gryt/stargazers"><img src="https://img.shields.io/github/stars/Gryt-chat/gryt" alt="GitHub Stars" /></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License: AGPL-3.0" /></a>
-    <a href="https://docs.gryt.chat"><img src="https://img.shields.io/badge/docs-docs.gryt.chat-blue" alt="Docs" /></a>
+    <a href="https://github.com/Gryt-chat/gryt/releases/latest"><img src="https://img.shields.io/github/v/release/Gryt-chat/gryt?style=flat-square&label=release&color=968FF8&cacheSeconds=3600" alt="GitHub Release" /></a>
+    <a href="https://github.com/Gryt-chat/gryt/stargazers"><img src="https://img.shields.io/github/stars/Gryt-chat/gryt?style=flat-square&color=968FF8" alt="GitHub Stars" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-968FF8?style=flat-square" alt="License: AGPL-3.0" /></a>
+    <a href="https://docs.gryt.chat"><img src="https://img.shields.io/badge/docs-docs.gryt.chat-968FF8?style=flat-square" alt="Docs" /></a>
   </p>
   <p>
-    <a href="https://snapcraft.io/gryt-chat"><img alt="Snap Store" src="https://snapcraft.io/gryt-chat/badge.svg" /></a>
-    <a href="https://aur.archlinux.org/packages/gryt-chat-bin"><img alt="AUR package" src="https://img.shields.io/aur/version/gryt-chat-bin" /></a>
-    <a href="https://ghcr.io/gryt-chat/server"><img src="https://img.shields.io/badge/Docker-ghcr.io-blue?logo=docker&logoColor=white" alt="Docker" /></a>
+    <a href="https://snapcraft.io/gryt-chat"><img alt="Snap Store" src="https://img.shields.io/snapcraft/v/gryt-chat/latest/stable?style=flat-square&label=snap&color=968FF8" /></a>
+    <a href="https://aur.archlinux.org/packages/gryt-chat-bin"><img alt="AUR package" src="https://img.shields.io/aur/version/gryt-chat-bin?style=flat-square&label=aur&color=968FF8" /></a>
+    <a href="https://ghcr.io/gryt-chat/server"><img src="https://img.shields.io/badge/docker-ghcr.io-968FF8?style=flat-square&logo=docker&logoColor=white" alt="Docker" /></a>
   </p>
 
   <img src="/.github/preview.webp" width="700" alt="The Gryt desktop client: a voice call with six people, a chat channel, and the member list" />
@@ -25,6 +25,73 @@
 
 > [!CAUTION]
 > **Early development.** Gryt is experimental and changes often. Expect breaking changes.
+
+## Why
+
+Most voice platforms are owned by companies that monetise the conversation and
+decide who gets to leave. Gryt is built the other way round — you run the
+server, the data sits on your disk, and nobody needs an account with us to talk
+to you.
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**No account required**
+
+A server chooses which identities it admits. Guests hold a keypair on their own
+device. An account carries your identity *between* servers — it is not the price
+of entry.
+
+</td>
+<td width="50%" valign="top">
+
+**Real-time voice and video**
+
+Go and Pion WebRTC relay voice, camera and screen share without transcoding.
+Noise suppression, echo cancellation and voice activity detection run on the
+client.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+**Yours to run**
+
+Docker Compose, Helm, or a Cloudflare Tunnel. One compose file can host as many
+servers as you like — they share an SFU.
+
+</td>
+<td valign="top">
+
+**Desktop and web**
+
+Electron app for Linux, macOS and Windows with auto-updates, plus a browser
+client. The desktop app can host a server on its own.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+**Files and messages**
+
+Persistent chat backed by SQLite, uploads to any S3-compatible store, and
+thumbnails generated out of process so a bad image cannot take the server down.
+
+</td>
+<td valign="top">
+
+**Open about how it is built**
+
+Gryt is developed partly with AI assistance. The
+[policy](https://docs.gryt.chat/docs/about/ai) says which parts of the codebase
+never merge without a human reading the whole diff.
+
+</td>
+</tr>
+</table>
 
 ## Features
 

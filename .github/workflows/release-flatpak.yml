@@ -30,7 +30,7 @@ permissions:
 
 jobs:
   flatpak:
-    name: Build the Flatpak bundle (${{ matrix.variant }})
+    name: Build Electron app (ubuntu-latest, Flatpak ${{ matrix.variant }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

@@ -1125,6 +1125,7 @@ jobs:
         uses: microsoft/microsoft-store-apppublisher@v1.1
 
       - name: Submit the MSIX to the Microsoft Store
+        id: store_submit
         if: runner.os == 'Windows' && matrix.variant == 'full' && env.CHANNEL == 'latest' && env.HAS_STORE_CREDS == 'true'
         continue-on-error: true
         working-directory: packages/client
@@ -1150,7 +1151,14 @@ jobs:
             --clientSecret $env:AZURE_AD_APPLICATION_SECRET
           # The argument is the project root, not the package: pointing it at
           # the .appx makes it look there for a project and find no publisher.
-          msstore publish . --inputFile $appx.FullName -id $productId
+          msstore publish . --inputDirectory $appx.DirectoryName -id $productId
+          if ($LASTEXITCODE -ne 0) { throw "msstore publish exited with $LASTEXITCODE" }
+
+      # continue-on-error hides a failed submission behind a green tick, so say it out loud.
+      - name: Warn when the Store submission failed
+        if: steps.store_submit.outcome == 'failure'
+        shell: bash
+        run: echo "::warning title=Microsoft Store::The Store submission failed, so the Store still has the previous version. See the step above."
 
       - name: Package macOS app
         if: runner.os == 'macOS'

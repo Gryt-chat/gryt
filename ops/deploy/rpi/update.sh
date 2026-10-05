@@ -802,9 +802,8 @@ update_service() {
     echo "[$(date -Is)] [$service] deployed ${target:0:12}"
 }
 
-# Share pictures for card links (GRYT-1673). Built from services/og in the ui checkout, which
-# update_service ui has just moved, and rebuilt only when that folder changes. One container:
-# it holds nothing but a RAM cache, so it is replaced in place rather than swapped.
+# Share pictures for card links (GRYT-1673), rebuilt when services/og in the ui checkout changes.
+# One container holding only a RAM cache, so it's replaced in place rather than swapped.
 update_og() {
     local statefile="$STATE/og.tree"
     local failedfile="$STATE/og.failed"

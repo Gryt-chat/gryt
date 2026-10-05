@@ -230,5 +230,26 @@ result restores cleanly, so nothing tells you the last few minutes are gone.
 Uploads go through `mc mirror`, so the copy is a consistent view of the bucket
 rather than files caught mid-write.
 
-Both copies land on the same disk as the thing they back up. Nothing copies
-them off the VM yet.
+Both land on the VM's own disk first. Unraid then pulls the newest snapshot each
+night onto its parity array, into the `gryt-backups` share where dev.lan's
+Keycloak dumps already go (GRYT-798), and keeps 31 days there too.
+
+It's a pull because the VM is in the DMZ and can't reach the LAN, and shouldn't.
+Unraid's key is limited on the VM to `backup-export.sh`, which writes the newest
+snapshot as a tar to stdout, so a stolen copy of that key can read last night's
+backup and nothing else.
+
+Setting it up, once:
+
+```bash
+# On Unraid. The key lives on /boot because /root is wiped on every boot.
+mkdir -p /boot/config/gryt-backup
+ssh-keygen -t ed25519 -N "" -C unraid-gryt-backup -f /boot/config/gryt-backup/id_ed25519
+cat /boot/config/gryt-backup/id_ed25519.pub
+
+# On the VM: the export script, and the key limited to it.
+sudo install -m 0755 backup-export.sh /opt/gryt-community/backup-export.sh
+echo 'restrict,command="/opt/gryt-community/backup-export.sh" ssh-ed25519 AAAA… unraid-gryt-backup' >> ~/.ssh/authorized_keys
+
+# On Unraid: unraid-pull.sh as a User Script, scheduled daily after the VM's backup.
+```

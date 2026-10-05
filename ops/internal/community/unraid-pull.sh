@@ -13,7 +13,9 @@ tmp="$(mktemp -d "$DEST/.incoming.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
 
 # The key is restricted on the VM to backup-export.sh, so whatever is asked, that runs.
-ssh -i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VM" true | tar -C "$tmp" -xf -
+# Its own known_hosts: /root/.ssh is on the flash drive, where ssh can't link its usual one.
+ssh -i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+  -o UserKnownHostsFile="$(dirname "$KEY")/known_hosts" "$VM" true | tar -C "$tmp" -xf -
 snapshot="$(ls "$tmp")"
 [[ -n "$snapshot" && -s "$tmp/$snapshot/gryt.db.gz" ]] || { echo "pulled nothing usable" >&2; exit 1; }
 if [[ -e "$DEST/$snapshot" ]]; then

@@ -47,8 +47,34 @@
 
 :8084 {
 	header -Via
-	reverse_proxy {file./etc/caddy/live/ui}:80 {
-		header_up -Via
-		lb_try_duration 5s
+
+	# A shared card link (GRYT-1673): its preview picture, and the page that points at it.
+	@ogImage path /og/card.jpg
+	@sharedCard {
+		path /card /card/
+		expression {http.request.uri.query} != ""
+	}
+
+	handle @ogImage {
+		reverse_proxy og:8080 {
+			header_up -Via
+		}
+	}
+
+	# Falls through to the site when og is down, so the link still opens with the usual preview.
+	handle @sharedCard {
+		reverse_proxy og:8080 {file./etc/caddy/live/ui}:80 {
+			header_up -Via
+			lb_policy first
+			fail_duration 30s
+			lb_try_duration 5s
+		}
+	}
+
+	handle {
+		reverse_proxy {file./etc/caddy/live/ui}:80 {
+			header_up -Via
+			lb_try_duration 5s
+		}
 	}
 }

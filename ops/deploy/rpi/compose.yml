@@ -126,3 +126,20 @@ services:
   ui-green:
     <<: *ui
     container_name: gryt-ui-green
+
+  # Share pictures for card links (GRYT-1673). One container, not two colours: it only caches.
+  # The cache is RAM, so the SD card sees no writes, and Caddy falls back to the site without it.
+  og:
+    build:
+      context: ./ui/services/og
+      network: host
+    image: gryt-og:local
+    container_name: gryt-og
+    restart: unless-stopped
+    environment:
+      UI_ORIGIN: http://proxy:8084
+      PUBLIC_ORIGIN: https://ui.gryt.chat
+    tmpfs:
+      - /cache:size=64m,uid=1000
+      - /tmp
+    healthcheck: *first-check

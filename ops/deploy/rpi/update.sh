@@ -660,6 +660,7 @@ build_args() {
         site) echo "$BASE/site $BASE/site/Dockerfile gryt-site:local" ;;
         docs) echo "$BASE/docs $BASE/local/Dockerfile.docs gryt-docs:local" ;;
         ui)   echo "$BASE/ui $BASE/ui/Dockerfile gryt-ui:local" ;;
+        og)   echo "$BASE/ui/services/og $BASE/ui/services/og/Dockerfile gryt-og:local" ;;
         *)    return 1 ;;
     esac
 }
@@ -700,8 +701,12 @@ build_service() {
         echo "[$(date -Is)] [$service] $REMOTE_BUILDER unreachable; building locally"
     fi
 
+    # og is one container; the sites build from their blue service.
+    local target="$service-blue"
+    [[ "$service" == og ]] && target=og
+
     status_code=0
-    timeout "$BUILD_TIMEOUT" docker compose -f "$COMPOSE" build "$service-blue" || status_code=$?
+    timeout "$BUILD_TIMEOUT" docker compose -f "$COMPOSE" build "$target" || status_code=$?
     return "$status_code"
 }
 
@@ -795,6 +800,52 @@ update_service() {
     rm -f "$failedfile" "$rebuildfile"
 
     echo "[$(date -Is)] [$service] deployed ${target:0:12}"
+}
+
+# Share pictures for card links (GRYT-1673). Built from services/og in the ui checkout, which
+# update_service ui has just moved, and rebuilt only when that folder changes. One container:
+# it holds nothing but a RAM cache, so it is replaced in place rather than swapped.
+update_og() {
+    local statefile="$STATE/og.tree"
+    local failedfile="$STATE/og.failed"
+    local tree attempts status_code=0
+
+    echo
+    echo "[$(date -Is)] [og] checking"
+
+    if ! tree="$(git -C "$BASE/ui" rev-parse HEAD:services/og 2>/dev/null)"; then
+        echo "[$(date -Is)] [og] no services/og in the ui checkout yet"
+        return 0
+    fi
+
+    if [[ "$(cat "$statefile" 2>/dev/null)" == "$tree" ]] && running og; then
+        echo "[$(date -Is)] [og] current ${tree:0:12}"
+        return 0
+    fi
+
+    if attempts="$(backing_off "$failedfile" "$tree")"; then
+        echo "[$(date -Is)] [og] ${tree:0:12} previously failed ${attempts}x; retry later"
+        return 1
+    fi
+
+    if [[ "$(cat "$statefile" 2>/dev/null)" != "$tree" ]] || ! docker image inspect gryt-og:local >/dev/null 2>&1; then
+        build_service og || status_code=$?
+        if (( status_code != 0 )); then
+            attempts="$(back_off "$failedfile" "$tree")"
+            echo "[$(date -Is)] [og] BUILD FAILED (${attempts}x in a row); card links fall back to the usual preview"
+            return 1
+        fi
+    fi
+
+    if ! docker compose -f "$COMPOSE" up -d --no-deps --no-build --force-recreate og; then
+        attempts="$(back_off "$failedfile" "$tree")"
+        echo "[$(date -Is)] [og] START FAILED (${attempts}x in a row)"
+        return 1
+    fi
+
+    printf '%s\n' "$tree" > "$statefile"
+    rm -f "$failedfile"
+    echo "[$(date -Is)] [og] running ${tree:0:12}"
 }
 
 # The web clients are images, so there's no commit to compare. The tag stays the same and
@@ -910,6 +961,7 @@ fi
 update_service site site || status=1
 update_service docs docs || status=1
 update_service ui ui || status=1
+update_og || status=1
 
 update_image app || status=1
 update_image beta || status=1

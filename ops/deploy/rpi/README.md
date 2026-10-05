@@ -23,6 +23,13 @@ Caddy runs as `gryt-proxy` and holds all five ports. It sends each port to one
 container of the pair, and `proxy/live/<site>` says which one. The other
 container is stopped, except while a deploy has both running.
 
+`gryt-og` is the exception: one container, no pair. On 8084, Caddy sends
+`/og/card.jpg` and `/card` links that carry a card to it, so a shared card
+previews as that card (GRYT-1673). It caches pictures in a 64 MB tmpfs, so
+it writes nothing to the SD card, and when it's down a card link opens with
+the usual preview. `update.sh` rebuilds it when `services/og` in the ui
+checkout changes.
+
 The Cloudflare tunnel runs on the Pi as `cloudflared.service`, set up with a
 token. The routes from hostname to port live in the Cloudflare dashboard, so no
 file here has them. The connector on dev.lan reaches the same ports as

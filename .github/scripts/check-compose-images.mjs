@@ -41,11 +41,12 @@ function isComposeFile(path) {
   return json !== "null" && json !== "{}";
 }
 
-/** [{ image, key, file }] for every service with an `image:` in one compose file. */
+/** [{ image, key, file }] for every pulled service in one compose file. One with a
+ *  `build:` is built on the host (gryt-og:local), so there's nothing to pull. */
 function imagesInComposeFile(path) {
   const json = run("yq", [
     "-o=json",
-    '[.services | to_entries[] | select(.value | has("image")) | {"key": .key, "image": .value.image}]',
+    '[.services | to_entries[] | select((.value | has("image")) and (.value | has("build") | not)) | {"key": .key, "image": .value.image}]',
     `${ROOT}${path}`,
   ]);
   return JSON.parse(json).map((e) => ({ ...e, file: path }));

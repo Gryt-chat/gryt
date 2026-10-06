@@ -48,10 +48,10 @@
 :8084 {
 	header -Via
 
-	# A shared card link (GRYT-1673): its preview picture, and the page that points at it.
-	@ogImage path /og/card.jpg
+	# A shared card, owl or egg link (GRYT-1673): its preview picture, and the page that points at it.
+	@ogImage path /og/card.jpg /og/owl.jpg /og/egg.jpg
 	@sharedCard {
-		path /card /card/
+		path /card /card/ /avatars /avatars/ /eggs /eggs/
 		expression {http.request.uri.query} != ""
 	}
 

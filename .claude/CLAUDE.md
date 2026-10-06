@@ -139,32 +139,36 @@ moved and its gitlink never did either. A new submodule needs the three shared
 workflows copied into it: this one, `bump-gitlink.yml` and `discord-ci-notify.yml`.
 None of them arrive on their own.
 
-Moving a task is not exposed by the Vikunja MCP server, so use the REST API directly:
+Use the `vikunja` MCP server for task work: reading, creating, commenting and moving.
+It's Vikunja's own, at `https://tasks.sivert.io/api/v2/mcp`, and replaced the old
+community one on 2026-09-29. That one escaped HTML and couldn't move tasks, which is why
+this section used to send you to the REST API.
 
-```bash
-# bucket ids: resolve by title from /projects/2/views/<kanban view>/buckets
-POST /api/v1/projects/2/views/12/buckets/<bucket>/tasks   {"task_id": <id>}
+**Moving a card is an action, not a field.** `tasks_update` accepts a `bucket_id`,
+echoes it back and leaves the card where it was. Move it with `task_bucket_update`
+through `do_action` (find it with `find_action` under `task`):
+
+```
+do_action task_bucket_update {"project": 2, "view": 12, "bucket": <id>, "task_id": <task id>}
 ```
 
-Moving a card into **Done** does **not** set its `done` flag. That needs its own write,
-and the write replaces the whole task, so send the whole task back:
+Bucket ids on the Kanban view (12): To-Do 7, Doing 8, Review 10, Done 9. `task_id` is the
+task's own id, not the number in `GRYT-123`; read it off `tasks_list`.
 
-```bash
-GET  /api/v1/tasks/<id>                  # the full task object
-POST /api/v1/tasks/<id>   <that object, with "done": true>
-```
+**Moving a card into Done does not set its `done` flag.** The view has no done bucket
+configured, so that takes a second write: `tasks_update` with `{"task": <id>, "title":
+<its title>, "done": true}`. Unlike the REST API, the MCP's update only changes the fields
+you send, so the description survives.
 
-This file claimed the opposite until 2026-08-18, and the CI workflow was written to match,
-so every task CI closed sat in the Done column reporting `done: false`. Thirteen of them
-had built up. They read as finished on the board and as open to anything filtering on
-`done`, and nothing failed on the way — which is why it went unnoticed for so long. Fixed
-in the reusable workflow, but do the second write yourself when moving a task by hand.
+This file claimed moving set the flag until 2026-08-18, and the CI workflow was written to
+match, so every task CI closed sat in the Done column reporting `done: false`. Thirteen of
+them had built up. Fixed in the reusable workflow, but do the second write yourself when
+moving a task by hand.
 
-Until 2026-09-15 the example above was `POST /api/v1/tasks/<id> {"done": true}` on its
-own. Vikunja treats that as the complete task, so it set the flag and emptied the
-description. Fourteen tasks lost theirs in one day before an agent noticed, and they came
-back only because the text was still in session transcripts. The same goes for any other
-field: never POST a partial task.
+**If you fall back to REST**, because the MCP server isn't answering, its write replaces
+the whole task. `POST /api/v1/tasks/<id> {"done": true}` on its own sets the flag and
+empties the description, which is how fourteen tasks lost theirs on 2026-09-15. GET the
+full task, change what you need, and POST all of it back. Never POST a partial task.
 
 If something merges outside a PR, or CI fails, **check the Review column at the start of
 Vikunja work and close anything whose PR has landed.**

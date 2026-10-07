@@ -1,0 +1,465 @@
+{
+  "uid": "gryt-push",
+  "title": "Gryt push",
+  "tags": [
+    "gryt",
+    "push"
+  ],
+  "timezone": "utc",
+  "editable": true,
+  "refresh": "5m",
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "schemaVersion": 39,
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Pushes, last 24h",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "push-prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum (gryt_push_sent_total) - (sum (gryt_push_sent_total offset 1d) or sum (gryt_push_sent_total) * 0)",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "blue"
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Pushes, last 7 days",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "push-prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum (gryt_push_sent_total) - (sum (gryt_push_sent_total offset 7d) or sum (gryt_push_sent_total) * 0)",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "blue"
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Pushes, last 30 days",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "push-prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum (gryt_push_sent_total) - (sum (gryt_push_sent_total offset 30d) or sum (gryt_push_sent_total) * 0)",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "blue"
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Pushes, all time",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "push-prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum(gryt_push_sent_total)",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "blue"
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Phones signed up",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "push-prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum(gryt_push_devices)",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "blue"
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Relay up",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "push-prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"gryt-push\"}",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "red"
+              },
+              {
+                "value": 1,
+                "color": "green"
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN"
+                },
+                "1": {
+                  "text": "UP"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Pushes per day (by kind)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "push-prometheus"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "interval": "1d",
+      "maxDataPoints": 400,
+      "targets": [
+        {
+          "expr": "sum by (kind) (gryt_push_sent_total) - (sum by (kind) (gryt_push_sent_total offset 1d) or sum by (kind) (gryt_push_sent_total) * 0)",
+          "legendFormat": "{{kind}}",
+          "interval": "1d"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Pushes per week",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "push-prometheus"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "interval": "7d",
+      "maxDataPoints": 400,
+      "targets": [
+        {
+          "expr": "sum (gryt_push_sent_total) - (sum (gryt_push_sent_total offset 7d) or sum (gryt_push_sent_total) * 0)",
+          "legendFormat": "pushes",
+          "interval": "7d"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Phones signed up (by platform)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "push-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "targets": [
+        {
+          "expr": "sum by (platform) (gryt_push_devices)",
+          "legendFormat": "{{platform}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "fillOpacity": 10
+          }
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Sign-ups and dead tokens per day",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "push-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "interval": "1d",
+      "targets": [
+        {
+          "expr": "sum (gryt_push_registrations_total) - (sum (gryt_push_registrations_total offset 1d) or sum (gryt_push_registrations_total) * 0)",
+          "legendFormat": "sign-ups",
+          "interval": "1d"
+        },
+        {
+          "expr": "sum (gryt_push_gone_total) - (sum (gryt_push_gone_total offset 1d) or sum (gryt_push_gone_total) * 0)",
+          "legendFormat": "dead tokens",
+          "interval": "1d"
+        },
+        {
+          "expr": "sum (gryt_push_failed_total) - (sum (gryt_push_failed_total offset 1d) or sum (gryt_push_failed_total) * 0)",
+          "legendFormat": "failed",
+          "interval": "1d"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70
+          }
+        }
+      }
+    }
+  ]
+}

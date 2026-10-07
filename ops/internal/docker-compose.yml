@@ -164,7 +164,32 @@ services:
       - gryt-reports-data:/data
     restart: unless-stopped
 
+  # The push relay (push.gryt.chat, GRYT-1656). Gryt servers post a capability and
+  # a kind here, and it forwards a fixed notification to Apple or Google.
+  push:
+    image: ghcr.io/gryt-chat/push:${PUSH_IMAGE_TAG:-latest}
+    container_name: gryt-push
+    ports:
+      - "${INTERNAL_PUSH_HTTP_PORT:-9477}:8080"
+    environment:
+      PUSH_VERSION: "${PUSH_IMAGE_TAG:-latest}"
+      # Behind the tunnel, like reports. Without the list anything on the LAN could
+      # claim any address and dodge the per-address limits.
+      TRUST_PROXY: "true"
+      TRUSTED_PROXIES: "${PUSH_TRUSTED_PROXIES:-}"
+      # The keys are files, mounted read-only and owned by the container's user (1001).
+      APNS_KEY_PATH: /keys/apns.p8
+      APNS_KEY_ID: "${PUSH_APNS_KEY_ID:-}"
+      APNS_TEAM_ID: "${PUSH_APNS_TEAM_ID:-8883W2XTQ8}"
+      APNS_TOPIC: "${PUSH_APNS_TOPIC:-chat.gryt.app}"
+      FCM_SERVICE_ACCOUNT_PATH: /keys/fcm.json
+    volumes:
+      - gryt-push-data:/data
+      - ${PUSH_KEYS_DIR:-./push-keys}:/keys:ro
+    restart: unless-stopped
+
 volumes:
   gryt-fider-pg-data:
   # Every report anyone has ever sent. There are no off-box backups of this.
   gryt-reports-data:
+  gryt-push-data:

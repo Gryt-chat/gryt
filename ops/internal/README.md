@@ -7,6 +7,7 @@ This folder contains **internal** infrastructure used to run:
 - `ui.gryt.chat` (the `@gryt/ui` component library docs)
 - `feedback.gryt.chat` (Fider feature requests board)
 - `reports.gryt.chat` (bug reports and feedback from inside the apps, and the inbox at `/admin`)
+- `push.gryt.chat` (the push relay that wakes phones, see [`packages/push`](../../packages/push/README.md))
 - `community.gryt.chat` (the one Gryt server we run — see [`community/`](community/))
 - `status.gryt.chat` (the public status page — see [`status/`](status/))
 
@@ -56,6 +57,7 @@ You must use unique host ports. Configure them in `ops/internal/.env`:
 - `INTERNAL_UI_HTTP_PORT` (default `9475`)
 - `FIDER_HTTP_PORT` (default `9473`)
 - `INTERNAL_REPORTS_HTTP_PORT` (default `9476`)
+- `INTERNAL_PUSH_HTTP_PORT` (default `9477`)
 
 ## Fider auth: use Gryt Auth (Keycloak OIDC)
 
@@ -90,6 +92,24 @@ In Fider (admin): **Site Settings → Authentication → Add New**
 
 Use Fider’s **Test** button before enabling the provider.
 
+## The push relay
+
+It needs two keys, and both stay off git:
+
+- `push-keys/apns.p8`, the APNs auth key from developer.apple.com, team 8883W2XTQ8.
+  Its key id goes in `.env` as `PUSH_APNS_KEY_ID`.
+- `push-keys/fcm.json`, the service account key from the `gryt-feab7` Firebase project.
+
+The container runs as uid 1001, so both files are owned by 1001 with mode `600`. Set
+`PUSH_TRUSTED_PROXIES` to the address of the host running the tunnel, as with reports.
+
+```bash
+docker compose --env-file ops/internal/.env -f ops/internal/docker-compose.yml up -d --no-deps push
+```
+
+`curl http://127.0.0.1:9477/healthz` answers with the version, and the log's first line
+says which platforms have keys.
+
 ## Cloudflared (what to forward)
 
 - `gryt.chat` → `http://127.0.0.1:<INTERNAL_SITE_HTTP_PORT>`
@@ -97,8 +117,9 @@ Use Fider’s **Test** button before enabling the provider.
 - `ui.gryt.chat` → `http://127.0.0.1:<INTERNAL_UI_HTTP_PORT>`
 - `feedback.gryt.chat` → `http://127.0.0.1:<FIDER_HTTP_PORT>`
 - `reports.gryt.chat` → `http://127.0.0.1:<INTERNAL_REPORTS_HTTP_PORT>`
+- `push.gryt.chat` → `http://127.0.0.1:<INTERNAL_PUSH_HTTP_PORT>`
 
-All five should be **proxied** and routed through the same Cloudflare Tunnel.
+All six should be **proxied** and routed through the same Cloudflare Tunnel.
 
 `reports.gryt.chat` is the only one of these that takes POSTs from strangers, so it is
 also the only one where a Cloudflare rate limit in front earns its keep. The service rate

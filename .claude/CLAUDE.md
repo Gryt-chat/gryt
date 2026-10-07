@@ -1,7 +1,7 @@
 # Working rules for Gryt
 
 Gryt is a WebRTC voice chat platform maintained by one person. It's a superproject with
-fifteen git submodules under `packages/`. Read these rules before making changes.
+sixteen git submodules under `packages/`. Read these rules before making changes.
 
 ## Review-required paths
 
@@ -14,6 +14,7 @@ packages/auth/**                                   # identity certificate author
 packages/crypto/**                                 # message encryption, published to npm
 packages/image-worker/**                           # decodes untrusted uploads
 packages/reports/**                                # public POST endpoint, stranger-written input
+packages/push/**                                   # public POST endpoint, holds the APNs and FCM keys
 packages/server/src/auth/**                        # challenge-response, JWT validation
 packages/server/src/middleware/**                  # request auth
 packages/server/src/db/**                          # persistence
@@ -47,7 +48,7 @@ and a published version cannot be taken back the way a commit can. It is also th
 place where getting the bytes wrong makes messages already sent unreadable rather than
 making the next one fail.
 
-Three of these look like exceptions but aren't:
+Four of these look like exceptions but aren't:
 
 - **`packages/image-worker`** compresses avatars and makes thumbnails, which sounds like a
   utility. It also hands stranger-uploaded files to an image decoder. Untrusted input
@@ -55,8 +56,11 @@ Three of these look like exceptions but aren't:
 - **`packages/client/src/packages/common/src/auth/`** sits inside the client, where UI code
   gets normal review. These specific files hold the user's private key.
 - **`packages/reports`** takes bug reports and feedback from inside the apps, which sounds
-  like a form handler. It is also the only Gryt service with an endpoint anyone on the
+  like a form handler. It is also one of two Gryt services with an endpoint anyone on the
   internet can POST to, it parses whatever they send, and it stores IP addresses.
+- **`packages/push`** only forwards a random ID and a word, which sounds harmless. It is the
+  other endpoint anyone can POST to, and it holds the Apple and Google keys that can put a
+  notification on every phone with Gryt installed.
 
 Everything else — docs, the site, client UI, `ops/`, build scripts, CI config, tests — gets
 normal review.
@@ -129,7 +133,7 @@ a public repository. The kanban board is the state: **To-Do → Doing → Review
 
 CI covers the last two through `.github/workflows/vikunja-task-done.yml`, which calls a
 reusable workflow in `Gryt-chat/.github`. Every repo has it — the superproject and all
-fifteen submodules — so you don't normally need to touch a task after opening the PR.
+sixteen submodules — so you don't normally need to touch a task after opening the PR.
 
 This paragraph said "all ten submodules" and named `ui` as the last one missing it,
 fixed by GRYT-143 on 2026-08-11. That stopped being true when submodules were added

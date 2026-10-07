@@ -58,3 +58,7 @@
 	path = packages/core
 	url = https://github.com/Gryt-chat/core.git
 	branch = main
+[submodule "push"]
+	path = packages/push
+	url = https://github.com/Gryt-chat/push.git
+	branch = main

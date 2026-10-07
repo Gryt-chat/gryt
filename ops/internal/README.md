@@ -58,6 +58,8 @@ You must use unique host ports. Configure them in `ops/internal/.env`:
 - `FIDER_HTTP_PORT` (default `9473`)
 - `INTERNAL_REPORTS_HTTP_PORT` (default `9476`)
 - `INTERNAL_PUSH_HTTP_PORT` (default `9477`)
+- `INTERNAL_PUSH_PROMETHEUS_PORT` (default `9479`, localhost only)
+- `INTERNAL_PUSH_GRAFANA_PORT` (default `9480`, localhost only)
 
 ## Fider auth: use Gryt Auth (Keycloak OIDC)
 
@@ -109,6 +111,30 @@ docker compose --env-file ops/internal/.env -f ops/internal/docker-compose.yml u
 
 `curl http://127.0.0.1:9477/healthz` answers with the version, and the log's first line
 says which platforms have keys.
+
+### How many pushes go out
+
+The relay counts pushes per day by platform and kind, plus sign-ups and dead tokens.
+It doesn't count anything per phone or per server (GRYT-1695). `push-prometheus`
+scrapes those counts every minute and keeps them for 10 years, and `push-grafana`
+draws them: pushes per day and per week, totals, and how many phones are signed up.
+
+```bash
+docker compose --env-file ops/internal/.env -f ops/internal/docker-compose.yml up -d --no-deps push push-prometheus push-grafana
+```
+
+Both only listen on localhost. To look at the graphs from your own machine:
+
+```bash
+ssh -L 9480:127.0.0.1:9480 edition35   # then open http://localhost:9480
+```
+
+Viewing doesn't need a login. Editing a dashboard needs `PUSH_GRAFANA_ADMIN_PASSWORD`.
+For a quick number without Grafana, the relay answers on its metrics port inside the network:
+
+```bash
+docker exec gryt-push-prometheus wget -qO- 'http://push:9091/stats?days=7'
+```
 
 ## Cloudflared (what to forward)
 

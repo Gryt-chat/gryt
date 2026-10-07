@@ -50,6 +50,8 @@ skills-lock.json
 .DS_Store
 
 # Release/download binaries (served by the hosted site; never commit)
+# The push relay's Apple and Google keys, on the box that runs it.
+ops/internal/push-keys/
 ops/internal/downloads/**
 !ops/internal/downloads/.gitkeep
 

@@ -7,12 +7,7 @@ source "${ROOT_DIR}/ops/dev/common.env.sh"
 
 cd "${ROOT_DIR}/packages/server"
 
-# Build env for optional deps
-if [[ "${DEV_WITH_S3:-1}" == "1" ]]; then
-  export S3_ENDPOINT S3_REGION S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET S3_FORCE_PATH_STYLE
-else
-  export DISABLE_S3=true
-fi
+export S3_BUCKET
 
 export PORT=5000
 export SERVER_NAME=ws1

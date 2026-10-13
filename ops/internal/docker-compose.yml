@@ -101,6 +101,8 @@ services:
       REPORTS_AUTO_BAN_WINDOW_H: "${REPORTS_AUTO_BAN_WINDOW_H:-24}"
       REPORTS_AUTO_BAN_DAYS: "${REPORTS_AUTO_BAN_DAYS:-7}"
       REPORTS_ADMIN_TOKEN: "${REPORTS_ADMIN_TOKEN:-}"
+      # Lets the game list's daily job read the app ids desktops couldn't name.
+      REPORTS_UNKNOWN_APPS_TOKEN: "${REPORTS_UNKNOWN_APPS_TOKEN:-}"
       REPORTS_PUBLIC_URL: "${REPORTS_PUBLIC_URL:-https://reports.gryt.chat}"
       REPORTS_CORS_ORIGINS: "${REPORTS_CORS_ORIGINS:-https://app.gryt.chat,https://beta.gryt.chat}"
       REPORTS_REQUIRE_SIGNATURE: "${REPORTS_REQUIRE_SIGNATURE:-false}"

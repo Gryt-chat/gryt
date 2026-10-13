@@ -190,6 +190,17 @@ which releases have no note, how to get a commit range out of two manifests, and
 where the MDX goes. A script on the box used to do this and wrote 105 drafts for
 4 published notes, so it was removed in GRYT-861 and the job is done here.
 
+### New features go on /features
+
+When a release's changelog line has a `new` change somebody would notice, add a card for
+it to `packages/site/src/data/features.ts` in the same site PR as the line. It goes under
+the minor line it first shipped in, and only once it's on latest: a beta-only feature
+waits. If it was on the page's "upcoming" list, take it off there.
+
+On 2026-10-13 a pass over every merged PR found fourteen shipped features missing from
+the page, moderation and who-can-join among them, some from August. Nothing had failed.
+The changelog had the lines and nobody carried them over.
+
 ### Anything you defer gets a task
 
 If you write "separate decision", "out of scope", "your call" or "follow-up" in a PR

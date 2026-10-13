@@ -16,15 +16,9 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 DEV_WITH_DB="${DEV_WITH_DB:-1}"
-DEV_WITH_S3="${DEV_WITH_S3:-1}"
 
-# ── Dev dependency config ────────────────────────────────────────────
-MINIO_ROOT_USER="${MINIO_ROOT_USER:-minioadmin}"
-MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-minioadmin}"
+# Uploads land in a folder under each server's DATA_DIR.
 S3_BUCKET="${S3_BUCKET:-gryt}"
-S3_ENV="S3_ENDPOINT=http://127.0.0.1:9000 S3_REGION=us-east-1 S3_ACCESS_KEY_ID=${MINIO_ROOT_USER} S3_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD} S3_BUCKET=${S3_BUCKET} S3_FORCE_PATH_STYLE=true"
-
-S3_DISABLE_ENV="DISABLE_S3=true"
 
 # The server hands SFU_PUBLIC_HOST straight to the client, which dials it, so a
 # placeholder guarantees a failed voice connect.
@@ -131,32 +125,6 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
   fi
 fi
 
-# ── Docker deps (MinIO) ─────────────────────────────────────────────
-if [[ "$DEV_WITH_S3" == "1" ]]; then
-  if ! command -v docker >/dev/null 2>&1; then
-    echo "Docker is required. Install Docker or set DEV_WITH_S3=0." >&2
-    exit 1
-  fi
-  if ! docker info >/dev/null 2>&1; then
-    echo "Docker daemon is not running." >&2
-    exit 1
-  fi
-
-  echo "Starting dev dependencies (MinIO)..."
-  docker compose -f ops/deploy/compose/dev-deps.yml up -d --wait 2>/dev/null \
-    || docker compose -f ops/deploy/compose/dev-deps.yml up -d
-
-  wait_for_tcp 127.0.0.1 9000 "MinIO" 60
-  wait_for_http "http://127.0.0.1:9000/minio/health/ready" "MinIO" 60 || true
-  # Best-effort init (compose service) + explicit bucket ensure (so avatar/file uploads don't 502).
-  docker compose -f ops/deploy/compose/dev-deps.yml up -d minio-init >/dev/null 2>&1 || true
-  echo "Ensuring MinIO bucket exists: ${S3_BUCKET}"
-  docker run --rm --network host --entrypoint /bin/sh pgsty/mc:RELEASE.2026-09-16T00-00-00Z -lc "\
-    mc alias set local http://127.0.0.1:9000 '${MINIO_ROOT_USER}' '${MINIO_ROOT_PASSWORD}' >/dev/null 2>&1 \
-    && mc mb -p 'local/${S3_BUCKET}' >/dev/null 2>&1 || true"
-  echo ""
-fi
-
 # ── Local auth (Keycloak + Postgres) ─────────────────────────────────
 if [[ "$DEV_WITH_AUTH" == "1" ]]; then
   if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
@@ -252,10 +220,8 @@ wait
 echo ""
 
 # ── Build env strings for servers ────────────────────────────────────
-WS_S3_ENV="$S3_DISABLE_ENV"
-[[ "$DEV_WITH_S3" == "1" ]] && WS_S3_ENV="$S3_ENV"
 
-COMMON_ENV="HOST=${HOST} CORS_ORIGIN=${CORS_ORIGIN} GRYT_AUTH_MODE=${GRYT_AUTH_MODE} GRYT_IDENTITY_TIERS=${GRYT_IDENTITY_TIERS} GRYT_OIDC_ISSUER=${GRYT_OIDC_ISSUER} GRYT_OIDC_AUDIENCE=${GRYT_OIDC_AUDIENCE} GRYT_TRUSTED_CERT_ISSUERS=${GRYT_TRUSTED_CERT_ISSUERS} JWT_SECRET=${JWT_SECRET} SERVER_PASSWORD=${SERVER_PASSWORD} SFU_WS_HOST=${SFU_WS_HOST} SFU_PUBLIC_HOST=${SFU_PUBLIC_HOST} STUN_SERVERS=${STUN_SERVERS} ${WS_S3_ENV}"
+COMMON_ENV="HOST=${HOST} CORS_ORIGIN=${CORS_ORIGIN} GRYT_AUTH_MODE=${GRYT_AUTH_MODE} GRYT_IDENTITY_TIERS=${GRYT_IDENTITY_TIERS} GRYT_OIDC_ISSUER=${GRYT_OIDC_ISSUER} GRYT_OIDC_AUDIENCE=${GRYT_OIDC_AUDIENCE} GRYT_TRUSTED_CERT_ISSUERS=${GRYT_TRUSTED_CERT_ISSUERS} JWT_SECRET=${JWT_SECRET} SERVER_PASSWORD=${SERVER_PASSWORD} SFU_WS_HOST=${SFU_WS_HOST} SFU_PUBLIC_HOST=${SFU_PUBLIC_HOST} STUN_SERVERS=${STUN_SERVERS} S3_BUCKET=${S3_BUCKET}"
 
 # The client reads these at build time through config.ts. Without them the browser
 # signs in against production Keycloak while the servers only trust the local CA.

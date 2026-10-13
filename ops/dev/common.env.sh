@@ -3,20 +3,10 @@ set -euo pipefail
 
 # Shared dev defaults for running components in separate terminals.
 
-# Dev defaults: run with local MinIO (full feature set for object storage)
 export DEV_WITH_DB="${DEV_WITH_DB:-1}"
-export DEV_WITH_S3="${DEV_WITH_S3:-1}"
 
-# Local dev dependency config (only used when DEV_WITH_S3 enabled)
-
-export MINIO_ROOT_USER="${MINIO_ROOT_USER:-minioadmin}"
-export MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-minioadmin}"
+# Uploads go to a folder under each server's DATA_DIR. No object store to start.
 export S3_BUCKET="${S3_BUCKET:-gryt}"
-export S3_ENDPOINT="${S3_ENDPOINT:-http://127.0.0.1:9000}"
-export S3_REGION="${S3_REGION:-us-east-1}"
-export S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID:-$MINIO_ROOT_USER}"
-export S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-$MINIO_ROOT_PASSWORD}"
-export S3_FORCE_PATH_STYLE="${S3_FORCE_PATH_STYLE:-true}"
 
 # Local defaults for SFU + STUN in dev
 export SFU_WS_HOST="${SFU_WS_HOST:-ws://127.0.0.1:9092}"

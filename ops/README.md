@@ -5,7 +5,7 @@ Operational scripts and deployment artifacts.
 ### For self-hosters (public)
 
 - `ops/deploy/host/compose.yml` — production-style Docker Compose stack (Cloudflare Tunnel friendly)
-- `ops/deploy/compose/prod.yml`, `beta.yml`, `dev.yml`, `dev-deps.yml` — additional compose stacks used during development/testing
+- `ops/deploy/compose/prod.yml`, `beta.yml`, `dev.yml` — additional compose stacks used during development/testing
 - `ops/helm/gryt/*` — Kubernetes Helm chart
 
 ### For contributors (public)

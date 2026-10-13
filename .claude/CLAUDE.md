@@ -244,8 +244,9 @@ worse, and don't "fix" it as a drive-by.
 ./ops/start_dev.sh
 ```
 
-Starts MinIO, the SFU, the Vite client on `:3666`, and two servers on `:5001`/`:5002` in a
-tmux session named `gryt`. Local overrides go in `ops/.env` (gitignored).
+Starts the SFU, the Vite client on `:3666`, and two servers on `:5001`/`:5002` in a tmux
+session named `gryt`. Uploads go on disk under each server's `DATA_DIR`, and there's no
+MinIO. Local overrides go in `ops/.env` (gitignored).
 
 ## Production server
 

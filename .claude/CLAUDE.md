@@ -68,6 +68,10 @@ normal review.
 If you change the list above, change [`about/ai.mdx`](../packages/docs/content/docs/about/ai.mdx)
 in the same breath. Those two drifting apart is the failure mode that matters most here.
 
+Each of those repos also has a `.github/CODEOWNERS` with the same paths. That's what makes
+GitHub ask Sivert to review a PR touching them, so update it too. It only requests the
+review and blocks nothing. A PR outside these paths doesn't need him assigned.
+
 ## Git
 
 **Never push to `main`.** It's the only long-lived branch. Always work on a branch and open

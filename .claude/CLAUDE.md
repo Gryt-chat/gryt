@@ -197,6 +197,11 @@ it to `packages/site/src/data/features.ts` in the same site PR as the line. It g
 the minor line it first shipped in, and only once it's on latest: a beta-only feature
 waits. If it was on the page's "upcoming" list, take it off there.
 
+The docs roadmap at `packages/docs/content/docs/about/roadmap.mdx` gets the same change in
+a docs PR: mark the item ✅, or add it, and bump the "last checked" date. It's a separate
+page in a separate repository, and the /features rule alone let it drift. On 2026-10-14
+polls and mini mode were both still "planned" there, a week after shipping.
+
 On 2026-10-13 a pass over every merged PR found fourteen shipped features missing from
 the page, moderation and who-can-join among them, some from August. Nothing had failed.
 The changelog had the lines and nobody carried them over.

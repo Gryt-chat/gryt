@@ -249,6 +249,16 @@ in the client and `^0.3.2` in mobile, which is what this is meant to stop: a sha
 on two versions is two implementations again. If one app needs a version the other can't
 take yet, that's the thing to fix.
 
+## Dependencies
+
+**Keep them few, and build what we reasonably can ourselves.** A dependency that breaks,
+changes its licence, gets abandoned or gets compromised takes Gryt down with it. Before you
+add an npm package, a Go module or code ported from another project, check whether a small
+version of our own does the job. If it doesn't, ask first and say why it can't be ours. That
+goes for your own changes, not only for outside pull requests. Decided 2026-10-15.
+
+Outside contributors sign the CLA in `Gryt-chat/.github` before anything of theirs merges.
+
 ## Package manager
 
 Use **yarn, never npm**. `packages/client` and `packages/server` both ship `yarn.lock` and

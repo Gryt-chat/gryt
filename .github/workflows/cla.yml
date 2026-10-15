@@ -1,0 +1,15 @@
+name: CLA
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+  issue_comment:
+    types: [created]
+
+permissions:
+  pull-requests: read
+  actions: write
+
+jobs:
+  cla:
+    uses: Gryt-chat/.github/.github/workflows/cla.yml@main

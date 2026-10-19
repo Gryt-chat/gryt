@@ -140,6 +140,24 @@ solves the task.
 That is not hypothetical. On 2026-10-19 a lint PR put a disable comment at the top of 151
 files, and the server half autofixed imports in 160 more. Both were redone as config-only.
 
+### Stacks, when the split pieces build on each other
+
+Use `gh stack` (the github/gh-stack extension). Each layer is its own PR, and
+`gh stack merge` lands the whole stack on main in one go, or none of it.
+
+- Run it in a full clone, not a worktree. In a worktree it reads the main checkout's HEAD
+  and its stale local `main`. Something like
+  `git clone --reference "$(git -C packages/<pkg> rev-parse --git-common-dir)" git@github-gryt:Gryt-chat/<pkg>.git .claude/worktrees/<task>-stack`.
+- `gh stack submit --auto` opens drafts with made-up titles. Set the title and body, then
+  `gh pr ready`.
+- Merge with `gh stack merge --squash --yes` once every layer is green. Never merge one layer
+  with `gh pr merge`.
+
+Don't build a stack by hand by pointing a PR's base at another PR's branch. Auto-delete of
+head branches is off in every Gryt-chat repo, so GitHub never retargets the child. It
+merges into its parent's branch, shows as merged, and never reaches main. That happened to
+server #5 and #6 on 2026-08-05.
+
 ## Task tracking
 
 Tasks live in Vikunja, project `GRYT`. Sivert has the address; it is not written down in

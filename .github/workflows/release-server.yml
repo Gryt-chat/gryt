@@ -428,7 +428,7 @@ jobs:
           (cd packages/image-worker && npx tsc)
 
           echo "Linting server..."
-          (cd packages/server && npx eslint src/)
+          (cd packages/server && npx eslint --flag unstable_native_nodejs_ts_config src/)
 
           echo "Checking SFU build..."
           (cd packages/sfu && go vet ./... && go build -o /dev/null ./cmd/sfu)

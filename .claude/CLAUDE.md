@@ -124,6 +124,22 @@ tracker they can't reach.
 **Keep `Co-Authored-By` trailers on every commit.** The public policy tells readers to audit
 AI involvement with `git log`. Stripping the trailer breaks a promise Gryt made in writing.
 
+## PR size
+
+Sivert reads every PR line by line, so a PR he can't read in one sitting doesn't get a real
+review. Keep each one small, and use the `ponytail` skill: the smallest change that fully
+solves the task.
+
+- Aim for under ~10 files and a few hundred changed lines. Over that, split it, and say in
+  the PR body what the next one carries.
+- No autofix sweeps, renames or reformatting across files as a side effect of something
+  else. A new lint rule lands with its existing violations listed in the lint config, and
+  the fixes follow in small PRs of their own.
+- Mechanical changes go in a PR of their own, never mixed into one that changes behaviour.
+
+That is not hypothetical. On 2026-10-19 a lint PR put a disable comment at the top of 151
+files, and the server half autofixed imports in 160 more. Both were redone as config-only.
+
 ## Task tracking
 
 Tasks live in Vikunja, project `GRYT`. Sivert has the address; it is not written down in

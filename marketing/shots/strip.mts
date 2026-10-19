@@ -21,12 +21,15 @@
  * a pixel offset that has to be recomputed when the device size changes.
  */
 
-import sharp from "sharp";
+import sharp, { type OverlayOptions } from "sharp";
+import type { Font } from "fontkit";
 
-import { baselineOffset, fit, glyphs, measure, wrap } from "./text.mjs";
+import type { CommandSpec, HeadlineSpec, ShotSet, Theme } from "./shots.config.mts";
+
+import { baselineOffset, fit, glyphs, measure, wrap } from "./text.mts";
 
 /** Strip units to pixels. `x` is in panels, `y` is a fraction of panel height. */
-const px = (value, span) => Math.round(value * span);
+const px = (value: number, span: number) => Math.round(value * span);
 
 /**
  * Refuse a block of text that crosses a panel edge.
@@ -37,7 +40,7 @@ const px = (value, span) => Math.round(value * span);
  * So it throws rather than warns: the strip renders fine and every panel is
  * wrong, which is the sort of thing that ships.
  */
-function assertWithinPanel(spec, widthUnits, label) {
+function assertWithinPanel(spec: { x: number }, widthUnits: number, label: string): void {
   const panel = Math.floor(spec.x);
   const end = spec.x + widthUnits;
   if (end > panel + 1 + 1e-9) {
@@ -57,7 +60,17 @@ function assertWithinPanel(spec, widthUnits, label) {
  * canvas to fit the rotation, so the placement is computed from the *rotated*
  * size and the caller positions by centre rather than by corner.
  */
-async function placeDevice({ framed, widthPx, angle, centreX, centreY }) {
+export interface Framed { buffer: Buffer; width: number; height: number }
+
+interface Block<S> { font: Font; theme: Theme; spec: S; W: number; H: number }
+
+async function placeDevice({ framed, widthPx, angle, centreX, centreY }: {
+  framed: Framed;
+  widthPx: number;
+  angle: number;
+  centreX: number;
+  centreY: number;
+}): Promise<OverlayOptions> {
   const height = Math.round(framed.height * (widthPx / framed.width));
 
   let buffer = await sharp(framed.buffer).resize(widthPx, height, { fit: "fill" }).png().toBuffer();
@@ -84,7 +97,7 @@ async function placeDevice({ framed, widthPx, angle, centreX, centreY }) {
  * baseline: a set where every headline sits at the same y in the same size is
  * the symmetric arrangement this is trying to get away from.
  */
-function textBlock({ font, theme, spec, W, H }) {
+function textBlock({ font, theme, spec, W, H }: Block<HeadlineSpec>): string {
   const style = theme.text[spec.style ?? "headline"];
   const x = px(spec.x, W);
   const y = px(spec.y, H);
@@ -92,7 +105,7 @@ function textBlock({ font, theme, spec, W, H }) {
   assertWithinPanel(spec, widthUnits, `text "${spec.text.slice(0, 32)}…"`);
   const maxWidth = px(widthUnits, W);
 
-  const out = [];
+  const out: string[] = [];
   let cursor = y;
 
   if (spec.eyebrow) {
@@ -149,7 +162,7 @@ function textBlock({ font, theme, spec, W, H }) {
 }
 
 /** The command chip, in strip coordinates. */
-function commandBlock({ font, theme, spec, W, H }) {
+function commandBlock({ font, theme, spec, W, H }: Block<CommandSpec>): string {
   const c = theme.command;
   const x = px(spec.x, W);
   const y = px(spec.y, H);
@@ -187,17 +200,17 @@ function commandBlock({ font, theme, spec, W, H }) {
 const REFERENCE_WIDTH = 1320;
 
 /** Every length in the theme, scaled to this device's panel. */
-function scaleTheme(theme, k) {
+function scaleTheme(theme: Theme, k: number): Theme {
   if (k === 1) return theme;
-  const scale = (v) => (typeof v === "number" ? Math.round(v * k * 100) / 100 : v);
+  const scale = (v: unknown) => (typeof v === "number" ? Math.round(v * k * 100) / 100 : v);
   const lengths = new Set([
     "size", "tracking", "inset", "gap", "height", "pad", "radius", "lineHeight",
   ]);
 
-  const walk = (node) => {
+  const walk = (node: unknown): unknown => {
     if (Array.isArray(node)) return node.map((v) => (typeof v === "number" ? scale(v) : walk(v)));
     if (!node || typeof node !== "object") return node;
-    const out = {};
+    const out: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(node)) {
       if (key === "lineHeight") out[key] = value; // a ratio, not a length
       else if (key === "sizes" && Array.isArray(value)) out[key] = value.map(scale);
@@ -206,10 +219,18 @@ function scaleTheme(theme, k) {
     }
     return out;
   };
-  return walk(theme);
+  // Same shape out as in, with the lengths scaled.
+  return walk(theme) as Theme;
 }
 
-export async function renderStrip({ set, W, H, font, framedFor, owlTiles }) {
+export async function renderStrip({ set, W, H, font, framedFor, owlTiles }: {
+  set: ShotSet;
+  W: number;
+  H: number;
+  font: Font;
+  framedFor: (slug: string | null) => Promise<Framed>;
+  owlTiles?: OverlayOptions[];
+}): Promise<{ cuts: Buffer[]; strip: Buffer }> {
   const theme = scaleTheme(set.theme, W / REFERENCE_WIDTH);
   /* The number of cuts, from the filenames rather than a `panels` array. A
      strip has no per-panel objects — that is the point of it — so the slug list
@@ -217,8 +238,8 @@ export async function renderStrip({ set, W, H, font, framedFor, owlTiles }) {
   const count = set.slugs.length;
   const stripW = W * count;
 
-  const svg = [];
-  const layers = [];
+  const svg: string[] = [];
+  const layers: OverlayOptions[] = [];
 
   if (theme.ground.type === "gradient") {
     const { from, to } = theme.ground;
@@ -242,7 +263,7 @@ export async function renderStrip({ set, W, H, font, framedFor, owlTiles }) {
   }
 
   for (const spec of set.text ?? []) {
-    svg.push(spec.command ? commandBlock({ font, theme, spec, W, H }) : textBlock({ font, theme, spec, W, H }));
+    svg.push("command" in spec ? commandBlock({ font, theme, spec, W, H }) : textBlock({ font, theme, spec, W, H }));
   }
 
   for (const tile of owlTiles ?? []) layers.push(tile);
@@ -272,7 +293,7 @@ export async function renderStrip({ set, W, H, font, framedFor, owlTiles }) {
     .png()
     .toBuffer();
 
-  const cuts = [];
+  const cuts: Buffer[] = [];
   for (let i = 0; i < count; i++) {
     cuts.push(
       await sharp(strip)

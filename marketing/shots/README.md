@@ -7,8 +7,8 @@ run off one panel and arrive in the next.
 ```bash
 cd marketing/shots
 yarn install
-node capture.mjs iphone-6.9 voice       # once per capture, app driven by hand
-node render.mjs                        # writes panels/<set>/<device>/
+node capture.mts iphone-6.9 voice       # once per capture, app driven by hand
+node render.mts                        # writes panels/<set>/<device>/
 ```
 
 `panels/` is what you upload, and it is committed. It is not called `out/`
@@ -31,7 +31,7 @@ is running.
 
 `frames/` is gitignored. Device frames are Apple's and Google's marketing
 assets and this repository is public, so they are not committed. Download them
-and drop them in with the exact filenames `devices.mjs` names:
+and drop them in with the exact filenames `devices.mts` names:
 
 | Device | File | Where |
 |---|---|---|
@@ -39,7 +39,7 @@ and drop them in with the exact filenames `devices.mjs` names:
 | iPad 13" | `iPad Pro 13 - Silver - Portrait.png` | same |
 | Android phone | `android-phone.png` | [Android device art generator](https://developer.android.com/distribute/marketing-tools/device-art-generator) |
 
-`render.mjs` fails with the missing path rather than rendering something wrong.
+`render.mts` fails with the missing path rather than rendering something wrong.
 
 ## One strip, cut into panels
 
@@ -62,7 +62,7 @@ own. No panel may be only the middle of a phone.
 **Text may not cross a panel edge.** A phone crossing one is the point; a
 headline crossing one is a word chopped in half in the cut, and it is invisible
 while you are looking at the uncut strip — which is exactly when the layout gets
-adjusted. `strip.mjs` throws rather than warns, and names the `maxWidth` that
+adjusted. `strip.mts` throws rather than warns, and names the `maxWidth` that
 would fit.
 
 Two more things worth knowing:
@@ -89,7 +89,7 @@ resampling; anything else is resized with a warning.
 
 App Store: 1 to 10 per set, flattened PNG or JPEG, **no alpha channel** — a PNG
 carrying one uploads and then fails validation without saying why, which is why
-`render.mjs` flattens.
+`render.mts` flattens.
 
 ## Measuring a frame
 
@@ -97,7 +97,7 @@ The aperture is measured from the alpha every run, not written down, so
 replacing a frame when the hardware changes needs no code edit:
 
 ```bash
-node measure-frame.mjs "frames/iPhone 17 Pro - Silver - Portrait.png" 1206 2622
+node measure-frame.mts "frames/iPhone 17 Pro - Silver - Portrait.png" 1206 2622
 ```
 
 A whole-image transparent bounding box gives the wrong answer — outside the
@@ -119,7 +119,7 @@ fine. Two things are not:
 
 ## What is not done
 
-**Android.** `devices.mjs` has the entry and the sizes are right — Play takes
+**Android.** `devices.mts` has the entry and the sizes are right — Play takes
 1080 to 3840 for phone, minimum two, and a separate tablet set of at least four
 at 9:16, plus a 1024x500 feature graphic. There are no captures, because this
 machine has the Android command-line tools and no `adb`, no emulator binary and
@@ -130,16 +130,16 @@ Gradle build of the app.
 publishes the machine's microphone to a live shared server, which is not
 something to do quietly; screen share has no simulator path at all.
 
-**Getting to a screen** is still by hand. `capture.mjs` does not drive the app —
+**Getting to a screen** is still by hand. `capture.mts` does not drive the app —
 a script guessing at deep links produces a screenshot of the wrong screen, which
 looks finished and is not.
 
 ## The owls
 
 `@gryt/owl` renders SVG from pure functions with no DOM, so the wall in panel
-five is real output from the seeds in `shots.config.mjs` rather than a picture
+five is real output from the seeds in `shots.config.mts` rather than a picture
 of some owls. Add seeds until there are at least `rows x columns` of them —
-below that they repeat and `render.mjs` says so.
+below that they repeat and `render.mts` says so.
 
 ## Colours
 

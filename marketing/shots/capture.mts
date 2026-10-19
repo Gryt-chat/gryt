@@ -24,22 +24,24 @@ import { fileURLToPath } from "node:url";
 
 import sharp from "sharp";
 
-import { DEVICES } from "./devices.mjs";
+import { DEVICES } from "./devices.mts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-function simctl(args) {
+function simctl(args: string[]): string {
   return execFileSync("xcrun", ["simctl", ...args], { encoding: "utf8" });
 }
 
-function bootedUdids() {
-  const json = JSON.parse(simctl(["list", "devices", "booted", "--json"]));
+function bootedUdids(): { udid: string; name: string }[] {
+  const json = JSON.parse(simctl(["list", "devices", "booted", "--json"])) as {
+    devices: Record<string, { udid: string; name: string }[]>;
+  };
   return Object.values(json.devices)
     .flat()
     .map((d) => ({ udid: d.udid, name: d.name }));
 }
 
-export function capture({ deviceId, slug }) {
+export function capture({ deviceId, slug }: { deviceId: string; slug: string }): string {
   const device = DEVICES[deviceId];
   if (!device) throw new Error(`unknown device "${deviceId}"`);
   if (!device.simulator) {
@@ -80,7 +82,7 @@ export function capture({ deviceId, slug }) {
  * argv is not, so on macOS anything under /tmp compares false and the CLI
  * silently does nothing. Resolving both is the fix.
  */
-function isMain(metaUrl) {
+function isMain(metaUrl: string): boolean {
   if (!process.argv[1]) return false;
   try {
     return realpathSync(fileURLToPath(metaUrl)) === realpathSync(process.argv[1]);
@@ -92,7 +94,7 @@ function isMain(metaUrl) {
 if (isMain(import.meta.url)) {
   const [deviceId, slug] = process.argv.slice(2);
   if (!deviceId || !slug) {
-    console.error("usage: node capture.mjs <device> <slug>");
+    console.error("usage: node capture.mts <device> <slug>");
     console.error(`devices: ${Object.keys(DEVICES).join(", ")}`);
     process.exit(1);
   }

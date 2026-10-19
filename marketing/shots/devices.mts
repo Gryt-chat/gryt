@@ -29,7 +29,19 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const framesDir = join(here, "frames");
 
-export const DEVICES = {
+export interface Size { width: number; height: number }
+
+export interface Device {
+  label: string;
+  store: "app-store" | "play" | "microsoft";
+  output: Size;
+  capture: Size;
+  frame: string | null;
+  cornerRadius?: number;
+  simulator: string | null;
+}
+
+export const DEVICES: Record<string, Device> = {
   /**
    * The one App Store set that is actually required for an iPhone app.
    * 1290x2796 is accepted too; 1320x2868 is what Apple recommends, and a set
@@ -86,7 +98,7 @@ export const DEVICES = {
    *
    * `simulator` is null and it always will be. Nothing here boots: desktop.cjs
    * drives the real renderer in a hidden Electron window, which is the whole
-   * reason the desktop set does not go through capture.mjs.
+   * reason the desktop set does not go through capture.mts.
    */
   desktop: {
     label: "Windows desktop",
@@ -109,7 +121,7 @@ export const DEVICES = {
  * iPhone set uses a frame because Apple's own asset is to hand and the aperture
  * matches the simulator at 1:1.
  */
-export function resolveFrame(deviceId) {
+export function resolveFrame(deviceId: string): string | null {
   const device = DEVICES[deviceId];
   if (!device) throw new Error(`unknown device "${deviceId}"`);
   if (!device.frame) return null;

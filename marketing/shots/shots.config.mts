@@ -6,7 +6,7 @@
  * **A strip, not six cards.** Everything below is placed against one canvas six
  * panels wide and cut at the end, so a phone can leave one panel and arrive in
  * the next. Scrolling the carousel then reads as panning across one picture.
- * See `strip.mjs`.
+ * See `strip.mts`.
  *
  * Coordinates are in strip units: `x` counts panels across, `y` is a fraction
  * of panel height. `x: 1.6` is a little past halfway through panel two.
@@ -28,6 +28,67 @@
  * near-black `#111318` is deliberate: on a shelf of dark-grey chat apps, indigo
  * is the thing that reads from a thumbnail.
  */
+export interface HeadlineStyle {
+  sizes: number[];
+  weight: number;
+  tracking: number;
+  lineHeight: number;
+  maxLines: number;
+  color: string;
+  inset: number;
+}
+
+export interface Theme {
+  ground: { type: "gradient"; from: string; to: string } | { type: "solid"; color: string };
+  text: {
+    eyebrow: { size: number; weight: number; tracking: number; color: string; gap: number; onBandColor: string };
+    headline: HeadlineStyle;
+    headlineSm: HeadlineStyle;
+    onBand: HeadlineStyle;
+    sub: { size: number; weight: number; lineHeight: number; color: string; gap: number };
+  };
+  command: {
+    height: number;
+    radius: number;
+    pad: number;
+    size: number;
+    prompt: string;
+    fill: string;
+    stroke: string;
+    color: string;
+    promptColor: string;
+  };
+  owlTile: { radius: number };
+}
+
+export interface HeadlineSpec {
+  x: number;
+  y: number;
+  style?: "headline" | "headlineSm" | "onBand";
+  eyebrow?: string;
+  text: string;
+  sub?: string;
+  maxWidth?: number;
+}
+
+export interface CommandSpec { x: number; y: number; command: string }
+
+export interface PhoneSpec { x: number; y: number; width: number; angle?: number; screenshot?: string }
+
+export interface OwlWall { x: number; y: number; columns: number; rows: number; gap: number; cell: number; seeds: string[] }
+
+export interface ShotSet {
+  slug: string;
+  devices: string[];
+  theme: Theme;
+  bands?: { x: number; y?: number; width: number; height?: number; fill: string }[];
+  text?: (HeadlineSpec | CommandSpec)[];
+  phones?: PhoneSpec[];
+  owls?: OwlWall;
+  perDevice?: Record<string, Pick<ShotSet, "phones" | "owls">>;
+  slugs: string[];
+}
+
 const C = {
   ground: "#2E2D5F",
   groundDeep: "#232249",
@@ -38,7 +99,7 @@ const C = {
   dim: "#BFBCE0",
 };
 
-const theme = {
+const theme: Theme = {
   ground: { type: "gradient", from: C.ground, to: C.groundDeep },
 
   text: {
@@ -71,7 +132,7 @@ const theme = {
   owlTile: { radius: 40 },
 };
 
-export const sets = [
+export const sets: ShotSet[] = [
   {
     slug: "launch",
     devices: ["iphone-6.9", "ipad-13", "android-phone"],

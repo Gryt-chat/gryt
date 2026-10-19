@@ -8,13 +8,24 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-const SCRIPT = new URL("check-release-line.mjs", import.meta.url).pathname;
+const SCRIPT = new URL("check-release-line.mts", import.meta.url).pathname;
 const dir = mkdtempSync(join(tmpdir(), "release-line-"));
 const today = new Date().toISOString().slice(0, 10);
 
 /** A releases.ts holding exactly the entries given, in the site's shape. */
-function fixture(name, { app = [], server = [], voice = [], images = [], areas }) {
-  const entries = (list) =>
+interface Entry { version: string; date: string | null; line?: string }
+
+function fixture(
+  name: string,
+  { app = [], server = [], voice = [], images = [], areas }: {
+    app?: Entry[];
+    server?: Entry[];
+    voice?: Entry[];
+    images?: Entry[];
+    areas?: Record<string, string>;
+  },
+): string {
+  const entries = (list: Entry[]) =>
     list
       .map(
         ({ version, date, line = "Something changed." }) =>
@@ -41,7 +52,7 @@ function fixture(name, { app = [], server = [], voice = [], images = [], areas }
 }
 
 /** Runs the gate and hands back its exit code and combined output. */
-function run(source, ...args) {
+function run(source: string, ...args: string[]): { code: number; out: string } {
   try {
     const stdout = execFileSync("node", [SCRIPT, ...args], {
       env: { ...process.env, GRYT_RELEASES_URL: source },
@@ -49,7 +60,8 @@ function run(source, ...args) {
       stdio: ["ignore", "pipe", "pipe"],
     });
     return { code: 0, out: stdout };
-  } catch (e) {
+  } catch (error) {
+    const e = error as { status: number; stdout?: string; stderr?: string };
     return { code: e.status, out: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }

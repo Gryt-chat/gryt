@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * What changed between two releases, as the body of a GitHub release.
  */
@@ -10,7 +8,7 @@
 /* Both manifests name the commit each component was built from, so the range per
    component is a subtraction and each merged PR in it is one line of `git log`. */
 
-/* node .github/scripts/release-notes.mjs --previous <manifest.json>
+/* node .github/scripts/release-notes.mts --previous <manifest.json>
    --current <manifest.json> [--repo-root .] [--title ...] [--details <file>] */
 
 /* `--title` names the product, because one caller releases the server rather than
@@ -36,7 +34,7 @@ const title = args.get("title") ?? "Gryt";
 const detailsPath = args.get("details");
 
 if (!currentPath) {
-  console.error("usage: release-notes.mjs --current <manifest.json> [--previous <manifest.json>]");
+  console.error("usage: release-notes.mts --current <manifest.json> [--previous <manifest.json>]");
   process.exit(1);
 }
 
@@ -56,12 +54,12 @@ const COMPONENTS = [
 
 /* --- reading a component's history --------------------------------------- */
 
-function git(cwd, cmdArgs) {
+function git(cwd: string, cmdArgs: string[]): string {
   return execFileSync("git", cmdArgs, { cwd, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
 }
 
 /** Does this repository have that commit? A shallow clone often does not. */
-function has(cwd, commit) {
+function has(cwd: string, commit: string): boolean {
   try {
     git(cwd, ["cat-file", "-e", `${commit}^{commit}`]);
     return true;
@@ -76,7 +74,9 @@ function has(cwd, commit) {
 
 /* `--first-parent` is what turns a branch's worth of commits into one line per
    pull request, rather than everything somebody pushed while working. */
-function commits(cwd, from, to) {
+interface Commit { sha: string; subject: string; body: string }
+
+function commits(cwd: string, from: string, to: string): Commit[] {
   const out = git(cwd, [
     "log",
     "--first-parent",
@@ -103,7 +103,7 @@ function commits(cwd, from, to) {
 
 /* Anything with no number is still listed: a commit pushed straight to main is
    exactly the kind of thing worth seeing in a release note. */
-function describe(commit) {
+function describe(commit: Commit): { title: string; pr: number | null } {
   const squashed = /^(.*)\s+\(#(\d+)\)\s*$/.exec(commit.subject);
   if (squashed) return { title: squashed[1].trim(), pr: Number(squashed[2]) };
 
@@ -120,7 +120,7 @@ function describe(commit) {
  * Commits that are about cutting a release rather than about the product. The
  * version bump each component makes on its own release is always there.
  */
-function isRelease(title) {
+function isRelease(title: string): boolean {
   return /^(release|chore\(release\)):/i.test(title) || /^v?\d+\.\d+\.\d+/.test(title);
 }
 

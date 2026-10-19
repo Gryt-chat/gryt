@@ -22,7 +22,7 @@
    network. The workflow re-uploads over the draft release, which nobody can see. */
 
 /*
- *   node relink-appimage-fuse.mjs --runtime <static-runtime> --dir <releaseDir>
+ *   node relink-appimage-fuse.mts --runtime <static-runtime> --dir <releaseDir>
  */
 
 /* Run from packages/client, where js-yaml resolves. Exits non-zero and changes
@@ -37,7 +37,7 @@ import fs from "node:fs";
 const require = createRequire(path.join(process.cwd(), "package.json"));
 const yaml = require("js-yaml");
 
-function arg(name) {
+function arg(name: string) {
   const i = process.argv.indexOf(`--${name}`);
   return i === -1 ? null : process.argv[i + 1];
 }
@@ -68,13 +68,13 @@ if (appImages.length === 0) {
 }
 
 /** sha512 as base64, the shape electron-updater writes and checks. */
-function sha512b64(buf) {
+function sha512b64(buf: Buffer) {
   return crypto.createHash("sha512").update(buf).digest("base64");
 }
 
 // The payload offset is the size of the current runtime. Ask the AppImage rather
 // than parsing the ELF: --appimage-offset needs no FUSE.
-function payloadOffset(file) {
+function payloadOffset(file: string) {
   // Absolute path: a bare name would be looked up in $PATH, and the exec bit
   // because a copied-in artifact may have lost it.
   const abs = path.resolve(file);
@@ -119,7 +119,7 @@ for (const name of appImages) {
 
   let found = false;
   for (const y of ymlDocs) {
-    const entry = (y.doc.files ?? []).find((f) => f.url === name);
+    const entry = (y.doc.files ?? []).find((f: { url: string }) => f.url === name);
     if (entry) {
       entry.sha512 = sha512;
       entry.size = size;

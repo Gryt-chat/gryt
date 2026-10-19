@@ -64,6 +64,6 @@ jobs:
       - run: node .github/scripts/check-publishers-dispatched.mts
       - run: node .github/scripts/check-offline-page.mts
       - run: node .github/scripts/check-comment-length.mts
-      - run: node --test .github/scripts/check-release-line.test.mjs
-      - run: node --test .github/scripts/checkout-release-tag.test.mjs
-      - run: node --test .github/scripts/beta-follows-latest.test.mjs
+      - run: node --test .github/scripts/check-release-line.test.mts
+      - run: node --test .github/scripts/checkout-release-tag.test.mts
+      - run: node --test .github/scripts/beta-follows-latest.test.mts

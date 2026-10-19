@@ -21,10 +21,10 @@ const ENV = {
   GIT_CONFIG_GLOBAL: "/dev/null",
 };
 
-const git = (cwd, ...args) => execFileSync("git", args, { cwd, env: ENV, encoding: "utf8" }).trim();
+const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, env: ENV, encoding: "utf8" }).trim();
 
 let n = 0;
-function commit(repo) {
+function commit(repo: string): string {
   writeFileSync(join(repo, "file"), String(++n));
   git(repo, "add", "file");
   git(repo, "commit", "--quiet", "-m", `commit ${n}`);
@@ -32,10 +32,10 @@ function commit(repo) {
 }
 
 /** An origin whose main carries each tag given, in order, plus one untagged commit on top. */
-function origin(name, tags) {
+function origin(name: string, tags: string[]): { repo: string; at: Record<string, string> } {
   const repo = join(dir, name);
   git(dir, "init", "--quiet", "--initial-branch=main", repo);
-  const at = {};
+  const at: Record<string, string> = {};
   for (const tag of tags) {
     at[tag] = commit(repo);
     git(repo, "tag", tag);
@@ -44,19 +44,20 @@ function origin(name, tags) {
   return { repo, at };
 }
 
-function clone(from, name) {
+function clone(from: { repo: string }, name: string): string {
   const path = join(dir, name);
   git(dir, "clone", "--quiet", from.repo, path);
   return path;
 }
 
 /** Runs the script and hands back its exit code, its output, and where the clone ended up. */
-function run(path, channel) {
+function run(path: string, channel: string): { code: number; out: string; head: string } {
   let code = 0;
-  let out;
+  let out: string;
   try {
     out = execFileSync("bash", [SCRIPT, path, channel], { env: ENV, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  } catch (e) {
+  } catch (error) {
+    const e = error as { status: number; stdout?: string; stderr?: string };
     code = e.status;
     out = `${e.stdout ?? ""}${e.stderr ?? ""}`;
   }

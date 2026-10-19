@@ -27,20 +27,26 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { owlAvatarSvg } from "@gryt/owl";
-import sharp from "sharp";
+import sharp, { type OverlayOptions } from "sharp";
 
-import { DEVICES, resolveFrame } from "./devices.mjs";
-import { measureAperture } from "./measure-frame.mjs";
-import { renderStrip } from "./strip.mjs";
-import { loadFont } from "./text.mjs";
+import { DEVICES, resolveFrame } from "./devices.mts";
+import { measureAperture } from "./measure-frame.mts";
+import type { OwlWall, ShotSet, Theme } from "./shots.config.mts";
+import { type Framed, renderStrip } from "./strip.mts";
+import { loadFont } from "./text.mts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
 /* ─────────────────────────────────────────────────────────── the device ── */
 
-const apertureCache = new Map();
+interface Fitted {
+  framePath: string | null;
+  aperture: { x: number; y: number; width: number; height: number; warnings?: string[] };
+}
 
-async function apertureFor(deviceId) {
+const apertureCache = new Map<string, Fitted>();
+
+async function apertureFor(deviceId: string): Promise<Fitted> {
   if (!apertureCache.has(deviceId)) {
     const device = DEVICES[deviceId];
     const framePath = resolveFrame(deviceId);
@@ -52,7 +58,7 @@ async function apertureFor(deviceId) {
         framePath: null,
         aperture: { x: 0, y: 0, ...device.capture, warnings: [] },
       });
-      return apertureCache.get(deviceId);
+      return apertureCache.get(deviceId)!;
     }
 
     const aperture = await measureAperture(framePath, device.capture);
@@ -61,7 +67,7 @@ async function apertureFor(deviceId) {
     }
     apertureCache.set(deviceId, { framePath, aperture });
   }
-  return apertureCache.get(deviceId);
+  return apertureCache.get(deviceId)!;
 }
 
 /**
@@ -70,7 +76,7 @@ async function apertureFor(deviceId) {
  * `screenshotPath` may be null, which gives an empty frame — the outline
  * panels in the second template, and what you get before any captures exist.
  */
-export async function composeDevice(deviceId, screenshotPath) {
+export async function composeDevice(deviceId: string, screenshotPath: string | null): Promise<Framed> {
   const { framePath, aperture } = await apertureFor(deviceId);
   const device = DEVICES[deviceId];
 
@@ -78,7 +84,7 @@ export async function composeDevice(deviceId, screenshotPath) {
     ? await sharp(framePath).metadata()
     : device.capture;
 
-  const layers = [];
+  const layers: OverlayOptions[] = [];
 
   /* A missing capture renders the empty frame rather than failing. The layout
      is worth seeing before any screenshots exist, and it is the honest state
@@ -151,7 +157,12 @@ export async function composeDevice(deviceId, screenshotPath) {
  * carries its own full-bleed background rect, and nesting twenty of those in
  * one document leaves the corner rounding to librsvg.
  */
-async function owlTiles({ owls, theme, W, H }) {
+async function owlTiles({ owls, theme, W, H }: {
+  owls: OwlWall | undefined;
+  theme: Theme;
+  W: number;
+  H: number;
+}): Promise<OverlayOptions[]> {
   if (!owls) return [];
 
   const cell = Math.round(owls.cell * W);
@@ -169,7 +180,7 @@ async function owlTiles({ owls, theme, W, H }) {
     `<svg xmlns="http://www.w3.org/2000/svg" width="${cell}" height="${cell}"><rect width="${cell}" height="${cell}" rx="${theme.owlTile.radius}" fill="#fff"/></svg>`,
   );
 
-  const tiles = [];
+  const tiles: OverlayOptions[] = [];
   for (let i = 0; i < wanted; i++) {
     const flat = await sharp(Buffer.from(owlAvatarSvg(owls.seeds[i % owls.seeds.length], {})))
       .resize(cell, cell)
@@ -186,14 +197,18 @@ async function owlTiles({ owls, theme, W, H }) {
 
 /* ─────────────────────────────────────────────────────────────── the set ── */
 
-export async function renderSet({ set, deviceId, outDir }) {
+export async function renderSet({ set, deviceId, outDir }: {
+  set: ShotSet;
+  deviceId: string;
+  outDir: string;
+}): Promise<{ file: string; width: number; height: number }[]> {
   const device = DEVICES[deviceId];
   const { width: W, height: H } = device.output;
   const font = await loadFont();
 
   /* Composed once per distinct screenshot. Three of the five placements in a
      set reuse a capture across devices, and framing is the expensive step. */
-  const cache = new Map();
+  const cache = new Map<string, Framed>();
   /**
    * A capture is named by slug, and the path is per device.
    *
@@ -203,13 +218,13 @@ export async function renderSet({ set, deviceId, outDir }) {
    * carry a phone capture, which is the mistake the earlier hardcoded paths
    * made silently and at the wrong resolution.
    */
-  const framedFor = async (slug) => {
+  const framedFor = async (slug: string | null) => {
     const key = slug ?? "";
     if (!cache.has(key)) {
       const path = slug ? join(here, "captures", deviceId, `${slug}.png`) : null;
       cache.set(key, await composeDevice(deviceId, path));
     }
-    return cache.get(key);
+    return cache.get(key)!;
   };
 
   /**
@@ -239,7 +254,7 @@ export async function renderSet({ set, deviceId, outDir }) {
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
 
-  const written = [];
+  const written: { file: string; width: number; height: number }[] = [];
   for (const [i, buffer] of cuts.entries()) {
     const name = `${String(i + 1).padStart(2, "0")}-${resolved.slugs[i] ?? `panel-${i + 1}`}.png`;
     const file = join(outDir, name);
@@ -264,7 +279,7 @@ export async function renderSet({ set, deviceId, outDir }) {
  * argv is not, so on macOS anything under /tmp compares false and the CLI
  * silently does nothing. Resolving both is the fix.
  */
-function isMain(metaUrl) {
+function isMain(metaUrl: string): boolean {
   if (!process.argv[1]) return false;
   try {
     return realpathSync(fileURLToPath(metaUrl)) === realpathSync(process.argv[1]);
@@ -274,8 +289,8 @@ function isMain(metaUrl) {
 }
 
 if (isMain(import.meta.url)) {
-  const [configPath = "./shots.config.mjs", ...only] = process.argv.slice(2);
-  const { sets } = await import(configPath.startsWith(".") ? join(here, configPath) : configPath);
+  const [configPath = "./shots.config.mts", ...only] = process.argv.slice(2);
+  const { sets } = (await import(configPath.startsWith(".") ? join(here, configPath) : configPath)) as { sets: ShotSet[] };
 
   for (const set of sets) {
     for (const deviceId of set.devices) {
@@ -286,7 +301,7 @@ if (isMain(import.meta.url)) {
         const written = await renderSet({ set, deviceId, outDir });
         for (const w of written) console.log(`  ${basename(w.file)}  ${w.width}x${w.height}`);
       } catch (err) {
-        console.error(`  skipped: ${err.message}`);
+        console.error(`  skipped: ${(err as Error).message}`);
       }
     }
   }

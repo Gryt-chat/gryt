@@ -32,9 +32,19 @@ import { fileURLToPath } from "node:url";
 
 import sharp from "sharp";
 
+import type { Size } from "./devices.mts";
+
 const ALPHA_THRESHOLD = 8; // anything below this is transparent enough to be screen
 
-export async function measureAperture(framePath, expected) {
+interface Rect { x: number; y: number; width: number; height: number }
+
+export interface Aperture extends Rect {
+  source: "measured" | "derived";
+  measured?: Rect;
+  warnings: string[];
+}
+
+export async function measureAperture(framePath: string, expected?: Size): Promise<Aperture> {
   const image = sharp(framePath);
   const { width, height, channels } = await image.metadata();
   if (channels < 4) {
@@ -42,7 +52,7 @@ export async function measureAperture(framePath, expected) {
   }
 
   const { data } = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const alphaAt = (x, y) => data[(y * width + x) * 4 + 3];
+  const alphaAt = (x: number, y: number) => data[(y * width + x) * 4 + 3];
 
   const midY = Math.floor(height / 2);
   const midX = Math.floor(width / 2);
@@ -76,7 +86,7 @@ export async function measureAperture(framePath, expected) {
      is the device's real screen size in pixels, which is also exactly what the
      simulator captures — so when the two disagree the walk is what is wrong. */
   const derivedTop = bottom - expected.height + 1;
-  const warnings = [];
+  const warnings: string[] = [];
 
   if (measured.width !== expected.width) {
     warnings.push(
@@ -108,7 +118,7 @@ export async function measureAperture(framePath, expected) {
  * argv is not, so on macOS anything under /tmp compares false and the CLI
  * silently does nothing. Resolving both is the fix.
  */
-function isMain(metaUrl) {
+function isMain(metaUrl: string): boolean {
   if (!process.argv[1]) return false;
   try {
     return realpathSync(fileURLToPath(metaUrl)) === realpathSync(process.argv[1]);
@@ -120,7 +130,7 @@ function isMain(metaUrl) {
 if (isMain(import.meta.url)) {
   const [framePath, w, h] = process.argv.slice(2);
   if (!framePath) {
-    console.error("usage: node measure-frame.mjs <frame.png> [screenWidth screenHeight]");
+    console.error("usage: node measure-frame.mts <frame.png> [screenWidth screenHeight]");
     process.exit(1);
   }
   readFileSync(framePath); // fail loudly and early on a bad path

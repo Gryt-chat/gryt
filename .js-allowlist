@@ -7,6 +7,9 @@ docs/design/object-storage-eval/verify.cjs
 # An addon sample people copy. The client loads an addon's files as they are.
 examples/addons/example-plugin/plugin.js
 
+# Run by `npx electron` rather than node, and not tried as TypeScript there yet.
+marketing/shots/desktop.cjs
+
 # Still to move to TypeScript (GRYT-1800).
 .github/scripts/beta-follows-latest.mjs
 .github/scripts/beta-follows-latest.test.mjs
@@ -20,11 +23,3 @@ examples/addons/example-plugin/plugin.js
 .github/scripts/release-notes.mjs
 .github/scripts/relink-appimage-fuse.mjs
 .github/scripts/sync-image-issues.mjs
-marketing/shots/capture.mjs
-marketing/shots/desktop.cjs
-marketing/shots/devices.mjs
-marketing/shots/measure-frame.mjs
-marketing/shots/render.mjs
-marketing/shots/shots.config.mjs
-marketing/shots/strip.mjs
-marketing/shots/text.mjs

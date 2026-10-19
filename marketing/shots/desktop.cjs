@@ -5,11 +5,11 @@
  *   cd packages/client && npx vite --host --port 3666
  *   npx electron marketing/shots/desktop.cjs
  *
- * Separate from capture.mjs on purpose. That one drives `xcrun simctl` and
+ * Separate from capture.mts on purpose. That one drives `xcrun simctl` and
  * photographs a booted simulator, which is the only way to reach the iOS app
  * and impossible for a desktop one. This loads the real renderer into a hidden
  * Electron window instead, so nothing appears on screen and every capture comes
- * out the same size. It also means this is the one device in devices.mjs that
+ * out the same size. It also means this is the one device in devices.mts that
  * needs no simulator and no hand-driving.
  *
  * The window asks for 1920x1080 and Windows returns 2400x1350 on a 4K display

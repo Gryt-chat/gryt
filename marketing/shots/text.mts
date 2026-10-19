@@ -20,6 +20,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import * as fontkit from "fontkit";
+import type { Font } from "fontkit";
 import wawoff2 from "wawoff2";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -33,24 +34,32 @@ const here = dirname(fileURLToPath(import.meta.url));
  */
 const FONT_FILE = join(here, "fonts", "AtkinsonHyperlegibleNextVF-Variable.woff2");
 
-let cached = null;
+let cached: Font | null = null;
 
-export async function loadFont() {
+export interface TextStyle {
+  font: Font;
+  weight: number;
+  size: number;
+  tracking?: number;
+}
+
+export async function loadFont(): Promise<Font> {
   if (!cached) {
     const ttf = Buffer.from(await wawoff2.decompress(readFileSync(FONT_FILE)));
-    cached = fontkit.create(ttf);
+    // One font in the file, never a collection.
+    cached = fontkit.create(ttf) as Font;
   }
   return cached;
 }
 
 /** Where the baseline sits inside a line box, per the CSS half-leading model. */
-export function baselineOffset(font, size, lineHeight) {
+export function baselineOffset(font: Font, size: number, lineHeight: number): number {
   const { ascent, descent, unitsPerEm } = font;
   const contentHeight = ((ascent - descent) / unitsPerEm) * size;
   return (lineHeight - contentHeight) / 2 + (ascent / unitsPerEm) * size;
 }
 
-export function measure(text, { font, weight, size, tracking = 0 }) {
+export function measure(text: string, { font, weight, size, tracking = 0 }: TextStyle): number {
   const run = font.getVariation({ wght: weight }).layout(text);
   const scale = size / font.unitsPerEm;
   return run.advanceWidth * scale + tracking * Math.max(0, run.glyphs.length - 1);
@@ -60,13 +69,16 @@ export function measure(text, { font, weight, size, tracking = 0 }) {
  * One string as glyph outlines. `y` is the baseline, not the top of the line.
  * The inner scale flips Y because font outlines are drawn with Y pointing up.
  */
-export function glyphs(text, { font, weight, size, tracking = 0, x, y, fill, anchor = "start" }) {
+export function glyphs(
+  text: string,
+  { font, weight, size, tracking = 0, x, y, fill, anchor = "start" }: TextStyle & { x: number; y: number; fill: string; anchor?: "start" | "middle" | "end" },
+): string {
   const run = font.getVariation({ wght: weight }).layout(text);
   const scale = size / font.unitsPerEm;
   const trackUnits = tracking / scale;
 
   let cursor = 0;
-  const parts = [];
+  const parts: string[] = [];
   run.glyphs.forEach((glyph, i) => {
     const pos = run.positions[i];
     const d = glyph.path.toSVG();
@@ -84,9 +96,9 @@ export function glyphs(text, { font, weight, size, tracking = 0, x, y, fill, anc
 }
 
 /** Greedy wrap. Words longer than the line get their own line rather than a break. */
-export function wrap(text, maxWidth, opts) {
+export function wrap(text: string, maxWidth: number, opts: TextStyle): string[] {
   const words = String(text).split(/\s+/).filter(Boolean);
-  const lines = [];
+  const lines: string[] = [];
   let line = "";
 
   for (const word of words) {
@@ -110,7 +122,10 @@ export function wrap(text, maxWidth, opts) {
  * smallest size given, which can still overflow — the caller is told by getting
  * more lines back than it asked for.
  */
-export function fit(text, { maxWidth, maxLines, sizes, ...opts }) {
+export function fit(
+  text: string,
+  { maxWidth, maxLines, sizes, ...opts }: Omit<TextStyle, "size"> & { maxWidth: number; maxLines: number; sizes: number[] },
+): { size: number; lines: string[] } {
   for (const size of sizes) {
     const lines = wrap(text, maxWidth, { ...opts, size });
     if (lines.length <= maxLines) return { size, lines };

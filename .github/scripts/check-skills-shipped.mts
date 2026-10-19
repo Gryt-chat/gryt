@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * Every skill CLAUDE.md names is in the repository. The rule was versioned and
  * the tool was not, and it went wrong twice with nothing to notice.

@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * The page the edge serves when the origin is down, and the rules that make it
  * worth having.
@@ -16,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { isOriginDown, offlineResponse } from "../../ops/edge/src/offline.js";
+import { isOriginDown, offlineResponse } from "../../ops/edge/src/offline.ts";
 
 const edge = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "ops", "edge");
 const html = readFileSync(join(edge, "src", "offline.html"), "utf8");

@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * The winget manifests match Microsoft's schema, with the placeholders filled.
  * The far end is a review queue, where a mistake costs a person's time.
@@ -36,7 +34,7 @@ const KINDS = {
 const PLACEHOLDER_VERSION = "0.0.0";
 const PLACEHOLDER_SHA = "0".repeat(64);
 
-const read = (kind) => readFileSync(join(dir, `${PACKAGE}${kind}.yaml`), "utf8");
+const read = (kind: string) => readFileSync(join(dir, `${PACKAGE}${kind}.yaml`), "utf8");
 
 for (const [kind, type] of Object.entries(KINDS)) {
   const file = `${PACKAGE}${kind}.yaml`;

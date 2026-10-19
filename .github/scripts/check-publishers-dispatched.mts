@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * Every publish-*.yml is dispatched by Release Client. They listen for
  * `release: published`, which never fires for a release GITHUB_TOKEN published.

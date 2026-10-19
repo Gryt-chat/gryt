@@ -1,6 +1,6 @@
 /**
- * When to stand in for the origin, and what to say. Kept apart from index.js so
- * check-offline-page.mjs can import it without Wrangler's text loader.
+ * When to stand in for the origin, and what to say. Kept apart from index.ts so
+ * check-offline-page.mts can import it without Wrangler's text loader.
  */
 
 /* Cloudflare's own codes for "the origin did not answer". 530 is what a tunnel
@@ -11,7 +11,7 @@ const ORIGIN_DOWN = new Set([502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 5
  * A 500 the origin itself chose is its own to explain, so only the codes above
  * are replaced. Standing in for every 5xx would hide a real bug behind an apology.
  */
-export function isOriginDown(status) {
+export function isOriginDown(status: number): boolean {
   return ORIGIN_DOWN.has(status);
 }
 
@@ -19,7 +19,7 @@ export function isOriginDown(status) {
  * 503 rather than 200. Every status.gryt.chat check asserts on the body, so a
  * friendly page with a success code reads as an outage the monitoring calls fine.
  */
-export function offlineResponse(html) {
+export function offlineResponse(html: string): Response {
   return new Response(html, {
     status: 503,
     headers: {

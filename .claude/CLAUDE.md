@@ -482,7 +482,7 @@ no contractions anywhere across 1700 characters, and with "persistent channels"
 still in it. That exact phrase is in the skill's own examples, with the fix next
 to it.
 
-`check-skills-shipped.mjs` fails if this file names a skill the repository does
+`check-skills-shipped.mts` fails if this file names a skill the repository does
 not carry, so the next one cannot go missing quietly.
 
 If `Skill` says a name is unknown, it isn't registered in this session rather

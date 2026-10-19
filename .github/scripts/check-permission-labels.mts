@@ -9,7 +9,7 @@
 /* Twice: `upload_avatar_image` in GRYT-866 and `set_activity` in GRYT-929, the
    second caught by hand. Neither repository's CI can see the other; this can. */
 
-/* Usage: check-permission-labels.mjs. Reads the two source files in place, at
+/* Usage: check-permission-labels.mts. Reads the two source files in place, at
    whatever refs the caller checked out. */
 
 import { readFileSync } from "node:fs";
@@ -30,11 +30,11 @@ const CLIENT_FILE = `${ROOT}/packages/client/src/packages/socket/src/lib/permiss
 
 /* Crude on purpose: it does not understand a `//` inside a string literal.
    Neither file has one, and a parser that did would be a dependency. */
-function withoutComments(source) {
+function withoutComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
 }
 
-function read(path, label) {
+function read(path: string, label: string): string {
   try {
     return readFileSync(path, "utf8");
   } catch {
@@ -43,8 +43,8 @@ function read(path, label) {
   }
 }
 
-const problems = [];
-function fail(message) {
+const problems: string[] = [];
+function fail(message: string): void {
   problems.push(message);
   console.error(`::error::${message}`);
 }

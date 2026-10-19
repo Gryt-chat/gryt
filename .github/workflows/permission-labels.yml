@@ -21,7 +21,7 @@ on:
   # first running at 06:41 the morning after it merges.
   pull_request:
     paths:
-      - .github/scripts/check-permission-labels.mjs
+      - .github/scripts/check-permission-labels.mts
       - .github/workflows/permission-labels.yml
 
 permissions:
@@ -41,6 +41,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
+
+      # The script is TypeScript, which the runner's own Node may be too old to strip.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
       - name: Clone the two sides
         shell: bash
@@ -71,6 +76,6 @@ jobs:
 
       - name: Compare
         shell: bash
-        run: node .github/scripts/check-permission-labels.mjs
+        run: node .github/scripts/check-permission-labels.mts
 
 # Trigger note: the check reads source as text, so it needs no install step.

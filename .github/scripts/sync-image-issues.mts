@@ -7,6 +7,8 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
+import type { ImageResult } from "./check-compose-images.mts";
+
 const REPO = process.env.GRYT_IMAGE_ISSUES_REPO ?? "Gryt-chat/gryt";
 const LABEL = "image-check";
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -21,28 +23,28 @@ const WORKAROUND =
   "If the image is already cached locally, `docker compose pull --ignore-pull-failures && docker compose up -d` " +
   "brings the stack up on the version you have while this is unresolved.";
 
-function gh(args) {
+function gh(args: string[]): string {
   return execFileSync("gh", args, { encoding: "utf8" });
 }
 
 /* `gh ... --json` prints nothing at all for an empty result, not "[]". */
-function ghJson(args) {
+function ghJson<T>(args: string[]): T[] {
   const out = gh(args).trim();
-  return out === "" ? [] : JSON.parse(out);
+  return out === "" ? [] : (JSON.parse(out) as T[]);
 }
 
-function title(ref) {
+function title(ref: string): string {
   return `Image unavailable: ${ref}`;
 }
 
 /* A marker line in the body, not a comment scan, decides whether the reason
    changed — comments are for history, not for the current state. */
-function reasonMarker(reason) {
+function reasonMarker(reason: string): string {
   return `<!-- image-check-reason: ${reason.replace(/\n/g, " ").slice(0, 500)} -->`;
 }
 
 function ensureLabelExists() {
-  const existing = ghJson(["label", "list", "--repo", REPO, "--search", LABEL, "--json", "name"]);
+  const existing = ghJson<{ name: string }>(["label", "list", "--repo", REPO, "--search", LABEL, "--json", "name"]);
   if (existing.some((l) => l.name === LABEL)) return;
 
   if (DRY_RUN) {
@@ -62,8 +64,8 @@ function ensureLabelExists() {
   ]);
 }
 
-function findOpenIssue(ref) {
-  const issues = ghJson([
+function findOpenIssue(ref: string) {
+  const issues = ghJson<{ number: number; title: string; body: string }>([
     "issue",
     "list",
     "--repo",
@@ -82,12 +84,12 @@ function findOpenIssue(ref) {
   return issues.find((i) => i.title === title(ref)) ?? null;
 }
 
-function currentReason(existingBody) {
+function currentReason(existingBody: string | undefined): string | null {
   const m = existingBody?.match(/<!-- image-check-reason: (.*) -->/);
   return m?.[1] ?? null;
 }
 
-function openOrUpdate(result) {
+function openOrUpdate(result: ImageResult): void {
   const existing = findOpenIssue(result.ref);
   const reason = result.error ?? `missing ${result.missing.join(", ")}`;
   const body = [
@@ -123,7 +125,7 @@ function openOrUpdate(result) {
   gh(["issue", "edit", String(existing.number), "--repo", REPO, "--body", body]);
 }
 
-function closeIfRecovered(result) {
+function closeIfRecovered(result: ImageResult): void {
   const existing = findOpenIssue(result.ref);
   if (!existing) return;
 
@@ -146,10 +148,10 @@ function closeIfRecovered(result) {
 function main() {
   const resultsPath = process.argv[2] ?? process.env.GRYT_IMAGE_CHECK_RESULTS;
   if (!resultsPath) {
-    console.error("usage: sync-image-issues.mjs <results.json> [--dry-run]");
+    console.error("usage: sync-image-issues.mts <results.json> [--dry-run]");
     process.exit(2);
   }
-  const results = JSON.parse(readFileSync(resultsPath, "utf8"));
+  const results = JSON.parse(readFileSync(resultsPath, "utf8")) as ImageResult[];
 
   ensureLabelExists();
   for (const result of results) {

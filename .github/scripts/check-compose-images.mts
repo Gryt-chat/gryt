@@ -7,7 +7,7 @@
 /* Compose files self-hosters curl, plus any other one under ops/deploy/.
    ops/internal is skipped — its images (gatus, postgres, fider…) differ. */
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, type StdioOptions } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -22,7 +22,18 @@ const CLI_SHARED_GO_URL =
 const CLI_DEFAULT_TAG = "latest";
 
 /** Runs a command, returning stdout, or throws with stderr attached. */
-function run(cmd, args, opts = {}) {
+interface ImageRef { image: string; key: string | null; file: string }
+
+export interface ImageResult {
+  ref: string;
+  sources: string[];
+  platforms: string[];
+  ok: boolean;
+  error: string | null;
+  missing: string[];
+}
+
+function run(cmd: string, args: string[], opts: { stdio?: StdioOptions } = {}): string {
   return execFileSync(cmd, args, { encoding: "utf8", ...opts });
 }
 
@@ -36,25 +47,25 @@ function listComposeCandidates() {
 }
 
 /** True when the file parses as a compose file (has a top-level `services`). */
-function isComposeFile(path) {
+function isComposeFile(path: string): boolean {
   const json = run("yq", ["-o=json", ".services", `${ROOT}${path}`]).trim();
   return json !== "null" && json !== "{}";
 }
 
 /** [{ image, key, file }] for every pulled service in one compose file. One with a
  *  `build:` is built on the host (gryt-og:local), so there's nothing to pull. */
-function imagesInComposeFile(path) {
+function imagesInComposeFile(path: string): ImageRef[] {
   const json = run("yq", [
     "-o=json",
     '[.services | to_entries[] | select((.value | has("image")) and (.value | has("build") | not)) | {"key": .key, "image": .value.image}]',
     `${ROOT}${path}`,
   ]);
-  return JSON.parse(json).map((e) => ({ ...e, file: path }));
+  return (JSON.parse(json) as { key: string; image: string }[]).map((e) => ({ ...e, file: path }));
 }
 
 /** Fetches the CLI's shared compose template and pulls out its `image:` lines. */
-async function imagesInCliSharedGo() {
-  let last;
+async function imagesInCliSharedGo(): Promise<ImageRef[]> {
+  let last: unknown;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await fetch(CLI_SHARED_GO_URL);
@@ -71,8 +82,8 @@ async function imagesInCliSharedGo() {
 
 /* Tight on purpose: only the two shapes this file actually uses. A third
    shape should fail loudly rather than be silently skipped. */
-function extractCliImages(source) {
-  const images = [];
+function extractCliImages(source: string): ImageRef[] {
+  const images: ImageRef[] = [];
   const literal = /^\s*image:\s*([\w./-]+:[\w.-]+)\s*$/gm;
   const interpolated =
     /^\s*image:\s*([\w./-]+):`\s*\+\s*s\.Preferences\(\)\.ImageTag\(\)\s*\+\s*`\s*$/gm;
@@ -97,14 +108,14 @@ function extractCliImages(source) {
 }
 
 /** `${VAR:-default}` resolves to its default; `${VAR}` with none fails loudly. */
-function resolveImageRef(image) {
-  let unresolved = null;
-  const resolved = image.replace(/\$\{([A-Z0-9_]+)(:-([^}]*))?\}/g, (_, name, hasDefault, def) => {
+function resolveImageRef(image: string): string {
+  let unresolved: string | null = null;
+  const resolved = image.replace(/\$\{([A-Z0-9_]+)(:-([^}]*))?\}/g, (_: string, name: string, hasDefault: string | undefined, def: string | undefined) => {
     if (hasDefault === undefined) {
       unresolved = name;
       return `\${${name}}`;
     }
-    return def;
+    return def ?? "";
   });
   if (unresolved) {
     throw new Error(`\${${unresolved}} has no default and can't be resolved`);
@@ -121,7 +132,7 @@ async function collectImages() {
   ];
   const uniqueFiles = [...new Set(composeFiles)];
 
-  const entries = [];
+  const entries: ImageRef[] = [];
   for (const file of uniqueFiles) {
     if (!isComposeFile(file)) continue;
     entries.push(...imagesInComposeFile(file));
@@ -130,11 +141,11 @@ async function collectImages() {
 
   /* Dedupe by resolved ref, keeping every source that named it — a self-hoster
      hits whichever source they used, so all of them need reporting on failure. */
-  const byRef = new Map();
+  const byRef = new Map<string, { ref: string; sources: string[] }>();
   for (const { image, file } of entries) {
     const ref = resolveImageRef(image);
     if (!byRef.has(ref)) byRef.set(ref, { ref, sources: [] });
-    const entry = byRef.get(ref);
+    const entry = byRef.get(ref)!;
     if (!entry.sources.includes(file)) entry.sources.push(file);
   }
   return [...byRef.values()];
@@ -143,15 +154,16 @@ async function collectImages() {
 const REQUIRED_PLATFORMS = ["linux/amd64", "linux/arm64"];
 
 /** Anonymous manifest inspect, retried 3x with backoff so one hiccup isn't fatal. */
-function inspectPlatforms(ref) {
-  let lastError;
+function inspectPlatforms(ref: string): string[] {
+  let lastError: string | undefined;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const raw = run("docker", ["buildx", "imagetools", "inspect", ref, "--raw"], {
         stdio: ["ignore", "pipe", "pipe"],
       });
       return platformsFromManifest(JSON.parse(raw));
-    } catch (e) {
+    } catch (error) {
+      const e = error as { stderr?: Buffer; message: string };
       lastError = e.stderr?.toString().trim() || e.message;
       if (attempt < 3) sleepSync(attempt * 3000);
     }
@@ -159,30 +171,32 @@ function inspectPlatforms(ref) {
   throw new Error(lastError);
 }
 
-function sleepSync(ms) {
+function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 /** Both a manifest list and a single-platform manifest come out normalized. */
-function platformsFromManifest(manifest) {
+interface Platform { os: string; architecture: string }
+
+function platformsFromManifest(manifest: { manifests?: { platform?: Platform }[]; platform?: Platform }): string[] {
   const list = manifest.manifests ?? [manifest];
   return list
     .map((m) => m.platform)
-    .filter((p) => p && p.os !== "unknown" && p.architecture !== "unknown")
+    .filter((p): p is Platform => !!p && p.os !== "unknown" && p.architecture !== "unknown")
     .map((p) => `${p.os}/${p.architecture}`);
 }
 
 async function main() {
   const images = await collectImages();
-  const results = [];
+  const results: ImageResult[] = [];
 
   for (const { ref, sources } of images) {
-    let platforms = [];
-    let error = null;
+    let platforms: string[] = [];
+    let error: string | null = null;
     try {
       platforms = inspectPlatforms(ref);
     } catch (e) {
-      error = e.message;
+      error = (e as Error).message;
     }
 
     const missing = error ? REQUIRED_PLATFORMS : REQUIRED_PLATFORMS.filter((p) => !platforms.includes(p));
@@ -211,7 +225,7 @@ async function main() {
   }
 }
 
-function writeSummary(results) {
+function writeSummary(results: ImageResult[]): void {
   const summaryPath = process.env.GITHUB_STEP_SUMMARY;
   const rows = results
     .map(

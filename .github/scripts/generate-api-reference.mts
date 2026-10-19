@@ -10,12 +10,12 @@
 /* Generated because a handwritten one goes stale. The site's developer page kept
    printing `window.gryt` after GRYT-930 deleted the file it came from. */
 
-/* In the superproject for the reason check-permission-labels.mjs is: nothing else
+/* In the superproject for the reason check-permission-labels.mts is: nothing else
    sees server, client, bot and docs at once. */
 
 /*
- *   generate-api-reference.mjs           write the pages
- *   generate-api-reference.mjs --check   fail if disk is not what this would write
+ *   generate-api-reference.mts           write the pages
+ *   generate-api-reference.mts --check   fail if disk is not what this would write
  */
 
 /* It resolves nothing: a type annotation is copied through as written, so renaming
@@ -26,26 +26,28 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { createRequire } from "node:module";
 
+import type * as TS from "typescript";
+
 const ROOT =
   process.env.GRYT_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 /*
- * TypeScript comes from whichever package has it: the superproject has no
- * package.json, and one would give Dependabot a fourteenth manifest to open PRs on.
+ * TypeScript comes from whichever package has it. The one in .github/scripts is
+ * only there to typecheck, and the workflow doesn't install it.
  */
 
 /* The workflow installs it into packages/docs, which is checked out anyway. */
 const require = createRequire(import.meta.url);
-let ts;
+let found: typeof import("typescript") | undefined;
 for (const from of ["docs", "client", "server", "site"]) {
   try {
-    ts = require(require.resolve("typescript", { paths: [`${ROOT}/packages/${from}`] }));
+    found = require(require.resolve("typescript", { paths: [`${ROOT}/packages/${from}`] }));
     break;
   } catch {
     /* next */
   }
 }
-if (!ts) {
+if (!found) {
   console.error(
     "generate-api-reference: no typescript to parse with.\n" +
       "  Install it somewhere this can see, e.g. `yarn --cwd packages/docs add -D typescript`,\n" +
@@ -53,16 +55,39 @@ if (!ts) {
   );
   process.exit(1);
 }
+const ts = found;
 
 const CHECK = process.argv.includes("--check");
 
 /* ── Reading TypeScript ──────────────────────────────────────────────── */
 
-const parsed = new Map();
+type Decl =
+  | TS.InterfaceDeclaration
+  | TS.TypeAliasDeclaration
+  | (TS.VariableDeclaration & { grytStatement?: TS.VariableStatement })
+  | TS.FunctionDeclaration
+  | TS.ClassDeclaration;
 
-function sourceFile(path) {
-  if (parsed.has(path)) return parsed.get(path);
-  let text;
+/** An interface member as this reads it: property and method signatures carry these two. */
+type TypeMember = TS.TypeElement & { modifiers?: TS.NodeArray<TS.ModifierLike>; type?: TS.TypeNode };
+
+interface Member {
+  name: string;
+  signature: string;
+  doc: string;
+  readonly?: boolean;
+  node?: TypeMember;
+  needs?: string | null;
+  kind?: "method" | "property" | "group";
+  nested?: Member[];
+}
+
+const parsed = new Map<string, TS.SourceFile>();
+
+function sourceFile(path: string): TS.SourceFile {
+  const cached = parsed.get(path);
+  if (cached) return cached;
+  let text: string;
   try {
     text = readFileSync(path, "utf8");
   } catch {
@@ -82,7 +107,7 @@ function sourceFile(path) {
 
 /* Markdown from the source survives: these comments are written with backticks and
    lists in them already, and MDX renders that. */
-function docOf(node) {
+function docOf(node: TS.Node): string {
   const [doc] = ts.getJSDocCommentsAndTags(node).filter(ts.isJSDoc);
   if (!doc) return "";
   const comment = typeof doc.comment === "string"
@@ -92,8 +117,8 @@ function docOf(node) {
 }
 
 /** Every top-level declaration in a file, by the name it is declared under. */
-function declarations(file) {
-  const found = new Map();
+function declarations(file: TS.SourceFile): Map<string, Decl> {
+  const found = new Map<string, Decl>();
   for (const statement of file.statements) {
     if (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) {
       found.set(statement.name.text, statement);
@@ -114,18 +139,19 @@ function declarations(file) {
   return found;
 }
 
-function declaration(path, name) {
+/** The caller says which kind it expects. Read as the wrong kind, it fails on the first property, as before. */
+function declaration<T = Decl>(path: string, name: string): T {
   const found = declarations(sourceFile(path)).get(name);
   if (!found) {
     console.error(`generate-api-reference: ${path.slice(ROOT.length + 1)} declares no ${name}.`);
     console.error("  It was renamed or moved. Update this script to match.");
     process.exit(1);
   }
-  return found;
+  return found as T;
 }
 
 /** Source text of a node, with runs of whitespace flattened onto one line. */
-function text(node) {
+function text(node: TS.Node): string {
   return node.getText().replace(/\s+/g, " ").trim();
 }
 
@@ -133,8 +159,8 @@ function text(node) {
  * The members of an interface, as `{ name, signature, doc }`. `signature` is the
  * member minus its own name, so a method reads as its parameters and return type.
  */
-function interfaceMembers(node) {
-  const members = [];
+function interfaceMembers(node: { members: TS.NodeArray<TypeMember> }): Member[] {
+  const members: Member[] = [];
   for (const member of node.members) {
     /* Every key in `PluginEvents` is a string literal, because a colon cannot go in
        an identifier. Reading identifiers only skipped the whole events section. */
@@ -148,7 +174,7 @@ function interfaceMembers(node) {
       name,
       signature: whole.slice(whole.indexOf(written) + written.length).trim(),
       doc: docOf(member),
-      readonly: !!member.modifiers?.some((m) => m.kind === ts.SyntaxKind.ReadonlyKeyword),
+      readonly: !!member.modifiers?.some((m: TS.ModifierLike) => m.kind === ts.SyntaxKind.ReadonlyKeyword),
       /* Kept so a caller can look past the text — the events section reads the
          payload's own members out of this. */
       node: member,
@@ -163,14 +189,14 @@ function interfaceMembers(node) {
 
 /* The client's whole API is an object literal assigned onto `globalThis`, so a
    reference for it has to read the value. Getters are reported as properties. */
-function objectMembers(node) {
+function objectMembers(node: { name: TS.Node; initializer?: TS.Expression }): Member[] {
   const init = node.initializer;
   if (!init || !ts.isObjectLiteralExpression(init)) {
     console.error(`generate-api-reference: ${node.name.getText()} is not an object literal.`);
     process.exit(1);
   }
 
-  const members = [];
+  const members: Member[] = [];
   for (const property of init.properties) {
     if (!property.name || !ts.isIdentifier(property.name)) continue;
     const name = property.name.text;
@@ -222,7 +248,7 @@ function objectMembers(node) {
 }
 
 /** A `const X = [...] as const` or a plain array, as its string entries. */
-function stringArray(node) {
+function stringArray(node: TS.VariableDeclaration): string[] {
   let init = node.initializer;
   if (init && ts.isAsExpression(init)) init = init.expression;
   if (!init || !ts.isArrayLiteralExpression(init)) return [];
@@ -230,9 +256,9 @@ function stringArray(node) {
 }
 
 /** A `const X: Record<…> = { a: "b" }`, as a Map, keeping the doc on each entry. */
-function stringRecord(node) {
+function stringRecord(node: TS.VariableDeclaration): Map<string, { value: string; doc: string }> {
   const init = node.initializer;
-  const out = new Map();
+  const out = new Map<string, { value: string; doc: string }>();
   if (!init || !ts.isObjectLiteralExpression(init)) return out;
   for (const property of init.properties) {
     if (!ts.isPropertyAssignment(property)) continue;
@@ -249,12 +275,12 @@ function stringRecord(node) {
 }
 
 /** Numeric consts by name, so a documented limit is the number that ships. */
-function numbers(path, names) {
+function numbers(path: string, names: string[]): Map<string, string> {
   const found = declarations(sourceFile(path));
-  const out = new Map();
+  const out = new Map<string, string>();
   for (const name of names) {
     const decl = found.get(name);
-    if (!decl?.initializer) continue;
+    if (!decl || !("initializer" in decl) || !decl.initializer) continue;
     const written = text(decl.initializer);
     /* `MAX_PAYLOAD_BYTES` is written `8 * 1024`. Folded when it is nothing but digits
        and arithmetic — that guard is what keeps this from being an eval. */
@@ -268,8 +294,9 @@ function numbers(path, names) {
 
 /* ── Writing MDX ─────────────────────────────────────────────────────── */
 
+// No filename here: renaming the script would otherwise mean regenerating every page (GRYT-1808).
 const BANNER =
-  "{/* Generated by .github/scripts/generate-api-reference.mjs in the monorepo.\n" +
+  "{/* Generated by the API reference script in the monorepo's .github/scripts.\n" +
   "    Do not edit this file. Change the source it reads, then run the script. */}";
 
 /**
@@ -289,7 +316,7 @@ const NOTICE = [
   "</Callout>",
 ].join("\n");
 
-function frontmatter({ title, description, icon }) {
+function frontmatter({ title, description, icon }: { title: string; description: string; icon: string }): string {
   return [
     "---",
     `title: ${title}`,
@@ -311,7 +338,7 @@ function frontmatter({ title, description, icon }) {
 
 /* Putting the parameter list in it cut at the first `)`, so a handler parameter left
    the heading ending mid-type and `ban` became a heading three lines long. */
-function member({ name, signature, doc, needs }, level = "###") {
+function member({ name, signature, doc, needs }: Member, level = "###"): string {
   const callable = signature.startsWith("(") || signature.startsWith("<");
   const out = [`${level} \`${name}${callable ? "()" : ""}\``, ""];
   out.push("```ts");
@@ -337,7 +364,7 @@ function member({ name, signature, doc, needs }, level = "###") {
 
 /* Escaped here rather than at each call site: every cell on these pages is a type or
    a name, and none of them wants a raw pipe. */
-function cell(value) {
+function cell(value: unknown): string {
   return String(value).replace(/\|/g, "\\|");
 }
 
@@ -353,7 +380,7 @@ function cell(value) {
 
 /* The whole doc, not the first paragraph. Cutting at the paragraph break lost that
    same `wants` warning, and a long cell is the smaller problem. */
-function fieldTable(members, extra) {
+function fieldTable(members: Member[], extra?: (f: Member) => string): string {
   return table(
     ["Field", "Type", "What it is"],
     members.map((f) => {
@@ -368,7 +395,7 @@ function fieldTable(members, extra) {
   );
 }
 
-function table(headings, rows) {
+function table(headings: string[], rows: unknown[][]): string {
   if (rows.length === 0) return "";
   return [
     `| ${headings.join(" | ")} |`,
@@ -523,7 +550,7 @@ function clientPage() {
   const api = objectMembers(declaration(`${CLIENT}/addonWorker.ts`, "gryt"));
   const manifest = interfaceMembers(declaration(`${CLIENT}/types.ts`, "AddonManifest"));
 
-  const needsFor = (path) => {
+  const needsFor = (path: string) => {
     for (const [key, entry] of methodCapability) {
       if (key.replace(/"/g, "") === path) return entry.value;
     }
@@ -598,23 +625,23 @@ function botPage() {
 
   /* Everything index.ts re-exports is public and nothing else is. Kept in the order
      it is exported, because that order is somebody's decision about what matters. */
-  const exports = [];
+  const exports: { name: string; from: string | undefined; isType: boolean }[] = [];
   for (const statement of index.statements) {
     if (!ts.isExportDeclaration(statement) || !statement.exportClause) continue;
     if (!ts.isNamedExports(statement.exportClause)) continue;
-    const from = statement.moduleSpecifier?.text?.replace(/^\.\//, "").replace(/\.ts$/, "");
+    const from = (statement.moduleSpecifier as TS.StringLiteral | undefined)?.text?.replace(/^\.\//, "").replace(/\.ts$/, "");
     for (const element of statement.exportClause.elements) {
       exports.push({ name: element.name.text, from, isType: statement.isTypeOnly || element.isTypeOnly });
     }
   }
 
-  const rendered = [];
+  const rendered: string[] = [];
   for (const entry of exports) {
     const path = `${BOT}/${entry.from}.ts`;
     const decl = declarations(sourceFile(path)).get(entry.name);
     if (!decl) continue;
 
-    const doc = docOf(decl.grytStatement ?? decl);
+    const doc = docOf(("grytStatement" in decl && decl.grytStatement) || decl);
 
     if (ts.isInterfaceDeclaration(decl)) {
       rendered.push(
@@ -628,7 +655,7 @@ function botPage() {
       );
     } else if (ts.isClassDeclaration(decl)) {
       const methods = decl.members
-        .filter((m) => ts.isMethodDeclaration(m) && ts.isIdentifier(m.name))
+        .filter((m): m is TS.MethodDeclaration & { name: TS.Identifier } => ts.isMethodDeclaration(m) && ts.isIdentifier(m.name))
         .filter((m) => !m.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.PrivateKeyword))
         .filter((m) => !m.name.text.startsWith("#"));
       rendered.push(
@@ -702,10 +729,10 @@ const PAGES = [
 
 /* `meta.json` is hand-ordered, so this checks rather than writes: where a page sits
    among its neighbours is somebody's decision. */
-function checkListed(page) {
+function checkListed(page: { path: string }): string | null {
   const section = dirname(`${ROOT}/${page.path}`);
-  const slug = page.path.split("/").pop().replace(/\.mdx$/, "");
-  let meta;
+  const slug = page.path.split("/").pop()!.replace(/\.mdx$/, "");
+  let meta: { pages?: string[] };
   try {
     meta = JSON.parse(readFileSync(`${section}/meta.json`, "utf8"));
   } catch {
@@ -724,7 +751,7 @@ if (unlisted.length > 0) {
   process.exit(1);
 }
 
-const stale = [];
+const stale: string[] = [];
 
 for (const page of PAGES) {
   const full = `${ROOT}/${page.path}`;
@@ -758,6 +785,6 @@ for (const path of stale) console.error(`  ${path}`);
 console.error(
   "\nSomething in the server, client or bot API moved and the page was not regenerated.\n" +
     "Run this in a monorepo checkout, then commit packages/docs and bump the gitlink:\n\n" +
-    "  node .github/scripts/generate-api-reference.mjs\n",
+    "  node .github/scripts/generate-api-reference.mts\n",
 );
 process.exit(1);

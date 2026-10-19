@@ -26,6 +26,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The scripts are TypeScript, which the runner's own Node may be too old to strip.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
       - name: Check yq is present
         run: yq --version
@@ -35,7 +39,7 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p .work
-          node .github/scripts/check-compose-images.mjs
+          node .github/scripts/check-compose-images.mts
 
       - name: Upload results
         if: always()
@@ -66,6 +70,10 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v4
+      # The scripts are TypeScript, which the runner's own Node may be too old to strip.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
       - name: Download the check job's results
         uses: actions/download-artifact@v4
@@ -77,4 +85,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GRYT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node .github/scripts/sync-image-issues.mjs .work/compose-image-results.json
+        run: node .github/scripts/sync-image-issues.mts .work/compose-image-results.json

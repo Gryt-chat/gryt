@@ -10,9 +10,3 @@ examples/addons/example-plugin/plugin.js
 # Run by `npx electron` rather than node, and not tried as TypeScript there yet.
 marketing/shots/desktop.cjs
 
-# Still to move to TypeScript (GRYT-1800).
-.github/scripts/check-compose-images.mjs
-.github/scripts/check-permission-labels.mjs
-.github/scripts/check-socket-coverage.mjs
-.github/scripts/generate-api-reference.mjs
-.github/scripts/sync-image-issues.mjs

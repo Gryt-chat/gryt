@@ -1,7 +1,7 @@
 name: API reference
 
 # Checks that the three generated reference pages in the docs still say what the
-# source says. generate-api-reference.mjs writes them out of the TypeScript.
+# source says. generate-api-reference.mts writes them out of the TypeScript.
 
 # Nothing in the docs repository can tell when one of those APIs moves, and nothing
 # in server, client or bot can tell that a page elsewhere describes something gone.
@@ -27,7 +27,7 @@ on:
   # rather than first running at 07:17 the next morning.
   pull_request:
     paths:
-      - .github/scripts/generate-api-reference.mjs
+      - .github/scripts/generate-api-reference.mts
       - .github/workflows/api-reference.yml
 
 permissions:
@@ -98,10 +98,10 @@ jobs:
 
       - name: Compare
         shell: bash
-        run: node .github/scripts/generate-api-reference.mjs --check
+        run: node .github/scripts/generate-api-reference.mts --check
 
       # server-api is the one reference page still written by hand. It had reached
       # 114 of 211 socket events, with whole features missing, before anybody counted.
       - name: Check the socket API is still fully described
         shell: bash
-        run: node .github/scripts/check-socket-coverage.mjs
+        run: node .github/scripts/check-socket-coverage.mts

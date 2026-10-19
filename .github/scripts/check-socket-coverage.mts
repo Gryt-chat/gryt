@@ -28,7 +28,7 @@ const NOT_OURS = new Set([
   "connect", "disconnect", "connect_error", "disconnecting", "error",
 ]);
 
-function walk(dir, out = []) {
+function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     const p = join(dir, entry);
     if (statSync(p).isDirectory()) walk(p, out);
@@ -45,13 +45,13 @@ function walk(dir, out = []) {
 /* A first pass counted only the first style and reported that two documented
    events did not exist. Both were real, registered the second way. */
 function eventsInSource() {
-  const found = new Map();
+  const found = new Map<string, { kind: string; file: string }>();
 
   for (const file of walk(SERVER)) {
     const text = readFileSync(file, "utf8");
     const short = file.replace(`${SERVER}/`, "");
 
-    const add = (name, kind) => {
+    const add = (name: string, kind: string) => {
       if (NOT_OURS.has(name)) return;
       if (!found.has(name)) found.set(name, { kind, file: short });
     };
@@ -110,7 +110,7 @@ if (missing.length > 0) {
 
   if (process.argv.includes("--list")) {
     console.log();
-    for (const e of missing) console.log(`  ${e.padEnd(34)} ${source.get(e).file}`);
+    for (const e of missing) console.log(`  ${e.padEnd(34)} ${source.get(e)!.file}`);
   } else {
     console.log("\nRun with --list to see them, and which file each is in.");
   }

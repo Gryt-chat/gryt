@@ -145,6 +145,24 @@ function closeIfRecovered(result: ImageResult): void {
   gh(["issue", "close", String(existing.number), "--repo", REPO]);
 }
 
+/* An image that left every compose file is never checked again, so nothing
+   above would close its issue. gryt#306 (gryt-og:local) sat open that way. */
+function closeUnchecked(results: ImageResult[]): void {
+  const checked = new Set(results.map((r) => title(r.ref)));
+  const open = ghJson<{ number: number; title: string }>([
+    "issue", "list", "--repo", REPO, "--label", LABEL, "--state", "open", "--json", "number,title", "--limit", "100",
+  ]);
+  for (const issue of open) {
+    if (checked.has(issue.title)) continue;
+    if (DRY_RUN) {
+      console.log(`[dry-run] would close #${issue.number} (no longer checked)`);
+      continue;
+    }
+    gh(["issue", "comment", String(issue.number), "--repo", REPO, "--body", `No compose file pulls this image any more, so it isn't checked: ${RUN_URL}`]);
+    gh(["issue", "close", String(issue.number), "--repo", REPO]);
+  }
+}
+
 function main() {
   const resultsPath = process.argv[2] ?? process.env.GRYT_IMAGE_CHECK_RESULTS;
   if (!resultsPath) {
@@ -158,6 +176,8 @@ function main() {
     if (result.ok) closeIfRecovered(result);
     else openOrUpdate(result);
   }
+  // An empty list means the check itself broke, not that every image went away.
+  if (results.length > 0) closeUnchecked(results);
 }
 
 main();

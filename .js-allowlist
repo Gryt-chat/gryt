@@ -16,3 +16,8 @@ marketing/shots/desktop.cjs
 .github/scripts/check-socket-coverage.mjs
 .github/scripts/generate-api-reference.mjs
 .github/scripts/sync-image-issues.mjs
+
+# sfu and image-worker releases download these two by URL from main and run them on their runner's Node.
+# Copies of the .mts files from before the rename. They go once both workflows fetch the .mts (GRYT-1800).
+.github/scripts/beta-follows-latest.mjs
+.github/scripts/check-release-line.mjs

@@ -637,7 +637,7 @@ jobs:
     env:
       OWNER: Gryt-chat
       # Read by the client's beforeBuild hook, its extraResources check and
-      # electron-builder.config.cjs. Empty is what `full` means to all three.
+      # electron-builder config. Empty is what `full` means to all three.
       GRYT_VARIANT: ${{ matrix.variant == 'slim' && 'slim' || '' }}
       REPO: gryt
       VERSION: ${{ needs.prepare-release.outputs.version }}
@@ -1023,12 +1023,15 @@ jobs:
             exit 1
           fi
 
+          # Either name while the client moves its config to TypeScript (GRYT-1806).
+          CONFIG="$([ -f electron-builder.config.ts ] && echo electron-builder.config.ts || echo electron-builder.config.cjs)"
+
           # electron-builder fetches Electron through DownloadNoRetry, so a dropped connection
           # fails the build outright. Three attempts: a real failure repeats the whole build.
           published=""
           for attempt in 1 2 3; do
             if npx electron-builder \
-              --config electron-builder.config.cjs \
+              --config "$CONFIG" \
               $TARGETS \
               --publish always \
               -c.extraMetadata.version="$VERSION" \
@@ -1183,13 +1186,16 @@ jobs:
 
           echo "${{ secrets.APPLE_API_KEY_P8_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
 
+          # Either name while the client moves its config to TypeScript (GRYT-1806).
+          CONFIG="$([ -f electron-builder.config.ts ] && echo electron-builder.config.ts || echo electron-builder.config.cjs)"
+
           # The publish overrides matter even though this uploads separately: electron-builder
           # bakes them into app-update.yml, and without them macOS asked an empty repository.
 
           # `forceCodeSigning` is the other half of dropping CSC_LINK: without it a missing
           # identity only warns, and the build ships an app Gatekeeper refuses.
           npx electron-builder \
-            --config electron-builder.config.cjs \
+            --config "$CONFIG" \
             --mac \
             --publish never \
             -c.mac.forceCodeSigning=true \

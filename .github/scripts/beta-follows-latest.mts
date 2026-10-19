@@ -15,14 +15,14 @@ const MANIFESTS = [
 ].join(", ");
 
 /** A full version's parts, or null for anything else: `1.10`, `latest`, `buildcache`. */
-export function parseVersion(text) {
+export function parseVersion(text: unknown): { core: number[]; pre: string[] } | null {
   const match = typeof text === "string" ? VERSION.exec(text) : null;
   if (!match) return null;
   return { core: match.slice(1, 4).map(Number), pre: match[4] ? match[4].split(".") : [] };
 }
 
 /** Semver precedence, so 1.10.14-beta.3 < 1.10.14 < 1.11.0-beta.2. */
-export function compareVersions(a, b) {
+export function compareVersions(a: string, b: string): number {
   const x = parseVersion(a);
   const y = parseVersion(b);
   if (!x || !y) throw new Error(`Not a version: ${x ? b : a}`);
@@ -47,7 +47,7 @@ export function compareVersions(a, b) {
 }
 
 /** Whether latest-beta, carrying version `current`, should move to `release`. */
-export function decide(release, current) {
+export function decide(release: string, current: string | null | undefined): { move: boolean; why: string } {
   const parsed = parseVersion(release);
   if (!parsed || parsed.pre.length) throw new Error(`${release} is not a stable version`);
 
@@ -65,7 +65,11 @@ export function decide(release, current) {
 }
 
 /** The highest version tag on `digest`, or null. Newest first, so a current latest-beta costs a request or two. */
-export async function versionOf(digest, tags, digestOf) {
+export async function versionOf(
+  digest: string,
+  tags: string[],
+  digestOf: (tag: string) => Promise<string | null>,
+): Promise<string | null> {
   const versions = tags.filter((tag) => parseVersion(tag)).sort((a, b) => compareVersions(b, a));
   for (const tag of versions) {
     if ((await digestOf(tag)) === digest) return tag;
@@ -74,13 +78,13 @@ export async function versionOf(digest, tags, digestOf) {
 }
 
 /** Reads tags and digests anonymously, which is all a public image needs. */
-export function registry(image, { retryMs = 1000 } = {}) {
+export function registry(image: string, { retryMs = 1000 } = {}) {
   const [host, ...path] = image.split("/");
   const scheme = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host) ? "http" : "https";
   const base = `${scheme}://${host}/v2/${path.join("/")}`;
-  let token = null;
+  let token: string | null | undefined = null;
 
-  async function login(challenge) {
+  async function login(challenge: string | null): Promise<string | undefined> {
     const params = Object.fromEntries([...(challenge ?? "").matchAll(/(\w+)="([^"]*)"/g)].map((m) => [m[1], m[2]]));
     if (!params.realm) throw new Error(`${host} asked for credentials without saying where to get them`);
 
@@ -88,7 +92,7 @@ export function registry(image, { retryMs = 1000 } = {}) {
     for (const key of ["service", "scope"]) if (params[key]) url.searchParams.set(key, params[key]);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`${url.origin} refused a token with ${res.status}`);
-    const body = await res.json();
+    const body = (await res.json()) as { token?: string; access_token?: string };
     return body.token ?? body.access_token;
   }
 
@@ -96,7 +100,7 @@ export function registry(image, { retryMs = 1000 } = {}) {
     return token ? { Accept: MANIFESTS, Authorization: `Bearer ${token}` } : { Accept: MANIFESTS };
   }
 
-  async function send(url, method) {
+  async function send(url: string, method: string): Promise<Response> {
     for (let attempt = 1; ; attempt++) {
       try {
         let res = await fetch(url, { method, headers: headers() });
@@ -113,7 +117,7 @@ export function registry(image, { retryMs = 1000 } = {}) {
     }
   }
 
-  async function digest(tag) {
+  async function digest(tag: string): Promise<string | null> {
     const res = await send(`${base}/manifests/${tag}`, "HEAD");
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`${image}:${tag} answered ${res.status}`);
@@ -123,12 +127,12 @@ export function registry(image, { retryMs = 1000 } = {}) {
   }
 
   async function tags() {
-    const all = [];
-    let url = `${base}/tags/list?n=1000`;
+    const all: string[] = [];
+    let url: string | null = `${base}/tags/list?n=1000`;
     while (url) {
       const res = await send(url, "GET");
       if (!res.ok) throw new Error(`${image}'s tag list answered ${res.status}`);
-      const page = (await res.json()).tags ?? [];
+      const page = ((await res.json()) as { tags?: string[] }).tags ?? [];
       if (!page.length) break;
       all.push(...page);
       const next = /<([^>]+)>;\s*rel="next"/.exec(res.headers.get("link") ?? "");
@@ -143,7 +147,7 @@ export function registry(image, { retryMs = 1000 } = {}) {
 async function main() {
   const [image, release] = process.argv.slice(2);
   if (!image?.includes("/") || !release) {
-    console.error("usage: beta-follows-latest.mjs <image> <stable version>");
+    console.error("usage: beta-follows-latest.mts <image> <stable version>");
     process.exit(2);
   }
   const parsed = parseVersion(release);
@@ -174,7 +178,7 @@ async function main() {
     if (move) console.log(target);
   } catch (error) {
     console.error(`Could not read ${image} from its registry, so latest-beta was left where it is.`);
-    console.error(`  ${error.message}`);
+    console.error(`  ${(error as Error).message}`);
     process.exit(1);
   }
 }

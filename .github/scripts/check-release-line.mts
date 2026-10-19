@@ -12,7 +12,7 @@ const SURFACES = ["app", "server", "voice", "images"];
 const [surface, version] = process.argv.slice(2);
 
 if (!surface || !version) {
-  console.error("usage: check-release-line.mjs <surface> <version>");
+  console.error("usage: check-release-line.mts <surface> <version>");
   process.exit(2);
 }
 
@@ -31,7 +31,7 @@ if (prerelease && surface !== "app") {
 }
 
 /** The releases source, read over the network or, for the tests, off disk. */
-async function read() {
+async function read(): Promise<string> {
   if (!SOURCE.startsWith("http")) {
     const { readFile } = await import("node:fs/promises");
     return readFile(SOURCE, "utf8");
@@ -39,7 +39,7 @@ async function read() {
 
   /* A release that fails because raw.githubusercontent.com blinked burns a
      version number, and the retry costs a second. */
-  let last;
+  let last: unknown;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await fetch(SOURCE);
@@ -53,13 +53,13 @@ async function read() {
   throw last;
 }
 
-let source;
+let source: string;
 try {
   source = await read();
 } catch (e) {
   console.error(`Could not read the changelog source, so the line could not be checked.`);
   console.error(`  ${SOURCE}`);
-  console.error(`  ${e.message}`);
+  console.error(`  ${(e as Error).message}`);
   console.error("");
   console.error("This is not a missing line — the check itself did not run. Try again.");
   process.exit(1);

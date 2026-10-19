@@ -335,7 +335,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node .github/scripts/check-release-line.mjs app "${{ steps.version.outputs.version }}"
+          node .github/scripts/check-release-line.mts app "${{ steps.version.outputs.version }}"
 
       - name: Update monorepo release.json
         shell: bash
@@ -488,7 +488,7 @@ jobs:
             rm -f "$PREVIOUS_MANIFEST"
           fi
 
-          node .github/scripts/release-notes.mjs "${ARGS[@]}" > "${RUNNER_TEMP}/release-notes.md"
+          node .github/scripts/release-notes.mts "${ARGS[@]}" > "${RUNNER_TEMP}/release-notes.md"
           cat "${RUNNER_TEMP}/release-notes.md"
 
       - name: Commit release metadata and tag
@@ -1074,7 +1074,7 @@ jobs:
           curl -fsSL -o "$RUNTIME" "$RUNTIME_URL"
           echo "${RUNTIME_SHA256}  ${RUNTIME}" | sha256sum -c -
 
-          node ../../.github/scripts/relink-appimage-fuse.mjs --runtime "$RUNTIME" --dir release
+          node ../../.github/scripts/relink-appimage-fuse.mts --runtime "$RUNTIME" --dir release
 
           # electron-builder published to a draft, so overwrite the AppImages and rewritten
           # manifests there and nobody ever sees the libfuse2 build.
@@ -1530,6 +1530,11 @@ jobs:
         with:
           sparse-checkout: .github/scripts
 
+      # The script is TypeScript, which the runner's own Node may be too old to strip.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -1544,7 +1549,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          TARGET="$(node .github/scripts/beta-follows-latest.mjs "$DOCKER_IMAGE" "$VERSION")"
+          TARGET="$(node .github/scripts/beta-follows-latest.mts "$DOCKER_IMAGE" "$VERSION")"
           if [[ -n "$TARGET" ]]; then
             docker buildx imagetools create -t "${DOCKER_IMAGE}:latest-beta" "${DOCKER_IMAGE}@${TARGET}"
           fi

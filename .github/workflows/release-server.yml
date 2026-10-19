@@ -356,7 +356,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node .github/scripts/check-release-line.mjs server "${{ steps.version.outputs.version }}"
+          node .github/scripts/check-release-line.mts server "${{ steps.version.outputs.version }}"
 
       - name: Update monorepo release.json
         shell: bash
@@ -717,7 +717,7 @@ jobs:
             rm -f "$PREVIOUS_MANIFEST"
           fi
 
-          node .github/scripts/release-notes.mjs "${ARGS[@]}" > "${RUNNER_TEMP}/release-notes.md"
+          node .github/scripts/release-notes.mts "${ARGS[@]}" > "${RUNNER_TEMP}/release-notes.md"
 
           # How to check what you just downloaded (GRYT-760).
 
@@ -953,7 +953,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          TARGET="$(node .github/scripts/beta-follows-latest.mjs "$SERVER_IMAGE" "$VERSION")"
+          TARGET="$(node .github/scripts/beta-follows-latest.mts "$SERVER_IMAGE" "$VERSION")"
           if [[ -n "$TARGET" ]]; then
             docker buildx imagetools create -t "${SERVER_IMAGE}:latest-beta" "${SERVER_IMAGE}@${TARGET}"
           fi

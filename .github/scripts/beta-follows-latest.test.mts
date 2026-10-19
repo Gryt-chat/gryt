@@ -4,11 +4,12 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import test from "node:test";
 import { promisify } from "node:util";
-import { compareVersions, decide, versionOf } from "./beta-follows-latest.mjs";
+import { compareVersions, decide, versionOf } from "./beta-follows-latest.mts";
 
-const SCRIPT = new URL("beta-follows-latest.mjs", import.meta.url).pathname;
+const SCRIPT = new URL("beta-follows-latest.mts", import.meta.url).pathname;
 const execute = promisify(execFile);
 
 test("an older beta moves to the release", () => {
@@ -56,15 +57,15 @@ test("versions compare by semver precedence rather than as strings", () => {
 });
 
 test("latest-beta's version is the highest version tag on its digest, looked up newest first", async () => {
-  const digests = {
+  const digests: Record<string, string> = {
     latest: "sha256:new",
     "1.10": "sha256:new",
     "1.10.14": "sha256:new",
     "1.10.13": "sha256:old",
     "1.8.16-beta.1": "sha256:beta",
   };
-  const asked = [];
-  const digestOf = async (tag) => {
+  const asked: string[] = [];
+  const digestOf = async (tag: string) => {
     asked.push(tag);
     return digests[tag] ?? null;
   };
@@ -75,10 +76,10 @@ test("latest-beta's version is the highest version tag on its digest, looked up 
 });
 
 /** One repository, gryt-chat/server, whose `tags` map each tag to a digest. Tokens work the way GHCR's do. */
-async function fakeRegistry(tags, { status } = {}) {
-  let port;
+async function fakeRegistry(tags: Record<string, string>, { status }: { status?: number } = {}) {
+  let port = 0;
   const server = createServer((req, res) => {
-    const url = new URL(req.url, `http://127.0.0.1:${port}`);
+    const url = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
     const manifest = /^\/v2\/gryt-chat\/server\/manifests\/(.+)$/.exec(url.pathname);
 
     if (status) {
@@ -97,17 +98,18 @@ async function fakeRegistry(tags, { status } = {}) {
     }
   });
 
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  port = server.address().port;
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+  port = (server.address() as AddressInfo).port;
   return { image: `127.0.0.1:${port}/gryt-chat/server`, close: () => server.close() };
 }
 
-async function follow(image, version) {
+async function follow(image: string, version: string) {
   try {
     const { stdout, stderr } = await execute("node", [SCRIPT, image, version]);
     return { code: 0, stdout, stderr };
   } catch (error) {
-    return { code: error.code, stdout: error.stdout, stderr: error.stderr };
+    const { code, stdout, stderr } = error as { code: number; stdout: string; stderr: string };
+    return { code, stdout, stderr };
   }
 }
 

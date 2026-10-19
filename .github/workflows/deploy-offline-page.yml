@@ -30,7 +30,7 @@ jobs:
 
       # The routes and the page are checked before anything reaches the edge, so a
       # page that fetches something is caught here rather than during an outage.
-      - run: node .github/scripts/check-offline-page.mjs
+      - run: node .github/scripts/check-offline-page.mts
 
       # Without the secret this says so and stops, rather than failing on wrangler
       # asking for a login it will never get on a runner.

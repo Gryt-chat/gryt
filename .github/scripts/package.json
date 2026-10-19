@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "description": "Only so tsc and Node's types are installed to check these scripts. They run under plain node.",
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,6 +1,6 @@
 import html from "./offline.html";
 
-import { isOriginDown, offlineResponse } from "./offline.js";
+import { isOriginDown, offlineResponse } from "./offline.ts";
 
 /**
  * Stands in front of the browser-facing hostnames and swaps Cloudflare's "this
@@ -10,8 +10,8 @@ import { isOriginDown, offlineResponse } from "./offline.js";
 /* Everything else passes through untouched, including 4xx and a 500 the origin
    chose for itself. A throw is the origin being unreachable rather than slow. */
 export default {
-  async fetch(request) {
-    let response;
+  async fetch(request: Request): Promise<Response> {
+    let response: Response;
     try {
       response = await fetch(request);
     } catch {

@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * The cask still downloads a file per architecture, and still carries the three
  * lines publish-homebrew.yml rewrites.

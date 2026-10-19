@@ -30,7 +30,7 @@ So it's 503, with `Retry-After` and `Cache-Control: no-store`.
 
 The machine that serves the fonts, the stylesheet and the logo is the one that's
 down. So the CSS is inline, the owl is an inline SVG, and the type is a system
-stack. `check-offline-page.mjs` fails if anything in it points at a URL other
+stack. `check-offline-page.mts` fails if anything in it points at a URL other
 than the status page.
 
 ## What it isn't in front of
@@ -80,5 +80,5 @@ curl -sI http://localhost:8787/ | head -3
 The check script covers the rest, and it's in `Repo checks`:
 
 ```bash
-node .github/scripts/check-offline-page.mjs
+node .github/scripts/check-offline-page.mts
 ```

@@ -13,11 +13,11 @@ on:
       - .claude/skills/**
       - packaging/winget/**
       - packaging/homebrew/**
-      - .github/scripts/check-skills-shipped.mjs
-      - .github/scripts/check-winget-manifests.mjs
-      - .github/scripts/check-homebrew-casks.mjs
-      - .github/scripts/check-publishers-dispatched.mjs
-      - .github/scripts/check-offline-page.mjs
+      - .github/scripts/check-skills-shipped.mts
+      - .github/scripts/check-winget-manifests.mts
+      - .github/scripts/check-homebrew-casks.mts
+      - .github/scripts/check-publishers-dispatched.mts
+      - .github/scripts/check-offline-page.mts
       - ops/edge/**
       - .github/workflows/publish-*.yml
       - .github/workflows/release-client.yml
@@ -55,12 +55,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: node .github/scripts/check-skills-shipped.mjs
-      - run: node .github/scripts/check-winget-manifests.mjs
-      - run: node .github/scripts/check-homebrew-casks.mjs
-      - run: node .github/scripts/check-publishers-dispatched.mjs
-      - run: node .github/scripts/check-offline-page.mjs
-      - run: node .github/scripts/check-comment-length.mjs
+      # The scripts run under plain node; this installs tsc and Node's types to check them.
+      - run: yarn --cwd .github/scripts install --frozen-lockfile
+      - run: yarn --cwd .github/scripts typecheck
+      - run: node .github/scripts/check-skills-shipped.mts
+      - run: node .github/scripts/check-winget-manifests.mts
+      - run: node .github/scripts/check-homebrew-casks.mts
+      - run: node .github/scripts/check-publishers-dispatched.mts
+      - run: node .github/scripts/check-offline-page.mts
+      - run: node .github/scripts/check-comment-length.mts
       - run: node --test .github/scripts/check-release-line.test.mjs
       - run: node --test .github/scripts/checkout-release-tag.test.mjs
       - run: node --test .github/scripts/beta-follows-latest.test.mjs

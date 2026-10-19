@@ -1,0 +1,27 @@
+name: No new JavaScript
+
+# Code here is TypeScript so its types get checked (GRYT-1800). A file that has to stay
+# JavaScript goes in .js-allowlist, one path a line, with a # comment saying why.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No new JavaScript
+        run: |
+          allowed=$(grep -v '^#' .js-allowlist 2>/dev/null || true)
+          found=$(git ls-files '*.js' '*.mjs' '*.cjs' '*.jsx' | grep -vxF -e "$allowed" -e '' || true)
+          if [ -n "$found" ]; then
+            echo "::error::JavaScript not on .js-allowlist. Write it in TypeScript (GRYT-1800):"
+            echo "$found"
+            exit 1
+          fi

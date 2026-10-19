@@ -15,6 +15,7 @@ on:
       - Compose images
       - Deploy offline page
       - Gryt Git notification
+      - No new JavaScript
       - Permission labels
       - Publish snap to the Snap Store
       - Publish the Homebrew cask

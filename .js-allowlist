@@ -1,0 +1,38 @@
+# The object storage evaluation, run by hand. It's the record of how the backends were picked.
+docs/design/object-storage-eval/gryt-e2e.cjs
+docs/design/object-storage-eval/s3-matrix.cjs
+docs/design/object-storage-eval/seed.cjs
+docs/design/object-storage-eval/verify.cjs
+
+# An addon sample people copy. The client loads an addon's files as they are.
+examples/addons/example-plugin/plugin.js
+
+# Still to move to TypeScript (GRYT-1800).
+.github/scripts/beta-follows-latest.mjs
+.github/scripts/beta-follows-latest.test.mjs
+.github/scripts/check-comment-length.mjs
+.github/scripts/check-compose-images.mjs
+.github/scripts/check-homebrew-casks.mjs
+.github/scripts/check-offline-page.mjs
+.github/scripts/check-permission-labels.mjs
+.github/scripts/check-publishers-dispatched.mjs
+.github/scripts/check-release-line.mjs
+.github/scripts/check-release-line.test.mjs
+.github/scripts/check-skills-shipped.mjs
+.github/scripts/check-socket-coverage.mjs
+.github/scripts/check-winget-manifests.mjs
+.github/scripts/checkout-release-tag.test.mjs
+.github/scripts/generate-api-reference.mjs
+.github/scripts/release-notes.mjs
+.github/scripts/relink-appimage-fuse.mjs
+.github/scripts/sync-image-issues.mjs
+marketing/shots/capture.mjs
+marketing/shots/desktop.cjs
+marketing/shots/devices.mjs
+marketing/shots/measure-frame.mjs
+marketing/shots/render.mjs
+marketing/shots/shots.config.mjs
+marketing/shots/strip.mjs
+marketing/shots/text.mjs
+ops/edge/src/index.js
+ops/edge/src/offline.js

@@ -153,6 +153,8 @@ services:
       - "${ICE_UDP_MUX_PORT:-10001}:${ICE_UDP_MUX_PORT:-10001}/udp"
       # The own voice transport (GRYT-1818), WebTransport over QUIC. In the VPS firewall range; 10001 is beta media, 10002 the test SFU.
       - "${AUDIO_TRANSPORT_PORT:-10003}:${AUDIO_TRANSPORT_PORT:-10003}/udp"
+      # The phone's native voice engine (GRYT-1822), plain encrypted UDP. Next to 10003, still in the VPS range.
+      - "${AUDIO_UDP_PORT:-10004}:${AUDIO_UDP_PORT:-10004}/udp"
       # Loopback only. The server below runs with host networking, so it cannot
       # reach a container port at all unless that port is published somewhere.
       - "127.0.0.1:${SFU_CONTROL_PORT:-9092}:${SFU_CONTROL_PORT:-9092}"
@@ -165,6 +167,7 @@ services:
       ICE_UDP_MUX_PORT: ${ICE_UDP_MUX_PORT:-10001}
       ICE_ADVERTISE_IP: ${ICE_ADVERTISE_IP:-}
       AUDIO_TRANSPORT_PORT: ${AUDIO_TRANSPORT_PORT:-10003}
+      AUDIO_UDP_PORT: ${AUDIO_UDP_PORT:-10004}
       DISABLE_STUN: ${DISABLE_STUN:-false}
       SFU_REQUIRE_CLIENT_TOKEN: ${SFU_REQUIRE_CLIENT_TOKEN:-}
       SFU_METRICS_PORT: ${SFU_METRICS_PORT:-9091}

@@ -690,7 +690,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version-file: packages/sfu/go.mod
           cache: true
           cache-dependency-path: packages/sfu/go.sum
 

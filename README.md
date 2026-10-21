@@ -23,8 +23,8 @@
 
 <br />
 
-> [!CAUTION]
-> **Early development.** Gryt is experimental and changes often. Expect breaking changes.
+> [!NOTE]
+> **In development since May 2022.** Gryt ships often, from a stable channel and a beta channel. Read the [changelog](https://gryt.chat/changelog) before you update a server.
 
 ## Why
 

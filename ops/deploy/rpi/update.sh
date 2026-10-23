@@ -686,6 +686,7 @@ build_service() {
             --platform linux/arm64 \
             --progress plain \
             --load \
+            --pull \
             -f "$dockerfile" \
             -t "$image" \
             "$context" || status_code=$?
@@ -706,7 +707,7 @@ build_service() {
     [[ "$service" == og ]] && target=og
 
     status_code=0
-    timeout "$BUILD_TIMEOUT" docker compose -f "$COMPOSE" build "$target" || status_code=$?
+    timeout "$BUILD_TIMEOUT" docker compose -f "$COMPOSE" build --pull "$target" || status_code=$?
     return "$status_code"
 }
 

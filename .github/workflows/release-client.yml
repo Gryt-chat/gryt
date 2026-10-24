@@ -841,6 +841,8 @@ jobs:
         run: |
           set -euo pipefail
           bash native/audio-capture/build.sh
+          # The iCloud Keychain addon (GRYT-1881). It warns and skips rather than failing the release.
+          bash native/keychain/build.sh
 
       - name: Build native Windows binaries
         if: runner.os == 'Windows'
@@ -1183,6 +1185,13 @@ jobs:
           fi
 
           echo "${{ secrets.APPLE_API_KEY_P8_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+
+          # GRYT-1881: with the Developer ID profile, the build carries the keychain group shared with the
+          # iPhone app. Without it the config leaves the entitlement out, which is what keeps the app launching.
+          if [[ -n "${{ secrets.GRYT_MAC_PROVISIONING_PROFILE_BASE64 }}" ]]; then
+            echo "${{ secrets.GRYT_MAC_PROVISIONING_PROFILE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/gryt-mac.provisionprofile"
+            export GRYT_MAC_PROVISIONING_PROFILE="$RUNNER_TEMP/gryt-mac.provisionprofile"
+          fi
 
 
           # The publish overrides matter even though this uploads separately: electron-builder

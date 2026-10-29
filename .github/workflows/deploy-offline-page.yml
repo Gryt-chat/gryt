@@ -49,3 +49,17 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx --yes wrangler@4 deploy
+
+      # wrangler recreates the routes fail-closed, and the free plan's 100k/day cap would then block the sites.
+      - name: Set the routes to fail open
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          api() { curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" "$@"; }
+          zone=$(api "https://api.cloudflare.com/client/v4/zones?name=gryt.chat" | jq -r '.result[0].id')
+          api "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes" | jq -c '.result[]' | while read -r r; do
+            id=$(jq -r .id <<<"$r")
+            api -X PUT "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes/$id" \
+              -d "$(jq -c '{pattern, script, request_limit_fail_open: true}' <<<"$r")" >/dev/null
+            echo "fail open: $(jq -r .pattern <<<"$r")"
+          done

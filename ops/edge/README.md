@@ -63,7 +63,7 @@ than a dashboard click.
 ## Before the first deploy
 
 Workers Free is 100,000 requests a day for the whole account, and this runs on
-every request to five hostnames. Check the account's usage, and check what the
+every request to six hostnames. Check the account's usage, and check what the
 Worker does when it runs out — the choice is between falling through to the
 origin and returning an error, and only the first is safe here.
 

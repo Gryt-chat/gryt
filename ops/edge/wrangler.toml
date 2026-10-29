@@ -20,6 +20,7 @@ routes = [
   { pattern = "app.gryt.chat/*", zone_name = "gryt.chat" },
   { pattern = "beta.gryt.chat/*", zone_name = "gryt.chat" },
   { pattern = "ui.gryt.chat/*", zone_name = "gryt.chat" },
+  { pattern = "auth.gryt.chat/*", zone_name = "gryt.chat" },
 ]
 
 # The page is a file rather than a template literal, so it can be opened in a

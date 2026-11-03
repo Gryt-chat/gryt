@@ -229,6 +229,7 @@ services:
       # not, which is what keeps an upgrade from needing the two changed together.
       SFU_WS_HOST: ws://127.0.0.1:${SFU_PORT:-5015}
       SFU_METRICS_URL: http://127.0.0.1:${SFU_METRICS_HOST_PORT:-9194}/metrics
+      EXTERNAL_HOST: ${EXTERNAL_HOST:-https://beta.sivert.io}
       SFU_PUBLIC_HOST: ${SFU_PUBLIC_HOST:-ws://localhost:5015}
       STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
       VOICE_MAX_USERS: ${VOICE_MAX_USERS:-20}

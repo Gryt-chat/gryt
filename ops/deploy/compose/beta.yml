@@ -158,6 +158,8 @@ services:
       # Loopback only. The server below runs with host networking, so it cannot
       # reach a container port at all unless that port is published somewhere.
       - "127.0.0.1:${SFU_CONTROL_PORT:-9092}:${SFU_CONTROL_PORT:-9092}"
+      # Read by the server for server:diagnostics. 9192, 9193 and 9195 are taken on dev.lan.
+      - "127.0.0.1:${SFU_METRICS_HOST_PORT:-9194}:${SFU_METRICS_PORT:-9091}"
     environment:
       PORT: "5005"
       # Registration, deliberately unpublished: the port above is public so clients
@@ -226,6 +228,7 @@ services:
       # So this works against an SFU that serves registration here and one that does
       # not, which is what keeps an upgrade from needing the two changed together.
       SFU_WS_HOST: ws://127.0.0.1:${SFU_PORT:-5015}
+      SFU_METRICS_URL: http://127.0.0.1:${SFU_METRICS_HOST_PORT:-9194}/metrics
       SFU_PUBLIC_HOST: ${SFU_PUBLIC_HOST:-ws://localhost:5015}
       STUN_SERVERS: ${STUN_SERVERS:-stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
       VOICE_MAX_USERS: ${VOICE_MAX_USERS:-20}

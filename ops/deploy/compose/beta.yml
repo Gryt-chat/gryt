@@ -196,6 +196,10 @@ services:
   # needs `chmod o+w /etc/avahi/services` on the host.
   server:
     image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest-beta}
+    # Locked down like the Helm chart (GRYT-2035). Uploads buffer in /tmp, so it's a volume on disk.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     container_name: gryt-beta-server
     # Waits for storage-migrate's marker, even when started alone with --no-deps,
     # so it never serves an empty uploads folder while MinIO still has the files.
@@ -258,6 +262,7 @@ services:
     volumes:
       - gryt-beta-server-data:/data
       - /etc/avahi/services:/etc/avahi/services
+      - gryt-beta-server-tmp:/tmp
     depends_on:
       sfu:
         condition: service_healthy
@@ -372,3 +377,4 @@ volumes:
   gryt-beta-server-data:
   # Only read, by storage-migrate. Delete it once a backup has run without it.
   gryt-beta-minio-data:
+  gryt-beta-server-tmp:

@@ -129,10 +129,6 @@ services:
   # ── Server ────────────────────────────────────────────────────────────────
   server:
     image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest}
-    # Locked down like the Helm chart (GRYT-2035). Uploads buffer in /tmp, so it's a volume on disk.
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: ["no-new-privileges:true"]
     container_name: gryt-community-server
     logging: *logging
     ports:
@@ -187,7 +183,6 @@ services:
       S3_FORCE_PATH_STYLE: "true"
     volumes:
       - gryt-community-server-data:/data
-      - gryt-community-server-tmp:/tmp
     depends_on:
       sfu:
         condition: service_healthy
@@ -286,4 +281,3 @@ networks:
 volumes:
   gryt-community-server-data:
   gryt-community-minio-data:
-  gryt-community-server-tmp:

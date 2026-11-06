@@ -37,10 +37,6 @@ services:
 
   server:
     image: ghcr.io/gryt-chat/server:${SERVER_VERSION:-latest}
-    # Locked down like the Helm chart (GRYT-2035). Uploads buffer in /tmp, so it's a volume on disk.
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: ["no-new-privileges:true"]
     container_name: gryt-server
     # Waits for storage-migrate's marker, even when started alone with --no-deps,
     # so it never serves an empty uploads folder while MinIO still has the files.
@@ -65,7 +61,6 @@ services:
       - "${BIND_ADDR:-127.0.0.1}:${SERVER_HTTP_PORT:-5000}:5000"
     volumes:
       - gryt-server-data:/data
-      - gryt-server-tmp:/tmp
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:5000/health" ]
@@ -262,4 +257,3 @@ volumes:
   gryt-server-data:
   # Only read, by storage-migrate. Delete it once a backup has run without it.
   gryt-minio-data:
-  gryt-server-tmp:

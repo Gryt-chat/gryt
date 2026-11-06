@@ -28,12 +28,18 @@ done
 add FORWARD -s "$LAN" -d "$GUEST_NET" -m conntrack --ctstate NEW -j DROP
 
 # ── INPUT: guest to Astro itself is INPUT, not FORWARD ──────────────────────
+# Order matters here, unlike FORWARD: every copy is removed and the set re-inserted,
+# because re-adding only the DROP put it above the accepts (GRYT-2031).
+put() {
+  while iptables -D INPUT "$@" 2>/dev/null; do :; done
+  iptables -I INPUT 1 "$@"
+}
 # Inserted in reverse, so the final order reads: established replies, the two
 # services the gateway legitimately answers, then drop everything else.
-add INPUT -s "$GUEST_NET" -j DROP
-add INPUT -s "$GUEST_NET" -d "$GATEWAY" -p tcp --dport 53 -j ACCEPT
-add INPUT -s "$GUEST_NET" -d "$GATEWAY" -p udp --dport 53 -j ACCEPT
-add INPUT -s "$GUEST_NET" -d "$GATEWAY" -p udp --dport 67 -j ACCEPT
+put -s "$GUEST_NET" -j DROP
+put -s "$GUEST_NET" -d "$GATEWAY" -p tcp --dport 53 -j ACCEPT
+put -s "$GUEST_NET" -d "$GATEWAY" -p udp --dport 53 -j ACCEPT
+put -s "$GUEST_NET" -d "$GATEWAY" -p udp --dport 67 -j ACCEPT
 # Without this the reply half of every host-initiated connection is dropped,
 # which takes SSH from Astro into the VM with it.
-add INPUT -s "$GUEST_NET" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+put -s "$GUEST_NET" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT

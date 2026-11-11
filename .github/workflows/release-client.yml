@@ -622,7 +622,8 @@ jobs:
           - full
           - slim
         os:
-          - ubuntu-latest
+          # Pinned: on 2026-11-11 the ubuntu-26.04 image couldn't resolve Ubuntu's mirrors (GRYT-2078).
+          - ubuntu-24.04
           - macos-latest
           # Pinned; do not move back to windows-latest without re-running the probe. node-gyp
           # is out of this path now, but native/build.bat has never been tried against VS 18.

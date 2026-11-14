@@ -162,8 +162,14 @@ services:
       REPORTS_OIDC_REDIRECT_URI: "${REPORTS_OIDC_REDIRECT_URI:-}"
       REPORTS_BOOTSTRAP_ADMIN: "${REPORTS_BOOTSTRAP_ADMIN:-}"
       REPORTS_SESSION_SECRET: "${REPORTS_SESSION_SECRET:-}"
+      # TestFlight crash and screenshot feedback. Off unless all four are set.
+      REPORTS_ASC_KEY_ID: "${REPORTS_ASC_KEY_ID:-}"
+      REPORTS_ASC_ISSUER_ID: "${REPORTS_ASC_ISSUER_ID:-}"
+      REPORTS_ASC_KEY_PATH: "${REPORTS_ASC_KEY_PATH:-}"
+      REPORTS_ASC_APP_ID: "${REPORTS_ASC_APP_ID:-}"
     volumes:
       - gryt-reports-data:/data
+      - ./asc-keys:/run/asc-keys:ro
     restart: unless-stopped
 
   # The push relay (push.gryt.chat, GRYT-1656). Gryt servers post a capability and

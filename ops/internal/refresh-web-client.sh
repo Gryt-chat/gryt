@@ -9,7 +9,7 @@ set -euo pipefail
 
 : "${GRYT_STACKS:=prod beta test demo}"
 : "${GRYT_SERVICES:=${GRYT_SERVICE:-sfu server server-nt server-pp image-worker image-worker-nt image-worker-pp client}}"
-: "${GRYT_CONTAINERS:=gryt-reports}"
+: "${GRYT_CONTAINERS:=gryt-reports gryt-push}"
 : "${GRYT_PROFILES:=web}"
 export GRYT_STACKS GRYT_SERVICES GRYT_CONTAINERS GRYT_PROFILES
 

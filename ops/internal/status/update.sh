@@ -195,7 +195,7 @@ update_image() {
 # The console runs as uid 1000 and writes announcements.yaml into the config
 # directory. Docker does not chown a bind mount, so a root-owned one blocks it.
 
-# The write threw EACCES, that killed the process, and console.gryt.chat answered
+# The write threw EACCES, that killed the process, and the console answered
 # 502 in a restart loop. Fixed every cycle so a hand-made directory ends up right.
 
 # Gatus mounts the same directory read-only and does not care who owns it.

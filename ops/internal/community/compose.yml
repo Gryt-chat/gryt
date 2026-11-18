@@ -13,8 +13,7 @@
 # Against ops/deploy/compose/prod.yml: bridge rather than host networking, since
 # this VM has no LAN it should be seen on, and nothing published outward but media.
 
-# MINIO_ROOT_PASSWORD is required, and there is no web client — app.gryt.chat
-# serves it.
+# There is no web client: app.gryt.chat serves it.
 name: gryt-community
 
 # Log retention, because the privacy statement on gryt.chat has to name a number.
@@ -29,50 +28,6 @@ x-logging: &logging
     max-file: "3"
 
 services:
-  # ── Object storage ────────────────────────────────────────────────────────
-  # Not published at all. The server and the worker reach it over the compose
-  # network by name, which is the only thing that needs to.
-  minio:
-    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
-    container_name: gryt-community-minio
-    logging: *logging
-    command: ["server", "/data", "--console-address", ":9001"]
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
-    volumes:
-      - gryt-community-minio-data:/data
-    networks:
-      - gryt-community
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  minio-init:
-    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
-    container_name: gryt-community-minio-init
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
-      S3_BUCKET: ${S3_BUCKET:-gryt-community}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
-        mc mb -p "local/$$S3_BUCKET" 2>/dev/null || true
-        echo "Bucket ready: $$S3_BUCKET"
-    networks:
-      - gryt-community
-    restart: "no"
-
   server-data-init:
     image: alpine:3
     container_name: gryt-community-server-data-init
@@ -175,19 +130,13 @@ services:
       # Without a value it does not start, which is right for a self-hoster.
       GRYT_ADMIN_TOKEN: ${GRYT_ADMIN_TOKEN:?Set GRYT_ADMIN_TOKEN in .env}
       DATA_DIR: /data
-      S3_ENDPOINT: http://minio:9000
-      S3_REGION: auto
-      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
-      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+      # Uploads are on disk under DATA_DIR; this names the folder, kept from the S3 days.
       S3_BUCKET: ${S3_BUCKET:-gryt-community}
-      S3_FORCE_PATH_STYLE: "true"
     volumes:
       - gryt-community-server-data:/data
     depends_on:
       sfu:
         condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
       server-data-init:
         condition: service_completed_successfully
     networks:
@@ -215,12 +164,8 @@ services:
     logging: *logging
     environment:
       DATA_DIR: /data
-      S3_ENDPOINT: http://minio:9000
-      S3_REGION: auto
-      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
-      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+      # Uploads are on disk under DATA_DIR; this names the folder, kept from the S3 days.
       S3_BUCKET: ${S3_BUCKET:-gryt-community}
-      S3_FORCE_PATH_STYLE: "true"
     volumes:
       - gryt-community-server-data:/data
     depends_on:
@@ -280,4 +225,3 @@ networks:
 
 volumes:
   gryt-community-server-data:
-  gryt-community-minio-data:

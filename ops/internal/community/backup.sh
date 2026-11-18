@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Nightly backup for community.gryt.chat: the SQLite database and the MinIO
-# bucket, both in Docker volumes on one disk on one machine.
+# Nightly backup for community.gryt.chat: the SQLite database and the uploads
+# folder, both in the server's data volume on one disk on one machine.
 
 # Copied with sqlite3 rather than cp — a live database has data in the WAL that a
 # file copy misses, and it restores cleanly, which is the part that hurts.
@@ -14,8 +14,6 @@ DATA_VOLUME="${DATA_VOLUME:-gryt-community-server-data}"
 NETWORK="${NETWORK:-gryt-community}"
 KEEP_DAYS="${KEEP_DAYS:-31}"
 
-: "${MINIO_ROOT_USER:?set MINIO_ROOT_USER, or run with --env-file /opt/gryt-community/.env}"
-: "${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}"
 S3_BUCKET="${S3_BUCKET:-gryt-community}"
 
 stamp="$(date -u +%Y%m%d-%H%M%S)"
@@ -39,20 +37,8 @@ docker cp gryt-community-server:/tmp/gryt-backup.db "$dest/gryt.db"
 docker exec gryt-community-server rm -f /tmp/gryt-backup.db
 gzip -9 "$dest/gryt.db"
 
-# mc mirror rather than a tarball of the volume: it goes through MinIO, so it
-# sees a consistent view instead of files caught mid-write.
-
-# It needs an image, but one the stack has already pulled, and it talks to MinIO
-# over the compose network rather than the internet.
-docker run --rm --pull=never \
-  --network "$NETWORK" \
-  -e MINIO_ROOT_USER -e MINIO_ROOT_PASSWORD -e S3_BUCKET \
-  -v "$dest/objects:/backup" \
-  --entrypoint /bin/sh pgsty/mc:RELEASE.2026-09-16T00-00-00Z -c '
-    set -e
-    mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null
-    mc mirror --overwrite --remove "local/$S3_BUCKET" /backup >/dev/null
-  '
+# Uploads are written once under a new name and never edited, so a plain copy is consistent.
+docker cp "gryt-community-server:/data/$S3_BUCKET/." "$dest/objects/"
 
 # Anything older than KEEP_DAYS goes. Same window as the Keycloak dumps: long
 # enough to notice a problem, short enough that the disk cannot fill quietly.

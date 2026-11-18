@@ -97,7 +97,7 @@ neither leaves a container behind.
 
 ## Announcing an outage
 
-The console at [console.gryt.chat](https://console.gryt.chat) posts
+The console at [admin.gryt.chat](https://admin.gryt.chat) posts
 announcements — Gatus renders them at the top of the page, and the Gryt client
 shows the same words as a banner to everybody signed in. One place to post, so
 the page and the banner cannot disagree.

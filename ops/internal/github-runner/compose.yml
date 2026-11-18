@@ -1,0 +1,38 @@
+# Runners for the private repos only.
+# Each is registered to one repo, so a public repo's fork PR can never reach this box.
+name: gryt-runner
+
+x-runner: &runner
+  build: .
+  restart: unless-stopped
+  # Capped so everything else on the box keeps its share.
+  cpus: 8
+  mem_limit: 8g
+  memswap_limit: 8g
+
+services:
+  scraper:
+    <<: *runner
+    container_name: gryt-runner-scraper
+    environment:
+      RUNNER_REPO: Gryt-chat/rich-presence-scraper
+      RUNNER_NAME: gryt-private-scraper
+      RUNNER_TOKEN: ${SCRAPER_TOKEN:-}
+    volumes:
+      - scraper-state:/state
+
+  cloud:
+    <<: *runner
+    container_name: gryt-runner-cloud
+    environment:
+      RUNNER_REPO: Gryt-chat/gryt-cloud
+      RUNNER_NAME: gryt-private-cloud
+      RUNNER_TOKEN: ${CLOUD_TOKEN:-}
+    volumes:
+      - cloud-state:/state
+
+volumes:
+  scraper-state:
+    name: gryt-runner-scraper-state
+  cloud-state:
+    name: gryt-runner-cloud-state

@@ -255,7 +255,7 @@ Environment variables, none of them required:
 | `GRYT_STACKS` | stacks to refresh, space separated. Default `prod beta test demo`. Each `<s>` covers the containers named `gryt-<s>-<service>`, and a stack without one of them skips it |
 | `GRYT_SERVICES` | services to refresh on each stack. Default `sfu server server-nt server-pp image-worker image-worker-nt image-worker-pp client` |
 | `GRYT_SERVICE` | the old spelling for a single service. `GRYT_SERVICES` wins if both are set |
-| `GRYT_CONTAINERS` | containers to refresh by name, for anything outside the stack naming. Default `gryt-reports`; the compose service is read off the container's own label |
+| `GRYT_CONTAINERS` | containers to refresh by name, for anything outside the stack naming. Default `gryt-reports gryt-push`; the compose service is read off the container's own label |
 | `GRYT_MIN_FREE_GB` | refuse to pull below this much free disk. Default `10` |
 
 A release-triggered deploy would be tighter, and is not what this is: the box sits behind

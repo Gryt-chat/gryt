@@ -23,7 +23,7 @@ might get a shell on.
       ▼
     VM gryt-community  (192.168.122.213 on virbr0, 10.2.0.6 on wg0)
       ├─ cloudflared, as a systemd service on the VM   -> out the house connection
-      └─ compose: server, sfu, minio, image-worker      -> out through the VPS
+      └─ compose: server, sfu, image-worker             -> out through the VPS
 ```
 
 | | Where | Reachable from |
@@ -31,7 +31,6 @@ might get a shell on.
 | Server HTTP | `127.0.0.1:5020` on the VM | `community.gryt.chat`, via cloudflared |
 | SFU signalling | `127.0.0.1:5025` on the VM | `community-sfu.gryt.chat`, via cloudflared |
 | SFU media | `0.0.0.0:10000/udp` on the VM | the VPS address, DNAT'd over WireGuard |
-| MinIO | compose network | nothing |
 | Metrics | compose network | nothing |
 
 `127.0.0.1:5020` and `127.0.0.1:5025` are how cloudflared reaches the two

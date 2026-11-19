@@ -341,7 +341,7 @@ project, and set it back to `0` afterwards.
 `import_realm.sh` refuses to run while Keycloak is listening, which catches the obvious
 mistake. It does not catch the flag being left on.
 
-**Three settings live only in the running realm and are wiped with it.** None is in
+**Four settings live only in the running realm and are wiped with it.** None is in
 `gryt-realm.json`, because realm-level configuration in the import file is what took the
 whole stack down in GRYT-136:
 
@@ -350,8 +350,9 @@ whole stack down in GRYT-136:
 | Declarative user profile | `keycloak-user-profile` | Registration silently rejects inputs the theme hides |
 | Brute-force protection, password policy | `keycloak-security-policy` | Unlimited login attempts, any password accepted |
 | Registration captcha | nobody — console only, needs keys | An email address is all a script needs to make accounts |
+| Sign in with Google | `keycloak-identity-providers`, when the Google keys are set | The Google button is gone from the login page |
 
-The first two are one-shots and re-running them is the fix. **Both failed silently from
+Everything except the captcha comes from a one-shot, and re-running it is the fix. **The first two failed silently from
 mid-August to 2026-08-31** because they authenticate as the master-realm `admin`, which is
 normally disabled on purpose — the containers exited 1 and nothing else said anything. So
 after an import, or after anything that touches the auth stack, check they actually ran

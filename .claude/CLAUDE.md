@@ -394,6 +394,15 @@ The site does not follow it yet. `packages/site/src/index.css` sets
 `a { text-decoration: none }` in its base layer and four stylesheets add the underline
 back per page, so a new prose link there starts wrong. That is GRYT-1094.
 
+**No disabled buttons.** A button that can't act stays clickable and says why when it's
+clicked: "You already have a free test server. Cancel it first to start a new one." Grey
+it out if that helps, but never the `disabled` prop. While a request runs, the label says
+so ("Saving…") and a second click does nothing. The client and mobile still have plenty;
+taking them out is GRYT-2215, so don't add new ones.
+
+**A button that costs money says how much.** `Upgrade to Community · €12.60 today`, `Pay
+€48 by card`. What it charges now, or the plan's price when that isn't known yet.
+
 ## Style
 
 Match the surrounding code, with one exception: comment density. Most of what is in the

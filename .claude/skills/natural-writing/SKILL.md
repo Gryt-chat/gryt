@@ -60,6 +60,27 @@ And the shapes they come in:
 | — | "But here's the problem" |
 | — | "So here's what happened" |
 
+### Claim, colon, proof
+
+A sentence that says something, then a colon, then a list backing it up. Nobody
+talks like that. It's the most common shape in generated UI copy, and Sivert
+hates it.
+
+| Instead of | Write |
+|---|---|
+| "Keep it, and it comes back as it was: same address, members and messages." | "Restore your server and keep your data." |
+| "It's private by default: only you, your friends and no one else." | "Only the people you invite can see it." |
+| "One place for everything: chat, voice and files." | "Chat, voice and files in one app." |
+
+Say what happens. If the detail matters, give it its own plain sentence, or
+leave it out.
+
+### A question and a button, every time
+
+"Changed your mind?" above a Restore button, "Need help?" above Contact us.
+Once on a page is fine. On every row it's a pattern, and it reads like a
+template. Most of the time the button alone says it: "Restore server".
+
 ## How to do it
 
 Work sentence by sentence. Most of the fix is four moves:

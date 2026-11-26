@@ -33,9 +33,14 @@ SCOPE="${FLATPAK_SCOPE:---user}"
 flatpak remote-add "$SCOPE" --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
 # CI builds against the SDK already in the image: updating it there fails with
-# "Invalid cross-device link" on the container's filesystem whenever Flathub has a newer one.
+# "Invalid cross-device link" on the container's filesystem, so only the missing base app is installed.
 DEPS=(--install-deps-from=flathub)
-[[ "$SCOPE" == "--system" ]] && DEPS=()
+if [[ "$SCOPE" == "--system" ]]; then
+  DEPS=()
+  BASE="$(sed -n -E "s/^base: *'?([^']+)'?$/\1/p" "$WORK/$APPID.yml")"
+  BASE_VERSION="$(sed -n -E "s/^base-version: *'?([^']+)'?$/\1/p" "$WORK/$APPID.yml")"
+  flatpak install "$SCOPE" --noninteractive -y flathub "$BASE//$BASE_VERSION"
+fi
 
 # rofiles-fuse needs /dev/fuse, which a container does not have.
 cd "$WORK"

@@ -32,11 +32,16 @@ grep -q "<release version=\"${VERSION}\"" "$WORK/$APPID.metainfo.xml"
 SCOPE="${FLATPAK_SCOPE:---user}"
 flatpak remote-add "$SCOPE" --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
+# CI builds against the SDK already in the image: updating it there fails with
+# "Invalid cross-device link" on the container's filesystem whenever Flathub has a newer one.
+DEPS=(--install-deps-from=flathub)
+[[ "$SCOPE" == "--system" ]] && DEPS=()
+
 # rofiles-fuse needs /dev/fuse, which a container does not have.
 cd "$WORK"
 flatpak-builder \
   "$SCOPE" \
-  --install-deps-from=flathub \
+  ${DEPS[@]+"${DEPS[@]}"} \
   --disable-rofiles-fuse \
   --force-clean \
   --default-branch=stable \
